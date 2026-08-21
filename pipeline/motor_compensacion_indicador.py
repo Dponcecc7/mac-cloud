@@ -22,6 +22,9 @@ from dimension_models import Persona, get_session  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
 from graph_client import leer_excel  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from anon import pseudonimo  # noqa: E402
+
 _dfs = []
 for f in sorted(glob.glob("Visitas/*.xlsx")):
     _d = pd.read_excel(f)
@@ -133,10 +136,13 @@ if len(comp):
     print()
     print("Confianza de los casos NO compensados (Baja = pocas visitas ese día, 'salida real' poco confiable):")
     print(no_comp_all["Confianza"].value_counts().to_string())
-    print()
-    print("Casos NO compensados de confianza ALTA (top 15 por magnitud del déficit) — los más accionables:")
+    # DNI pseudonimizado, sin Nombre (Fase 6, repo público) -- el detalle
+    # real completo queda en 12_Compensacion.xlsx (SharePoint).
     no_comp_alta = no_comp_all[no_comp_all["Confianza"] == "Alta"].sort_values("Déficit del día (min)").head(15)
-    print(no_comp_alta.to_string(index=False))
+    print(f"Casos NO compensados de confianza ALTA (top 15 por magnitud del déficit) — los más accionables:")
+    for _, row in no_comp_alta.iterrows():
+        print(f"  {pseudonimo(row['DNI'])} {row['Fecha']}: déficit={row['Déficit del día (min)']} min, "
+              f"ventana={row['Suma ventana 3 días (min)']} min, visitas={row['N° visitas ese día']}")
 
 comp.to_excel("12_Compensacion.xlsx", index=False)
 print()
@@ -169,9 +175,13 @@ for dni, grp in r.groupby("DNI"):
 ind = pd.DataFrame(indicador_rows).sort_values("Indicador de asistencia (%)")
 print("Meta de referencia (según mockup inicial): 95%")
 print(f"Personas bajo la meta: {(ind['Indicador de asistencia (%)'] < 95).sum()} de {len(ind)}")
-print()
+# DNI pseudonimizado, sin Nombre (Fase 6, repo público) -- el detalle real
+# completo queda en 13_Indicador_Asistencia.xlsx (SharePoint).
 print("Los 10 indicadores más bajos:")
-print(ind.head(10).to_string(index=False))
+for _, row in ind.head(10).iterrows():
+    print(f"  {pseudonimo(row['DNI'])}: {row['Días evaluados']} días evaluados, "
+          f"{row['Faltas']} faltas, {row['Tardanzas no compensadas']} tardanzas no compensadas, "
+          f"indicador={row['Indicador de asistencia (%)']}%")
 
 ind.to_excel("13_Indicador_Asistencia.xlsx", index=False)
 print()

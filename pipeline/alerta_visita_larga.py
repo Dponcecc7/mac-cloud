@@ -13,6 +13,9 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from graph_client import leer_excel  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from anon import pseudonimo  # noqa: E402
+
 
 def fmt_hora(td):
     if pd.isna(td):
@@ -106,12 +109,14 @@ print(res["Canal (Maestro)"].value_counts().to_string())
 res_tradicional = res[res["Canal (Maestro)"] == "TRADICIONAL"]
 print()
 print(f"Casos en canal TRADICIONAL (el patrón sospechoso que preguntas): {len(res_tradicional)}")
+# DNI pseudonimizado, sin Nombre (Fase 6, repo público -- ver
+# pipeline/anon.py). El detalle real completo queda en
+# 14_Alerta_Visita_Larga.xlsx (SharePoint, no público).
 print()
 print("Top 20 casos TRADICIONAL (por duración):")
-print(res_tradicional.head(20).to_string(index=False))
-print()
-print("Personas TRADICIONAL con más casos:")
-print(res_tradicional["DNI"].value_counts().head(10))
+for _, row in res_tradicional.head(20).iterrows():
+    print(f"  {pseudonimo(row['DNI'])} {row['Fecha']}: {row['Duración (min)']} min "
+          f"(hora inicio {row['Hora inicio última visita']}, salida programada {row['Hora salida programada']})")
 
 res.to_excel("14_Alerta_Visita_Larga.xlsx", index=False)
 print()
@@ -143,8 +148,11 @@ else:
     resumen_censo = resumen_censo.sort_values("dias_distintos", ascending=False)
     print(f"Mercaderistas con alguna visita a Punto Censo: {len(resumen_censo)}")
     print(f"Alertados (>{UMBRAL_DIAS_CENSO} días distintos, o >{UMBRAL_HORAS_CENSO_MIN} min seguidos): {resumen_censo['Alerta'].sum()}")
-    print()
-    print(resumen_censo[["DNI", "Nombre", "dias_distintos", "duracion_total_min", "duracion_max_min", "Alerta"]].to_string(index=False))
+    # DNI pseudonimizado, sin Nombre (Fase 6, repo público) -- el detalle
+    # real completo queda en 15_Alerta_Punto_Censo.xlsx (SharePoint).
+    for _, row in resumen_censo.iterrows():
+        print(f"  {pseudonimo(row['DNI'])}: {row['dias_distintos']} días distintos, "
+              f"{row['duracion_total_min']} min total, {row['duracion_max_min']} min máx, alerta={row['Alerta']}")
     resumen_censo.to_excel("15_Alerta_Punto_Censo.xlsx", index=False)
     print()
     print("Guardado: 15_Alerta_Punto_Censo.xlsx")

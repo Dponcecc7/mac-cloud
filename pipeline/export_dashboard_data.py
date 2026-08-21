@@ -154,4 +154,11 @@ data = {
 with open("dashboard_data.json", "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
-print(json.dumps(data, ensure_ascii=False, indent=2))
+# No se imprime `data` completo (Fase 6, repo público) -- "registros",
+# "top_falta" y "fase3.top_indicador_bajo" traen DNI/Nombre de cada persona.
+# El JSON completo sigue en dashboard_data.json (SharePoint/mac_cloud, no
+# público); acá solo un resumen agregado para confirmar que corrió bien.
+print(f"Total registros: {data['resumen']['total_dias_persona']} | "
+      f"Asistió: {data['resumen']['asistio']} | Tardanza: {data['resumen']['tardanza']} | "
+      f"Falta: {data['resumen']['falta']} | % Efectividad: {data['resumen']['pct_efectividad']}")
+print("Guardado: dashboard_data.json")

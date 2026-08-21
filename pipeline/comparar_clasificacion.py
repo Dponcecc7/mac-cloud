@@ -26,6 +26,9 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from graph_client import leer_excel  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from anon import pseudonimo  # noqa: E402
+
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 ARCHIVO_PRODUCCION = "7_Clasificacion_Diaria.xlsx"
 ARCHIVO_AUDITORIA_NUBE = "_nube_7_Clasificacion_Diaria.xlsx"
@@ -62,13 +65,17 @@ def main():
 
     discrepancias_por_campo = {c: 0 for c in COLUMNAS_A_COMPARAR}
     filas_con_discrepancia = 0
+    # DNI pseudonimizado en vez de crudo (Fase 6, repo público -- ver
+    # pipeline/anon.py) -- alcanza para correlacionar filas/corridas de la
+    # misma persona sin exponer el DNI real en un log público. Para saber a
+    # quién corresponde un pseudónimo puntual, hashear el DNI real con la
+    # misma función (Maestro/Postgres) y buscar el que matchea.
     detalle = []
-
     for clave in sorted(comunes):
         fila_prod = prod.loc[clave]
         fila_nube = nube.loc[clave]
         tiene_discrepancia = False
-        detalle_fila = {"DNI": clave[0], "Fecha": clave[1]}
+        detalle_fila = {"Persona": pseudonimo(clave[0]), "Fecha": clave[1]}
         for col in COLUMNAS_A_COMPARAR:
             v_prod = fila_prod[col]
             v_nube = fila_nube[col]
@@ -92,17 +99,15 @@ def main():
 
     if detalle:
         print()
-        print(f"Detalle de las primeras {min(30, len(detalle))} discrepancias:")
+        print(f"Detalle de las primeras {min(30, len(detalle))} discrepancias (DNI pseudonimizado):")
         for d in detalle[:30]:
-            partes = [f"{k}: local={v[0]!r} vs nube={v[1]!r}" for k, v in d.items() if k not in ("DNI", "Fecha")]
-            print(f"  DNI {d['DNI']} {d['Fecha']}: " + " | ".join(partes))
+            partes = [f"{k}: local={v[0]!r} vs nube={v[1]!r}" for k, v in d.items() if k not in ("Persona", "Fecha")]
+            print(f"  {d['Persona']} {d['Fecha']}: " + " | ".join(partes))
 
     if solo_prod:
-        print()
-        print(f"Ejemplos solo en motor local (primeras 10 de {len(solo_prod)}): {sorted(solo_prod)[:10]}")
+        print(f"\n{len(solo_prod)} fila(s) solo en motor local (no calculadas todavía por el motor nube).")
     if solo_nube:
-        print()
-        print(f"Ejemplos solo en motor nube (primeras 10 de {len(solo_nube)}): {sorted(solo_nube)[:10]}")
+        print(f"\n{len(solo_nube)} fila(s) solo en motor nube (no calculadas todavía por el motor local).")
 
 
 if __name__ == "__main__":
