@@ -1,0 +1,27 @@
+name: Comparación motor local vs nube (Fase 6)
+
+on:
+  schedule:
+    # 18:00 hora Peru (UTC-5) = 23:00 UTC, diario
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  comparar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Comparar clasificación (local vs nube)
+        env:
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+        run: python pipeline/comparar_clasificacion.py

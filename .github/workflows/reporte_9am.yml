@@ -1,0 +1,32 @@
+name: Reporte 9am (nube, Fase 6)
+
+on:
+  schedule:
+    # 8:00am-12:30pm hora Peru (UTC-5) aprox = 13:00-17:30 UTC, cada 10 min, Lun-Sab
+    - cron: "*/10 13-17 * * 1-6"
+  workflow_dispatch: {}
+
+jobs:
+  reporte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Aplicar correcciones y regenerar reporte 9am
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ATHENA_S3_STAGING: ${{ secrets.ATHENA_S3_STAGING }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: python pipeline/ciclo_reporte_9am.py
