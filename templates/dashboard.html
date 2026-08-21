@@ -14,10 +14,11 @@
 <body>
   <nav>
     <span>Hola, {{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+    <a href="{{ url_for('personal') }}">Personal</a>
     {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
     <a href="{{ url_for('auth.logout') }}">Salir</a>
   </nav>
   <h1>MAC</h1>
-  <p>Próximamente: el reporte diario de asistencia va a vivir acá (Fases 2/3 del roadmap de migración).</p>
+  <p>Próximamente: el reporte diario de asistencia va a vivir acá (Fase 3 del roadmap de migración). Por ahora, mirá <a href="{{ url_for('personal') }}">Personal</a> para ver la data real ya migrada a Postgres.</p>
 </body>
 </html>

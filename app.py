@@ -15,6 +15,8 @@ from sqlalchemy import text
 
 from extensions import db, login_manager
 from models import Usuario
+from dimension_models import Persona
+from dimension_models import get_session as get_dim_session
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
 
@@ -49,6 +51,20 @@ def create_app():
     @login_required
     def dashboard():
         return render_template("dashboard.html", usuario=current_user)
+
+    @app.get("/personal")
+    @login_required
+    def personal():
+        # Fase 2: primera pantalla que lee directo de Postgres (dimension_models,
+        # las mismas tablas que migrar_dimensiones_a_postgres.py pobló) --
+        # solo lectura por ahora, el alta/baja/reemplazo sigue siendo
+        # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
+        dim_session = get_dim_session()
+        try:
+            personas = dim_session.query(Persona).order_by(Persona.estado, Persona.nombre_completo).all()
+        finally:
+            dim_session.close()
+        return render_template("personal.html", usuario=current_user, personas=personas)
 
     return app
 

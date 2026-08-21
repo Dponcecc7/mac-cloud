@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Personal</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
+    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
+    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
+    .sub { color:#6b6154; font-size:12.5px; margin:0 0 18px; }
+    table { border-collapse:collapse; width:100%; background:#fff; border-radius:8px; overflow:hidden; }
+    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; white-space:nowrap; }
+    th { background:#f2ddca; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; position:sticky; top:0; }
+    .table-wrap { overflow-x:auto; max-height:75vh; overflow-y:auto; border-radius:8px; }
+    .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+    .pill.activo { background:#e4f0e6; color:#2f6a45; }
+    .pill.inactivo { background:#ece5d8; color:#6b6154; }
+    .pill.vacante { background:#fbedd3; color:#8a5c07; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">← MAC</a>
+    {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+    <a href="{{ url_for('auth.logout') }}">Salir</a>
+  </nav>
+  <h1>Personal</h1>
+  <p class="sub">{{ personas|length }} personas — datos en vivo desde Postgres (Fase 2 de la migración).</p>
+  <div class="table-wrap">
+  <table>
+    <tr>
+      <th>DNI</th><th>Nombre</th><th>Estado</th><th>Rol</th><th>Canal</th>
+      <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th>
+    </tr>
+    {% for p in personas %}
+    <tr>
+      <td>{{ p.dni }}</td>
+      <td>{{ p.nombre_completo }}</td>
+      <td>
+        {% if p.estado == "Activo" %}<span class="pill activo">Activo</span>
+        {% elif p.estado == "Vacante" %}<span class="pill vacante">Vacante</span>
+        {% else %}<span class="pill inactivo">Inactivo</span>{% endif %}
+      </td>
+      <td>{{ p.rol or "—" }}</td>
+      <td>{{ p.canal or "—" }}</td>
+      <td>{{ p.region or "—" }}</td>
+      <td>{{ p.ciudad or "—" }}</td>
+      <td>{{ p.zona or "—" }}</td>
+      <td>{{ p.supervisor_dni or "—" }}</td>
+      <td>{{ p.correo or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+</body>
+</html>
