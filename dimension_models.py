@@ -65,6 +65,10 @@ class Persona(Base):
     motivo_baja = Column(String(200))
     registrado_por = Column(String(150))
     fecha_registro = Column(Date)
+    # Fase 4 (2026-08-21): a quien pertenece esta persona -- el correo del
+    # analista que la cargo. Permite que varios analistas usen el mismo MAC
+    # con sus propios equipos sin pisarse datos entre si (ver mac_cloud/cargas.py).
+    analista_propietario = Column(String(150))
 
     __table_args__ = (
         CheckConstraint("estado IN ('Activo','Inactivo','Vacante')", name="ck_personas_estado"),

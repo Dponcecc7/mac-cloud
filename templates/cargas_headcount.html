@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Cargar Headcount</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
+    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
+    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
+    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:20px; max-width:520px; margin-bottom:20px; }
+    label { display:block; font-size:12.5px; font-weight:600; color:#6b6154; margin-bottom:6px; margin-top:14px; }
+    input[type=file] { width:100%; font-size:12.5px; }
+    .sub { color:#6b6154; font-size:12px; margin:2px 0 0; }
+    button { margin-top:18px; padding:9px 18px; background:#b5602c; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+    .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; max-width:520px; }
+    .flash.error { background:#f8e0dc; color:#a33b2c; }
+    .flash.ok { background:#e4f0e6; color:#2f6a45; }
+    table { border-collapse:collapse; width:100%; max-width:700px; background:#fff; border-radius:8px; overflow:hidden; margin-top:10px; }
+    th, td { text-align:left; padding:6px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; }
+    th { background:#f2ddca; font-size:10.5px; text-transform:uppercase; color:#6b6154; }
+    .resumen { display:flex; gap:16px; margin:14px 0; flex-wrap:wrap; }
+    .stat { background:#fff; border:1px solid #ddd4c6; border-radius:8px; padding:10px 16px; font-size:12.5px; }
+    .stat b { display:block; font-size:20px; color:#211c16; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">← MAC</a>
+    <a href="{{ url_for('personal') }}">Personal</a>
+    <a href="{{ url_for('auth.logout') }}">Salir</a>
+  </nav>
+  <h1>Cargar Headcount</h1>
+  <p class="sub" style="max-width:520px;">Subí tu Maestro Headcount (y opcionalmente tu Patrón Recurrente) con el mismo formato que ya usa el sistema. Las personas quedan asociadas a tu cuenta — si un DNI ya pertenece a otro analista, no se toca, se reporta como conflicto.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if resultado %}
+    <div class="resumen">
+      <div class="stat"><b>{{ nuevas|length }}</b>nuevas</div>
+      <div class="stat"><b>{{ actualizadas|length }}</b>actualizadas</div>
+      <div class="stat"><b>{{ conflictos|length }}</b>en conflicto</div>
+      <div class="stat"><b>{{ n_patron }}</b>filas de Patrón</div>
+    </div>
+    {% if conflictos %}
+      <p class="sub"><b>DNIs que no se tocaron</b> (ya pertenecen a otro analista):</p>
+      <table>
+        <tr><th>DNI</th><th>Nombre</th><th>Pertenece a</th></tr>
+        {% for c in conflictos %}
+        <tr><td>{{ c.dni }}</td><td>{{ c.nombre }}</td><td>{{ c.dueño_actual }}</td></tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="{{ url_for('cargas.headcount_submit') }}" enctype="multipart/form-data">
+      <label>Maestro Headcount (obligatorio)
+        <input type="file" name="maestro" accept=".xlsx" required>
+      </label>
+      <p class="sub">Mismo formato: hoja "Maestro Headcount", encabezados en la fila 4.</p>
+
+      <label>Patrón Recurrente (opcional, pero sin esto no se puede calcular asistencia)
+        <input type="file" name="patron" accept=".xlsx">
+      </label>
+      <p class="sub">Mismo formato: hoja "Patrón recurrente", encabezados en la fila 4.</p>
+
+      <button type="submit">Cargar</button>
+    </form>
+  </div>
+</body>
+</html>

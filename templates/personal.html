@@ -22,6 +22,7 @@
 <body>
   <nav>
     <a href="{{ url_for('dashboard') }}">← MAC</a>
+    {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
     {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
     <a href="{{ url_for('auth.logout') }}">Salir</a>
   </nav>
@@ -31,7 +32,7 @@
   <table>
     <tr>
       <th>DNI</th><th>Nombre</th><th>Estado</th><th>Rol</th><th>Canal</th>
-      <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th>
+      <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
     </tr>
     {% for p in personas %}
     <tr>
@@ -49,6 +50,7 @@
       <td>{{ p.zona or "—" }}</td>
       <td>{{ p.supervisor_dni or "—" }}</td>
       <td>{{ p.correo or "—" }}</td>
+      <td>{{ p.analista_propietario or "—" }}</td>
     </tr>
     {% endfor %}
   </table>
