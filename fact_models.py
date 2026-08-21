@@ -31,7 +31,7 @@ class ClasificacionDiaria(Base):
     salida_anticipada_min = Column(Integer)
     trabajo_otro_canal = Column(Boolean, default=False)
     alerta_geofence = Column(Boolean, default=False)
-    fuente_dato = Column(String(60))
+    fuente_dato = Column(Text)  # texto libre historico puede superar 60 chars (ver correcciones manuales viejas) -- ampliado 2026-08-21
     comentario_supervisor = Column(Text)
     alerta_analista = Column(Boolean, default=False)
     procesado_en = Column(TIMESTAMP, server_default=func.now())
