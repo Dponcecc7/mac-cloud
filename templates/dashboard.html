@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
+    nav { display:flex; align-items:center; gap:16px; font-size:13px; margin-bottom:24px; }
+    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
+    .pill { background:#ece5d8; color:#6b6154; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span>Hola, {{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+    {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+    <a href="{{ url_for('auth.logout') }}">Salir</a>
+  </nav>
+  <h1>MAC</h1>
+  <p>Próximamente: el reporte diario de asistencia va a vivir acá (Fases 2/3 del roadmap de migración).</p>
+</body>
+</html>

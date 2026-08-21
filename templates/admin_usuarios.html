@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Usuarios</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
+    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
+    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
+    table { border-collapse:collapse; width:100%; margin-top:16px; background:#fff; border-radius:8px; overflow:hidden; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #ece5d8; font-size:13px; }
+    th { background:#f2ddca; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; }
+    form.inline { display:inline; }
+    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:16px; margin-top:20px; max-width:420px; }
+    label { display:block; font-size:12px; font-weight:600; color:#6b6154; margin-bottom:4px; }
+    input, select { width:100%; padding:6px 8px; margin-bottom:10px; border:1px solid #ddd4c6; border-radius:6px; box-sizing:border-box; font:inherit; }
+    button { padding:8px 14px; background:#b5602c; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:12.5px; }
+    .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:#f8e0dc; color:#a33b2c; }
+    .flash.ok { background:#e4f0e6; color:#2f6a45; }
+    .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+    .pill.si { background:#e4f0e6; color:#2f6a45; }
+    .pill.no { background:#f8e0dc; color:#a33b2c; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">← MAC</a>
+    <a href="{{ url_for('auth.logout') }}">Salir</a>
+  </nav>
+  <h1>Usuarios</h1>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  <table>
+    <tr><th>Correo</th><th>Rol</th><th>DNI asociado</th><th>Activo</th><th>Último login</th><th></th></tr>
+    {% for u in usuarios %}
+    <tr>
+      <td>{{ u.email }}</td>
+      <td>{{ u.rol }}</td>
+      <td>{{ u.dni_asociado or "—" }}</td>
+      <td><span class="pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
+      <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "Nunca" }}</td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('admin.toggle_usuario', usuario_id=u.id) }}">
+          <button type="submit">{{ "Desactivar" if u.activo else "Activar" }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="card">
+    <h2 style="font-size:14px; margin-top:0;">Crear usuario nuevo</h2>
+    <form method="post">
+      <label>Correo</label>
+      <input type="email" name="email" required>
+      <label>Contraseña</label>
+      <input type="password" name="password" required>
+      <label>Rol</label>
+      <select name="rol">
+        <option value="analista">Analista</option>
+        <option value="supervisor">Supervisor</option>
+        <option value="admin">Admin</option>
+      </select>
+      <label>DNI asociado (opcional)</label>
+      <input type="text" name="dni_asociado">
+      <button type="submit">Crear</button>
+    </form>
+  </div>
+</body>
+</html>

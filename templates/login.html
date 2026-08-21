@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Iniciar sesión</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:32px; width:320px; box-shadow:0 8px 24px -12px rgba(33,28,22,.2); }
+    h1 { font-size:18px; margin:0 0 20px; }
+    label { display:block; font-size:12.5px; font-weight:600; color:#6b6154; margin-bottom:4px; }
+    input { width:100%; padding:8px 10px; margin-bottom:14px; border:1px solid #ddd4c6; border-radius:6px; font:inherit; box-sizing:border-box; }
+    button { width:100%; padding:10px; background:#b5602c; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+    .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:#f8e0dc; color:#a33b2c; }
+    .flash.ok { background:#e4f0e6; color:#2f6a45; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>MAC — Iniciar sesión</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <label>Correo</label>
+      <input type="email" name="email" required autofocus>
+      <label>Contraseña</label>
+      <input type="password" name="password" required>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+</body>
+</html>
