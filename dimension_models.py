@@ -137,6 +137,20 @@ class Feriado(Base):
     feriado_nacional = Column(Boolean, default=True)
 
 
+class PipelineLock(Base):
+    """Fase 6 (2026-08-21): candado distribuido -- el candado por archivo
+    local (logs/*.lock) que ya usan pipeline_completo.py/export_sharepoint.py
+    no sirve entre dos maquinas distintas (la laptop y un runner de GitHub
+    Actions corriendo el mismo pipeline en paralelo durante la validacion).
+    Una fila por nombre de tarea ("pipeline_completo", "reporte_9am", etc.);
+    ver mac_cloud/pipeline/db_lock.py para adquirir/liberar."""
+    __tablename__ = "pipeline_lock"
+
+    nombre = Column(String(50), primary_key=True)
+    quien = Column(String(150), nullable=False)
+    adquirido_en = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+
+
 VACANTES_VIEW_SQL = """
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,
