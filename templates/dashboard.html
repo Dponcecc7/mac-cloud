@@ -15,12 +15,12 @@
       font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif;
       background:var(--bg); color:var(--ink); margin:0;
     }
-    .wrap { max-width:1180px; margin:0 auto; padding:0 28px 40px; }
+    .wrap { max-width:1240px; margin:0 auto; padding:0 28px 40px; }
     header.top {
       background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff;
       padding:14px 28px; margin-bottom:18px;
     }
-    header.top .inner { max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .inner { max-width:1240px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; letter-spacing:.02em; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
     nav.links { display:flex; align-items:center; gap:20px; font-size:13px; }
@@ -28,10 +28,16 @@
     nav.links a:hover { opacity:1; }
     .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
 
-    h1.title { font-size:19px; margin:0 0 2px; letter-spacing:-.01em; }
-    p.sub { color:var(--muted); font-size:12px; margin:0 0 16px; }
+    h1.title { font-size:19px; margin:0 0 10px; letter-spacing:-.01em; display:inline-block; }
     h2.section { font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:20px 0 8px; font-weight:700; }
     h2.section:first-of-type { margin-top:0; }
+
+    .top-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+    .periodo-form { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; }
+    .periodo-form input[type=date] { font:inherit; font-size:12px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .periodo-form button.aplicar { font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
+    .preset { font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); text-decoration:none; }
+    .preset.activo { background:var(--brand); color:#fff; border-color:var(--brand); }
 
     .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
     .card {
@@ -47,7 +53,7 @@
     .card.neutro { border-left-color:var(--brand); }
 
     .hero { display:flex; gap:16px; align-items:center; background:var(--card); border-radius:14px; padding:14px 18px;
-            box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:6px; flex-wrap:wrap; }
+            box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; flex-wrap:wrap; }
     .ring { width:66px; height:66px; border-radius:50%; flex-shrink:0;
             background:conic-gradient(var(--brand) calc(var(--pct) * 1%), var(--line) 0);
             display:flex; align-items:center; justify-content:center; }
@@ -57,40 +63,46 @@
     .ring-inner span { font-size:7px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
     .hero-txt b { font-size:13px; }
     .hero-txt p { margin:2px 0 0; color:var(--muted); font-size:11.5px; }
+    .hero-hoy { margin-left:auto; font-size:11.5px; color:var(--muted); text-align:right; }
+    .hero-hoy b { color:var(--ink); }
 
     .panel { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .grid2 { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; align-items:start; }
-    @media (max-width: 860px) { .grid2 { grid-template-columns:1fr; } .wrap { padding:0 16px 40px; } }
+    .grid4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; align-items:start; }
+    @media (max-width: 860px) { .grid2, .grid4 { grid-template-columns:1fr; } .wrap { padding:0 16px 40px; } }
 
-    .chart { display:flex; align-items:flex-end; gap:4px; height:118px; margin-top:4px; overflow-x:auto;
+    .chart { display:flex; align-items:flex-end; gap:4px; height:110px; margin-top:4px; overflow-x:auto;
               padding-bottom:2px; border-bottom:1px solid var(--line); }
-    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:16px; flex-shrink:0; }
-    .chart-bars { display:flex; align-items:flex-end; gap:2px; height:100px; }
-    .chart-bar { width:8px; border-radius:3px 3px 0 0; min-height:2px; transition:opacity .15s; }
+    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:14px; flex-shrink:0; }
+    .chart-bars { display:flex; align-items:flex-end; gap:2px; height:92px; }
+    .chart-bar { width:7px; border-radius:3px 3px 0 0; min-height:2px; transition:opacity .15s; }
     .chart-bar.falta { background:linear-gradient(180deg, #c85f52, var(--bad)); }
     .chart-bar.tardanza { background:linear-gradient(180deg, #e6b463, var(--warn)); }
     .chart-col:hover .chart-bar { opacity:.75; }
-    .chart-day { font-size:8.5px; color:var(--muted); margin-top:5px; white-space:nowrap; }
+    .chart-day { font-size:8px; color:var(--muted); margin-top:5px; white-space:nowrap; }
     .legend { display:flex; gap:16px; font-size:11px; color:var(--muted); margin-top:8px; font-weight:600; }
     .legend span { display:inline-flex; align-items:center; gap:5px; }
     .swatch { width:9px; height:9px; border-radius:3px; display:inline-block; }
 
-    .canal-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
-    .canal-row:last-child { margin-bottom:0; }
-    .canal-nombre { width:88px; flex-shrink:0; font-weight:600; }
-    .canal-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:8px; overflow:hidden; }
+    .canal-row, .motivo-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
+    .canal-row:last-child, .motivo-row:last-child { margin-bottom:0; }
+    .canal-nombre, .motivo-nombre { width:auto; min-width:88px; max-width:150px; flex-shrink:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .canal-barra-wrap, .motivo-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:8px; overflow:hidden; }
     .canal-barra { background:linear-gradient(90deg, var(--brand-dark), var(--brand)); height:100%; border-radius:6px; }
-    .canal-pct { width:40px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:11.5px; }
+    .motivo-barra { background:linear-gradient(90deg, #c85f52, var(--bad)); height:100%; border-radius:6px; }
+    .canal-pct, .motivo-n { width:34px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:11.5px; }
 
     table { border-collapse:collapse; width:100%; }
-    th { text-align:left; padding:0 8px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
-    td { padding:6px 8px; border-bottom:1px solid var(--line); font-size:12px; }
+    th { text-align:left; padding:0 6px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
+    td { padding:6px 6px; border-bottom:1px solid var(--line); font-size:11.5px; }
     tr:last-child td { border-bottom:none; }
     td.num, th.num { text-align:right; }
-    .badge-pct { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:var(--bad-bg); color:var(--bad); }
+    .badge-pct { display:inline-block; padding:2px 7px; border-radius:999px; font-size:10.5px; font-weight:700; background:var(--bad-bg); color:var(--bad); }
+    .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
 
     .panel + .panel { margin-top:14px; }
-    .empty { color:var(--muted); font-size:12.5px; padding:6px 0; }
+    .empty { color:var(--muted); font-size:12px; padding:6px 0; }
+    .tabla-wrap { max-height:220px; overflow-y:auto; }
   </style>
 </head>
 <body>
@@ -109,45 +121,45 @@
   </header>
 
   <div class="wrap">
-    <h1 class="title">Asistencia</h1>
+    <div class="top-row">
+      <h1 class="title">Asistencia</h1>
+      <form class="periodo-form" method="get">
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta) }}">7 días</a>
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta) }}">30 días</a>
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta) }}">Este mes</a>
+        <input type="date" name="desde" value="{{ periodo_args.desde }}">
+        <span style="color:var(--muted);">→</span>
+        <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
+        <button class="aplicar" type="submit">Aplicar</button>
+      </form>
+    </div>
 
     {% if not hay_datos %}
-      <p class="sub">Todavía no hay datos de clasificación en Postgres. Mirá <a href="{{ url_for('personal') }}">Personal</a> mientras tanto.</p>
+      <p style="color:var(--muted); font-size:13px;">No hay datos de clasificación en este periodo. Mirá <a href="{{ url_for('personal') }}">Personal</a> mientras tanto.</p>
     {% else %}
-      <p class="sub">Histórico {{ data.periodo.desde }} – {{ data.periodo.hasta }} · en vivo desde Postgres, se actualiza solo con cada corrida del pipeline</p>
-
       <div class="hero">
         <div class="ring" style="--pct: {{ data.resumen.pct_efectividad }};">
           <div class="ring-inner"><b>{{ data.resumen.pct_efectividad }}%</b><span>Efectividad</span></div>
         </div>
         <div class="hero-txt">
-          <b>Hoy: {{ data.resumen_hoy.asistio }} asistieron a tiempo, {{ data.resumen_hoy.tardanza }} con tardanza, {{ data.resumen_hoy.falta }} con falta</b>
-          <p>de {{ data.resumen_hoy.total }} evaluados hoy · {{ data.resumen_hoy.vacante }} vacantes, {{ data.resumen_hoy.vacaciones }} de vacaciones</p>
+          <b>{{ data.periodo.desde }} – {{ data.periodo.hasta }}: {{ data.resumen.asistio }} asistieron a tiempo, {{ data.resumen.tardanza }} con tardanza, {{ data.resumen.falta }} con falta</b>
+          <p>{{ data.kpis.personas_evaluadas }} personas evaluadas · {{ data.resumen.vacante }} días vacante, {{ data.resumen.vacaciones }} de vacaciones</p>
         </div>
+        <div class="hero-hoy">Hoy: <b>{{ data.resumen_hoy.asistio }}</b> a tiempo · <b>{{ data.resumen_hoy.tardanza }}</b> tardanza · <b>{{ data.resumen_hoy.falta }}</b> falta</div>
       </div>
 
-      <h2 class="section">Hoy</h2>
-      <div class="cards">
-        <div class="card ok"><div class="num">{{ data.resumen_hoy.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
-        <div class="card warn"><div class="num">{{ data.resumen_hoy.tardanza }}</div><div class="lbl">Tardanza</div></div>
-        <div class="card bad"><div class="num">{{ data.resumen_hoy.falta }}</div><div class="lbl">Falta</div></div>
-        <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacante }}</div><div class="lbl">Vacante</div></div>
-        <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacaciones }}</div><div class="lbl">Vacaciones</div></div>
-        <div class="card neutro"><div class="num">{{ data.resumen_hoy.total }}</div><div class="lbl">Total evaluado</div></div>
-      </div>
-
-      <h2 class="section">Resumen histórico</h2>
-      <div class="cards">
-        <div class="card ok"><div class="num">{{ data.resumen.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
-        <div class="card warn"><div class="num">{{ data.resumen.tardanza }}</div><div class="lbl">Tardanza</div></div>
-        <div class="card bad"><div class="num">{{ data.resumen.falta }}</div><div class="lbl">Falta</div></div>
-        <div class="card neutro"><div class="num">{{ data.resumen.geofence }}</div><div class="lbl">Alerta geofence</div></div>
+      <div class="cards" style="margin-bottom:16px;">
+        <div class="card neutro"><div class="num">{{ data.kpis.headcount_actual }}</div><div class="lbl">Headcount actual</div></div>
+        <div class="card neutro"><div class="num">{{ data.kpis.personas_evaluadas }}</div><div class="lbl">Personas evaluadas</div></div>
+        <div class="card bad"><div class="num">{{ data.kpis.incidencias }}</div><div class="lbl">Incidencias (falta+vacante+vacac.)</div></div>
+        <div class="card neutro"><div class="num">{{ data.kpis.jornada_promedio }}</div><div class="lbl">Jornada promedio</div></div>
       </div>
 
       <div class="grid2">
         <div>
-          <h2 class="section">Tendencia · últimos {{ data.tendencia|length }} días</h2>
+          <h2 class="section">Tendencia diaria</h2>
           <div class="panel">
+            {% if data.tendencia %}
             <div class="chart">
               {% for d in data.tendencia %}
               <div class="chart-col">
@@ -163,50 +175,101 @@
               <span><span class="swatch" style="background:var(--bad);"></span> Falta</span>
               <span><span class="swatch" style="background:var(--warn);"></span> Tardanza</span>
             </div>
-          </div>
-
-          <h2 class="section">Alertas</h2>
-          <div class="cards">
-            <div class="card neutro"><div class="num">{{ data.alertas.alerta_analista }}</div><div class="lbl">Para revisar (analista)</div></div>
-            <div class="card neutro"><div class="num">{{ data.alertas.otro_canal }}</div><div class="lbl">Trabajó otro canal</div></div>
-            <div class="card neutro"><div class="num">{{ data.alertas.geofence }}</div><div class="lbl">Fuera de geocerca</div></div>
+            {% else %}
+            <p class="empty">Sin datos en este periodo.</p>
+            {% endif %}
           </div>
         </div>
 
         <div>
           <h2 class="section">Efectividad por canal</h2>
           <div class="panel">
-            {% for canal, pct in data.efectividad_por_canal %}
-            <div class="canal-row">
-              <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
-              <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
-              <div class="canal-pct">{{ pct }}%</div>
-            </div>
-            {% endfor %}
-          </div>
-
-          <h2 class="section">Top 6 con más falta</h2>
-          <div class="panel">
-            {% if data.top_falta %}
-            <table>
-              <tr><th>Nombre</th><th class="num">Falta</th><th class="num">Tardanza</th><th class="num">% Falta</th></tr>
-              {% for p in data.top_falta %}
-              <tr>
-                <td>{{ p.nombre }}</td>
-                <td class="num">{{ p.falta }}</td>
-                <td class="num">{{ p.tardanza }}</td>
-                <td class="num"><span class="badge-pct">{{ p.pct_falta }}%</span></td>
-              </tr>
+            {% if data.efectividad_por_canal %}
+              {% for canal, pct in data.efectividad_por_canal %}
+              <div class="canal-row">
+                <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
+                <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
+                <div class="canal-pct">{{ pct }}%</div>
+              </div>
               {% endfor %}
-            </table>
             {% else %}
-            <p class="empty">Sin datos todavía.</p>
+              <p class="empty">Sin datos en este periodo.</p>
             {% endif %}
           </div>
+        </div>
+      </div>
 
-          <h2 class="section">Asistencia perfecta</h2>
-          <div class="cards">
-            <div class="card ok"><div class="num">{{ data.asistencia_perfecta.n }} <span style="font-size:14px; color:var(--muted); font-weight:600;">/ {{ data.asistencia_perfecta.total }}</span></div><div class="lbl">Personas sin falta ni tardanza</div></div>
+      <h2 class="section">Faltas por motivo</h2>
+      <div class="panel">
+        {% if data.faltas_por_motivo %}
+          {% set max_motivo = data.faltas_por_motivo[0][1] %}
+          {% for motivo, n in data.faltas_por_motivo %}
+          <div class="motivo-row">
+            <div class="motivo-nombre" title="{{ motivo }}">{{ motivo }}</div>
+            <div class="motivo-barra-wrap"><div class="motivo-barra" style="width: {{ (n / max_motivo * 100)|round(0,'floor') }}%;"></div></div>
+            <div class="motivo-n">{{ n }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="empty">Sin faltas en este periodo.</p>
+        {% endif %}
+      </div>
+
+      <h2 class="section">Detalle del periodo</h2>
+      <div class="grid4">
+        <div class="panel">
+          <p style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px;">Top tardanzas</p>
+          <div class="tabla-wrap">
+          {% if data.top_tardanza %}
+            <table>
+              <tr><th>Nombre</th><th class="num">Días</th></tr>
+              {% for p in data.top_tardanza %}
+              <tr><td>{{ p.nombre }}</td><td class="num"><span class="badge-pct warn">{{ p.tardanza }}</span></td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">Sin tardanzas.</p>{% endif %}
+          </div>
+        </div>
+
+        <div class="panel">
+          <p style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px;">Top faltas</p>
+          <div class="tabla-wrap">
+          {% if data.top_falta %}
+            <table>
+              <tr><th>Nombre</th><th class="num">Días</th></tr>
+              {% for p in data.top_falta %}
+              <tr><td>{{ p.nombre }}</td><td class="num"><span class="badge-pct">{{ p.falta }}</span></td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">Sin faltas.</p>{% endif %}
+          </div>
+        </div>
+
+        <div class="panel">
+          <p style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px;">Vacaciones</p>
+          <div class="tabla-wrap">
+          {% if data.vacaciones_detalle %}
+            <table>
+              <tr><th>Fecha</th><th>Colaborador</th></tr>
+              {% for v in data.vacaciones_detalle %}
+              <tr><td>{{ v.fecha }}</td><td>{{ v.nombre }}</td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">Nadie de vacaciones.</p>{% endif %}
+          </div>
+        </div>
+
+        <div class="panel">
+          <p style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px;">Vacantes</p>
+          <div class="tabla-wrap">
+          {% if data.vacantes_detalle %}
+            <table>
+              <tr><th>Posición</th><th class="num">Días abierta</th></tr>
+              {% for v in data.vacantes_detalle %}
+              <tr><td>{{ v.nombre }}</td><td class="num">{{ v.dias }}</td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">Sin vacantes.</p>{% endif %}
           </div>
         </div>
       </div>

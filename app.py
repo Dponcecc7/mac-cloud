@@ -8,11 +8,12 @@ el reporte diario real llega en fases futuras (2 y 3 del roadmap).
 """
 import datetime as dt
 import os
+import re
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 from flask_login import current_user, login_required
 from sqlalchemy import text
 
@@ -26,6 +27,27 @@ from fact_models import ClasificacionDiaria
 from scoping import correos_visibles
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
+
+_RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
+
+
+def _motivo_limpio(comentario):
+    """Version chica de asistencia.py::_homologar_motivo() -- separada a
+    proposito (evita acoplar app.py al modulo del blueprint) para agrupar
+    "Faltas por motivo" del dashboard."""
+    if not comentario:
+        return "Sin motivo"
+    texto = str(comentario).strip()
+    while True:
+        m = _RE_PREFIJO_FALTA.match(texto)
+        if not m or m.end() == 0:
+            break
+        resto = texto[m.end():].strip()
+        if resto == texto:
+            break
+        texto = resto
+    texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+    return (texto[0].upper() + texto[1:]) if texto else "Sin motivo"
 
 
 def create_app():
@@ -89,72 +111,155 @@ def create_app():
     @app.get("/")
     @login_required
     def dashboard():
-        # Fase 6 (2026-08-21): primer dashboard real -- consulta Postgres en
-        # vivo en cada visita (clasificacion_diaria + personas), no depende
-        # de dashboard_data.json (ese archivo lo genera export_dashboard_data.py
-        # en cada corrida del pipeline, pero vive en SharePoint/local, no
-        # aca). Deja afuera compensacion/indicador/alertas operativas (visita
-        # larga, Punto Censo) -- esos datos hoy solo existen como Excel
-        # transitorio dentro de una corrida del pipeline, nunca se persisten
-        # en Postgres, asi que no hay de donde consultarlos en vivo.
+        # Fase 6 (2026-08-21): dashboard real -- consulta Postgres en vivo en
+        # cada visita, no depende de dashboard_data.json (ese archivo lo
+        # genera export_dashboard_data.py en cada corrida del pipeline, pero
+        # vive en SharePoint/local, no aca).
+        #
+        # 2026-08-22: el periodo (desde/hasta) ahora es seleccionable -- antes
+        # el indicador de efectividad mezclaba TODO el historico desde el
+        # inicio del sistema en un solo numero, sin poder acotarlo.
+        hoy_peru = dt.datetime.now(PERU_TZ).date()
+        try:
+            hasta = dt.date.fromisoformat(request.args.get("hasta", "")) if request.args.get("hasta") else hoy_peru
+        except ValueError:
+            hasta = hoy_peru
+        try:
+            desde = dt.date.fromisoformat(request.args.get("desde", "")) if request.args.get("desde") else hasta - dt.timedelta(days=29)
+        except ValueError:
+            desde = hasta - dt.timedelta(days=29)
+        if desde > hasta:
+            desde, hasta = hasta, desde
+
+        # Jinja no tiene timedelta a mano -- se precalculan los 3 atajos de
+        # periodo acá en vez de hacer aritmetica de fechas en la plantilla.
+        presets = {
+            "7d": {"desde": (hoy_peru - dt.timedelta(days=6)).isoformat(), "hasta": hoy_peru.isoformat()},
+            "30d": {"desde": (hoy_peru - dt.timedelta(days=29)).isoformat(), "hasta": hoy_peru.isoformat()},
+            "mes": {"desde": hoy_peru.replace(day=1).isoformat(), "hasta": hoy_peru.isoformat()},
+        }
+
+        correos = correos_visibles(current_user)  # None = sin restriccion (admin / usuario sin cliente asignado)
+
         dim_session = get_dim_session()
         try:
             query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
-                                   ClasificacionDiaria.canal_esperado, ClasificacionDiaria.trabajo_otro_canal,
-                                   ClasificacionDiaria.alerta_analista)
+                                   ClasificacionDiaria.canal_esperado, ClasificacionDiaria.entrada_real,
+                                   ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
+                .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
             )
-            # correos_visibles(): un analista de otro cliente_id_athena no
-            # debe ver nombres/DNI de un cliente que no es el suyo -- admin
-            # (o un usuario todavia sin cliente asignado) ve todo.
-            correos = correos_visibles(current_user)
             if correos is not None:
                 query = query.filter(Persona.analista_propietario.in_(correos))
             filas = query.all()
+
+            # "Hoy" es independiente del periodo elegido (si elegis un rango
+            # pasado, igual queres ver como viene el dia de hoy) -- consulta
+            # aparte, chica.
+            query_hoy = (
+                dim_session.query(ClasificacionDiaria.estado)
+                .join(Persona, Persona.dni == ClasificacionDiaria.dni)
+                .filter(ClasificacionDiaria.fecha == hoy_peru)
+            )
+            if correos is not None:
+                query_hoy = query_hoy.filter(Persona.analista_propietario.in_(correos))
+            filas_hoy = query_hoy.all()
+
+            headcount_query = dim_session.query(Persona.dni).filter(Persona.estado == "Activo")
+            if correos is not None:
+                headcount_query = headcount_query.filter(Persona.analista_propietario.in_(correos))
+            headcount_actual = headcount_query.count()
+
+            # Dias abiertos por vacante: no se acota al periodo elegido (una
+            # vacante sigue "abierta" aunque el usuario mire una semana vieja)
+            # -- se cuenta el total de dias con estado VACANTE registrados
+            # para cada Persona que hoy figura como Vacante.
+            dnis_vacantes_query = dim_session.query(Persona.dni, Persona.nombre_completo).filter(Persona.estado == "Vacante")
+            if correos is not None:
+                dnis_vacantes_query = dnis_vacantes_query.filter(Persona.analista_propietario.in_(correos))
+            personas_vacantes = dnis_vacantes_query.all()
+            dias_por_vacante = []
+            if personas_vacantes:
+                dnis_vac = [dni for dni, _ in personas_vacantes]
+                nombre_de_vac = dict(personas_vacantes)
+                conteo = (
+                    dim_session.query(ClasificacionDiaria.dni, ClasificacionDiaria.estado)
+                    .filter(ClasificacionDiaria.dni.in_(dnis_vac))
+                    .all()
+                )
+                dias_vac = pd.DataFrame(conteo, columns=["dni", "estado"])
+                if len(dias_vac):
+                    dias_vac["estado_base"] = dias_vac["estado"].apply(lambda s: s.split(" (")[0])
+                    dias_vac = dias_vac[dias_vac["estado_base"] == "VACANTE"]
+                    conteo_dias = dias_vac.groupby("dni").size()
+                    dias_por_vacante = sorted(
+                        [{"nombre": nombre_de_vac[dni], "dias": int(n)} for dni, n in conteo_dias.items()],
+                        key=lambda x: -x["dias"],
+                    )
         finally:
             dim_session.close()
 
+        periodo_args = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
+
         if not filas:
-            return render_template("dashboard.html", usuario=current_user, hay_datos=False)
+            return render_template(
+                "dashboard.html", usuario=current_user, hay_datos=False,
+                periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
+            )
 
         r = pd.DataFrame(filas, columns=[
-            "dni", "nombre", "region", "fecha", "estado", "canal", "otro_canal", "alerta_analista",
+            "dni", "nombre", "region", "fecha", "estado", "canal", "entrada_real", "salida_real", "comentario",
         ])
         r["fecha"] = pd.to_datetime(r["fecha"])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
         r["region"] = r["region"].fillna("Sin región")
 
-        # Render corre en UTC, no en hora de Peru -- "hoy" calculado con el
-        # reloj del servidor puede ser un dia distinto al de Peru varias
-        # horas por dia (ej. entre las 19:00 y 23:59 hora Peru, UTC ya paso
-        # a "manana"). Los datos en Postgres estan en fecha calendario de
-        # Peru (vienen de Athena), asi que "hoy" tiene que calcularse igual.
-        hoy = pd.Timestamp(dt.datetime.now(PERU_TZ).date())
-        hoy_df = r[r["fecha"] == hoy]
+        hoy_es = [f.split(" (")[0] for (f,) in filas_hoy]
         resumen_hoy = {
-            "asistio": int((hoy_df["estado_base"] == "ASISTIÓ A TIEMPO").sum()),
-            "tardanza": int((hoy_df["estado_base"] == "TARDANZA").sum()),
-            "falta": int((hoy_df["estado_base"] == "FALTA").sum()),
-            "vacante": int((hoy_df["estado_base"] == "VACANTE").sum()),
-            "vacaciones": int((hoy_df["estado_base"] == "VACACIONES").sum()),
-            "total": int(len(hoy_df)),
+            "asistio": hoy_es.count("ASISTIÓ A TIEMPO"),
+            "tardanza": hoy_es.count("TARDANZA"),
+            "falta": hoy_es.count("FALTA"),
+            "vacante": hoy_es.count("VACANTE"),
+            "vacaciones": hoy_es.count("VACACIONES"),
+            "total": len(hoy_es),
         }
 
         total = len(r)
         n_asistio = int((r["estado_base"] == "ASISTIÓ A TIEMPO").sum())
         n_tardanza = int((r["estado_base"] == "TARDANZA").sum())
         n_falta = int((r["estado_base"] == "FALTA").sum())
-        n_geofence = int(r["estado_base"].str.startswith("ALERTA").sum())
+        n_vacante = int((r["estado_base"] == "VACANTE").sum())
+        n_vacaciones = int((r["estado_base"] == "VACACIONES").sum())
         pct_efectividad = round((n_asistio + n_tardanza) / total * 100, 1) if total else 0.0
+        n_personas_evaluadas = r["dni"].nunique()
+        n_incidencias = n_falta + n_vacante + n_vacaciones
+
+        # Jornada promedio: solo dias con entrada Y salida real (asistio o
+        # tardanza) -- ambas guardadas como texto "HH:MM:SS".
+        con_jornada = r[r["entrada_real"].notna() & r["salida_real"].notna()].copy()
+        if len(con_jornada):
+            entrada_td = pd.to_timedelta(con_jornada["entrada_real"])
+            salida_td = pd.to_timedelta(con_jornada["salida_real"])
+            duracion = (salida_td - entrada_td).dt.total_seconds() / 3600
+            duracion = duracion[(duracion > 0) & (duracion < 16)]  # descarta datos corruptos/turnos nocturnos raros
+            jornada_promedio_h = duracion.mean() if len(duracion) else None
+        else:
+            jornada_promedio_h = None
+        if jornada_promedio_h is not None:
+            horas = int(jornada_promedio_h)
+            minutos = int(round((jornada_promedio_h - horas) * 60))
+            jornada_promedio = f"{horas}h {minutos:02d}m"
+        else:
+            jornada_promedio = "—"
 
         tendencia = r.groupby(r["fecha"].dt.date)["estado_base"].value_counts().unstack(fill_value=0)
         for col in ["ASISTIÓ A TIEMPO", "TARDANZA", "FALTA"]:
             if col not in tendencia.columns:
                 tendencia[col] = 0
-        tendencia = tendencia.sort_index().tail(30)  # ultimos 30 dias -- no saturar el grafico
-        max_tendencia = max(1, int(tendencia[["FALTA", "TARDANZA"]].to_numpy().max()))
+        tendencia = tendencia.sort_index()
+        max_tendencia = max(1, int(tendencia[["FALTA", "TARDANZA"]].to_numpy().max())) if len(tendencia) else 1
         serie_tendencia = [
             {"dia": d.strftime("%d/%m"), "falta": int(fila["FALTA"]), "tardanza": int(fila["TARDANZA"])}
             for d, fila in tendencia.iterrows()
@@ -166,34 +271,55 @@ def create_app():
             .sort_values(ascending=False)
         )
 
-        n_otro_canal = int(r["otro_canal"].sum())
-        n_alerta_analista = int(r["alerta_analista"].sum())
-
         resumen_persona = r.groupby(["dni", "nombre"]).agg(
             dias=("estado_base", "size"),
             falta=("estado_base", lambda s: int((s == "FALTA").sum())),
             tardanza=("estado_base", lambda s: int((s == "TARDANZA").sum())),
         ).reset_index()
-        resumen_persona["pct_falta"] = (resumen_persona["falta"] / resumen_persona["dias"] * 100).round(1)
-        top_falta = resumen_persona.sort_values(["falta", "tardanza"], ascending=False).head(6).to_dict("records")
-        n_perfectas = int(((resumen_persona["falta"] == 0) & (resumen_persona["tardanza"] == 0)).sum())
-        n_personas = len(resumen_persona)
+        top_falta = (
+            resumen_persona[resumen_persona["falta"] > 0]
+            .sort_values(["falta", "tardanza"], ascending=False).head(8).to_dict("records")
+        )
+        top_tardanza = (
+            resumen_persona[resumen_persona["tardanza"] > 0]
+            .sort_values(["tardanza", "falta"], ascending=False).head(8).to_dict("records")
+        )
+
+        faltas_por_motivo = (
+            r[r["estado_base"] == "FALTA"]["comentario"].apply(_motivo_limpio).value_counts().head(8)
+        )
+
+        vacaciones_detalle = (
+            r[r["estado_base"] == "VACACIONES"][["fecha", "nombre"]]
+            .sort_values("fecha", ascending=False)
+            .assign(fecha=lambda d: d["fecha"].dt.strftime("%d/%m/%Y"))
+            .to_dict("records")
+        )
 
         data = {
-            "periodo": {"desde": r["fecha"].min().strftime("%d/%m/%Y"), "hasta": r["fecha"].max().strftime("%d/%m/%Y")},
+            "periodo": {"desde": desde.strftime("%d/%m/%Y"), "hasta": hasta.strftime("%d/%m/%Y")},
             "resumen_hoy": resumen_hoy,
             "resumen": {
                 "total": total, "asistio": n_asistio, "tardanza": n_tardanza, "falta": n_falta,
-                "geofence": n_geofence, "pct_efectividad": pct_efectividad,
+                "vacante": n_vacante, "vacaciones": n_vacaciones, "pct_efectividad": pct_efectividad,
+            },
+            "kpis": {
+                "headcount_actual": headcount_actual, "personas_evaluadas": int(n_personas_evaluadas),
+                "incidencias": n_incidencias, "jornada_promedio": jornada_promedio,
             },
             "tendencia": serie_tendencia,
             "max_tendencia": max_tendencia,
             "efectividad_por_canal": list(por_canal.items()),
-            "alertas": {"otro_canal": n_otro_canal, "alerta_analista": n_alerta_analista, "geofence": n_geofence},
+            "faltas_por_motivo": list(faltas_por_motivo.items()),
             "top_falta": top_falta,
-            "asistencia_perfecta": {"n": n_perfectas, "total": n_personas},
+            "top_tardanza": top_tardanza,
+            "vacaciones_detalle": vacaciones_detalle,
+            "vacantes_detalle": dias_por_vacante,
         }
-        return render_template("dashboard.html", usuario=current_user, hay_datos=True, data=data)
+        return render_template(
+            "dashboard.html", usuario=current_user, hay_datos=True, data=data,
+            periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
+        )
 
     @app.get("/personal")
     @login_required

@@ -56,7 +56,7 @@
       <div class="table-wrap">
       <table>
         <tr>
-          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Rol</th><th>Canal</th>
+          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Fecha de baja</th><th>Rol</th><th>Canal</th>
           <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
         </tr>
         {% for p in personas %}
@@ -68,6 +68,7 @@
             {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>
             {% else %}<span class="estado-pill inactivo">Inactivo</span>{% endif %}
           </td>
+          <td>{{ p.fecha_baja.strftime("%d/%m/%Y") if p.fecha_baja else "—" }}</td>
           <td>{{ (p.rol or "—")|title }}</td>
           <td>{{ (p.canal or "—")|title }}</td>
           <td>{{ (p.region or "—")|title }}</td>
