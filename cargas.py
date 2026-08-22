@@ -11,9 +11,11 @@ import datetime as dt
 import io
 from functools import wraps
 
+import openpyxl
 import pandas as pd
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from openpyxl.styles import Font
 
 from dimension_models import Persona, PatronRecurrente, get_session
 from parseo_headcount import (
@@ -63,6 +65,53 @@ def _si_no_a_bool(valor):
 
 def _hora(valor):
     return valor if pd.notna(valor) else None
+
+
+def _plantilla_excel(nombre_hoja, titulo, columnas, fila_ejemplo):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = nombre_hoja
+    ws.cell(row=1, column=1, value=titulo).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value="Plantilla en blanco -- completá una fila por persona/día y subila en \"Cargar Headcount\".")
+    for i, col in enumerate(columnas, start=1):
+        celda = ws.cell(row=4, column=i, value=col)
+        celda.font = Font(bold=True)
+        ws.column_dimensions[celda.column_letter].width = max(14, len(col) + 2)
+    for i, valor in enumerate(fila_ejemplo, start=1):
+        celda = ws.cell(row=5, column=i, value=valor)
+        celda.font = Font(italic=True, color="9C6B13")
+    ws.cell(row=6, column=1, value="↑ borrá esta fila de ejemplo antes de subir el archivo").font = Font(italic=True, size=9, color="9C6B13")
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@bp.get("/plantilla/maestro.xlsx")
+@_analista_requerido
+def plantilla_maestro():
+    # DNI de ejemplo = "EJEMPLO" (no numérico) a propósito -- parsear_maestro()
+    # descarta filas cuyo DNI no es numérico, así que si alguien sube el
+    # archivo sin borrar la fila de ejemplo, no crea una persona fantasma.
+    buf = _plantilla_excel(
+        "Maestro Headcount", "Maestro Headcount", COLUMNAS_MAESTRO_ESPERADAS,
+        ["EJEMPLO", "APELLIDOS NOMBRES", dt.date.today(), None, "Activo", None, "No",
+         "MERCADERISTAS", "FARMACIA", "LIMA", "LIMA", "NOMBRE DE ZONA", "NOMBRE DEL SUPERVISOR",
+         None, None, "Analista MAC", dt.date.today()],
+    )
+    return send_file(buf, as_attachment=True, download_name="Plantilla_Maestro_Headcount.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@bp.get("/plantilla/patron.xlsx")
+@_analista_requerido
+def plantilla_patron():
+    buf = _plantilla_excel(
+        "Patrón recurrente", "Patrón Recurrente", COLUMNAS_PATRON_ESPERADAS,
+        ["EJEMPLO", "lunes", dt.time(8, 0), dt.time(17, 30), "Farmacia", "Con refrigerio"],
+    )
+    return send_file(buf, as_attachment=True, download_name="Plantilla_Patron_Recurrente.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @bp.get("/headcount")
