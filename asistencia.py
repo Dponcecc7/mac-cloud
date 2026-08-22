@@ -20,6 +20,7 @@ funciona) y ademas una copia en Postgres (correcciones_web, solo auditoria).
 import datetime as dt
 import io
 import os
+import re
 import sys
 
 import openpyxl
@@ -48,6 +49,32 @@ SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que usaba la app local para resaltar 
 # encontrar estos casos facil para no perderlos (ver TEXTO_PENDIENTE_ENTRADA/
 # TEXTO_PENDIENTE_SALIDA en pipeline/aplicar_correcciones.py).
 MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
+
+_RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
+
+
+def _homologar_motivo(texto):
+    """Version tolerante de reporte_diario_9am.py::limpiar_motivo() solo
+    para lo que se muestra/edita acá -- saca el prefijo "Falta" repetido con
+    cualquier variante de formato (con/sin guion, con/sin espacios,
+    mayúsculas), no solo el "Falta - " exacto que espera el motor. Ej.:
+    "Falta-Falta Injustificada" -> "Injustificada". No toca limpiar_motivo()
+    en sí (esa la usa el motor de clasificación real, no se arriesga)."""
+    if not texto:
+        return texto
+    texto = str(texto).strip()
+    while True:
+        m = _RE_PREFIJO_FALTA.match(texto)
+        if not m or not m.group(0) or m.end() == 0:
+            break
+        resto = texto[m.end():].strip()
+        if resto == texto:
+            break
+        texto = resto
+    texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+    if not texto:
+        return None
+    return texto[0].upper() + texto[1:]
 
 
 def _cargar_feriados():
@@ -113,16 +140,16 @@ def _cargar_reporte(fecha):
             "entrada_real": c.entrada_real,
             "entrada_corregida": c.fuente_dato == "Corregido manualmente (Tabla 3)",
             "estado": c.estado,
-            # limpiar_motivo() saca el prefijo redundante "Falta - " (el
-            # badge de Estado ya dice "Falta") -- misma funcion que ya usa
-            # el motor de clasificacion para esto, no se reinventa.
-            "comentario_entrada": r9am.limpiar_motivo(c.comentario_supervisor, "Falta") or "",
+            # _homologar_motivo() saca el prefijo redundante "Falta" (el
+            # badge de Estado ya dice "Falta"), tolerando variantes de
+            # formato -- ver docstring de la función.
+            "comentario_entrada": _homologar_motivo(c.comentario_supervisor) or "",
             "salida_prog": ayer_c.salida_esperada if ayer_c else None,
             "salida_real": ayer_c.salida_real if ayer_c else None,
             "salida_corregida": bool(ayer_c and ayer_c.fuente_dato == "Corregido manualmente (Tabla 3)"),
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
-            "comentario_salida": (r9am.limpiar_motivo(ayer_c.comentario_supervisor, "Falta") or "") if ayer_c else "",
+            "comentario_salida": (_homologar_motivo(ayer_c.comentario_supervisor) or "") if ayer_c else "",
             "entrada_pendiente": MARCADOR_PENDIENTE in (c.comentario_supervisor or ""),
             "salida_pendiente": MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else ""),
         })
