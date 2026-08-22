@@ -6,9 +6,41 @@
   <title>MAC</title>
   <style>
     body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
-    nav { display:flex; align-items:center; gap:16px; font-size:13px; margin-bottom:24px; }
+    nav { display:flex; align-items:center; gap:16px; font-size:13px; margin-bottom:24px; flex-wrap:wrap; }
     nav a { color:#b5602c; text-decoration:none; font-weight:600; }
     .pill { background:#ece5d8; color:#6b6154; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+    h1 { margin:0 0 4px; }
+    .sub { color:#6b6154; font-size:12.5px; margin:0 0 24px; }
+    h2 { font-size:15px; margin:32px 0 12px; color:#3a332b; }
+    .cards { display:flex; gap:14px; flex-wrap:wrap; }
+    .card { background:#fff; border-radius:10px; padding:16px 20px; min-width:120px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .card .num { font-size:26px; font-weight:700; line-height:1.1; }
+    .card .lbl { font-size:11.5px; color:#6b6154; text-transform:uppercase; letter-spacing:.03em; margin-top:4px; }
+    .card.asistio .num { color:#2f6a45; }
+    .card.tardanza .num { color:#8a5c07; }
+    .card.falta .num { color:#a3372e; }
+    .card.neutro .num { color:#3a332b; }
+    .panel { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .chart { display:flex; align-items:flex-end; gap:4px; height:140px; margin-top:12px; overflow-x:auto; }
+    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:22px; }
+    .chart-bars { display:flex; align-items:flex-end; gap:1px; height:110px; }
+    .chart-bar { width:9px; border-radius:2px 2px 0 0; }
+    .chart-bar.falta { background:#c0554b; }
+    .chart-bar.tardanza { background:#d9a441; }
+    .chart-day { font-size:9px; color:#6b6154; margin-top:4px; transform:rotate(-45deg); white-space:nowrap; }
+    .legend { display:flex; gap:16px; font-size:11.5px; color:#6b6154; margin-top:8px; }
+    .legend span { display:inline-flex; align-items:center; gap:5px; }
+    .swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+    .canal-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
+    .canal-nombre { width:110px; flex-shrink:0; }
+    .canal-barra-wrap { flex:1; background:#ece5d8; border-radius:4px; height:16px; overflow:hidden; }
+    .canal-barra { background:#b5602c; height:100%; }
+    .canal-pct { width:44px; text-align:right; flex-shrink:0; color:#6b6154; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; }
+    th { font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    @media (max-width: 800px) { .grid2 { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -19,7 +51,89 @@
     {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
     <a href="{{ url_for('auth.logout') }}">Salir</a>
   </nav>
-  <h1>MAC</h1>
-  <p>Próximamente: el reporte diario de asistencia va a vivir acá (Fase 3 del roadmap de migración). Por ahora, mirá <a href="{{ url_for('personal') }}">Personal</a> para ver la data real ya migrada a Postgres.</p>
+  <h1>MAC — Asistencia</h1>
+
+  {% if not hay_datos %}
+    <p class="sub">Todavía no hay datos de clasificación en Postgres. Mirá <a href="{{ url_for('personal') }}">Personal</a> mientras tanto.</p>
+  {% else %}
+    <p class="sub">Histórico: {{ data.periodo.desde }} – {{ data.periodo.hasta }} · datos en vivo desde Postgres, se actualiza solo con cada corrida del pipeline.</p>
+
+    <h2>Hoy</h2>
+    <div class="cards">
+      <div class="card asistio"><div class="num">{{ data.resumen_hoy.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
+      <div class="card tardanza"><div class="num">{{ data.resumen_hoy.tardanza }}</div><div class="lbl">Tardanza</div></div>
+      <div class="card falta"><div class="num">{{ data.resumen_hoy.falta }}</div><div class="lbl">Falta</div></div>
+      <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacante }}</div><div class="lbl">Vacante</div></div>
+      <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacaciones }}</div><div class="lbl">Vacaciones</div></div>
+      <div class="card neutro"><div class="num">{{ data.resumen_hoy.total }}</div><div class="lbl">Total evaluado</div></div>
+    </div>
+
+    <h2>Resumen histórico</h2>
+    <div class="cards">
+      <div class="card neutro"><div class="num">{{ data.resumen.pct_efectividad }}%</div><div class="lbl">Efectividad</div></div>
+      <div class="card asistio"><div class="num">{{ data.resumen.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
+      <div class="card tardanza"><div class="num">{{ data.resumen.tardanza }}</div><div class="lbl">Tardanza</div></div>
+      <div class="card falta"><div class="num">{{ data.resumen.falta }}</div><div class="lbl">Falta</div></div>
+      <div class="card neutro"><div class="num">{{ data.resumen.geofence }}</div><div class="lbl">Alerta geofence</div></div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <h2>Tendencia (últimos {{ data.tendencia|length }} días)</h2>
+        <div class="panel">
+          <div class="chart">
+            {% for d in data.tendencia %}
+            <div class="chart-col">
+              <div class="chart-bars">
+                <div class="chart-bar falta" style="height: {{ (d.falta / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="Falta: {{ d.falta }}"></div>
+                <div class="chart-bar tardanza" style="height: {{ (d.tardanza / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="Tardanza: {{ d.tardanza }}"></div>
+              </div>
+              <div class="chart-day">{{ d.dia }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="legend">
+            <span><span class="swatch" style="background:#c0554b;"></span> Falta</span>
+            <span><span class="swatch" style="background:#d9a441;"></span> Tardanza</span>
+          </div>
+        </div>
+
+        <h2>Alertas</h2>
+        <div class="cards">
+          <div class="card neutro"><div class="num">{{ data.alertas.alerta_analista }}</div><div class="lbl">Para revisar (analista)</div></div>
+          <div class="card neutro"><div class="num">{{ data.alertas.otro_canal }}</div><div class="lbl">Trabajó otro canal</div></div>
+          <div class="card neutro"><div class="num">{{ data.alertas.geofence }}</div><div class="lbl">Fuera de geocerca</div></div>
+        </div>
+      </div>
+
+      <div>
+        <h2>Efectividad por canal</h2>
+        <div class="panel">
+          {% for canal, pct in data.efectividad_por_canal %}
+          <div class="canal-row">
+            <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
+            <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
+            <div class="canal-pct">{{ pct }}%</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <h2>Top 6 con más Falta</h2>
+        <div class="panel">
+          <table>
+            <tr><th>Nombre</th><th>Falta</th><th>Tardanza</th><th>% Falta</th></tr>
+            {% for p in data.top_falta %}
+            <tr><td>{{ p.nombre }}</td><td>{{ p.falta }}</td><td>{{ p.tardanza }}</td><td>{{ p.pct_falta }}%</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+
+        <h2>Asistencia perfecta</h2>
+        <div class="cards">
+          <div class="card asistio"><div class="num">{{ data.asistencia_perfecta.n }}</div><div class="lbl">de {{ data.asistencia_perfecta.total }} personas, sin falta ni tardanza</div></div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 </body>
 </html>

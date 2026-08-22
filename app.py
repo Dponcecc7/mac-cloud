@@ -8,6 +8,7 @@ el reporte diario real llega en fases futuras (2 y 3 del roadmap).
 """
 import os
 
+import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 from flask_login import current_user, login_required
@@ -17,6 +18,7 @@ from extensions import db, login_manager
 from models import Usuario
 from dimension_models import Persona
 from dimension_models import get_session as get_dim_session
+from fact_models import ClasificacionDiaria
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
 
@@ -52,7 +54,100 @@ def create_app():
     @app.get("/")
     @login_required
     def dashboard():
-        return render_template("dashboard.html", usuario=current_user)
+        # Fase 6 (2026-08-21): primer dashboard real -- consulta Postgres en
+        # vivo en cada visita (clasificacion_diaria + personas), no depende
+        # de dashboard_data.json (ese archivo lo genera export_dashboard_data.py
+        # en cada corrida del pipeline, pero vive en SharePoint/local, no
+        # aca). Deja afuera compensacion/indicador/alertas operativas (visita
+        # larga, Punto Censo) -- esos datos hoy solo existen como Excel
+        # transitorio dentro de una corrida del pipeline, nunca se persisten
+        # en Postgres, asi que no hay de donde consultarlos en vivo.
+        dim_session = get_dim_session()
+        try:
+            filas = (
+                dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
+                                   ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
+                                   ClasificacionDiaria.canal_esperado, ClasificacionDiaria.trabajo_otro_canal,
+                                   ClasificacionDiaria.alerta_analista)
+                .join(Persona, Persona.dni == ClasificacionDiaria.dni)
+                .all()
+            )
+        finally:
+            dim_session.close()
+
+        if not filas:
+            return render_template("dashboard.html", usuario=current_user, hay_datos=False)
+
+        r = pd.DataFrame(filas, columns=[
+            "dni", "nombre", "region", "fecha", "estado", "canal", "otro_canal", "alerta_analista",
+        ])
+        r["fecha"] = pd.to_datetime(r["fecha"])
+        r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
+        r["region"] = r["region"].fillna("Sin región")
+
+        hoy = pd.Timestamp.today().normalize()
+        hoy_df = r[r["fecha"] == hoy]
+        resumen_hoy = {
+            "asistio": int((hoy_df["estado_base"] == "ASISTIÓ A TIEMPO").sum()),
+            "tardanza": int((hoy_df["estado_base"] == "TARDANZA").sum()),
+            "falta": int((hoy_df["estado_base"] == "FALTA").sum()),
+            "vacante": int((hoy_df["estado_base"] == "VACANTE").sum()),
+            "vacaciones": int((hoy_df["estado_base"] == "VACACIONES").sum()),
+            "total": int(len(hoy_df)),
+        }
+
+        total = len(r)
+        n_asistio = int((r["estado_base"] == "ASISTIÓ A TIEMPO").sum())
+        n_tardanza = int((r["estado_base"] == "TARDANZA").sum())
+        n_falta = int((r["estado_base"] == "FALTA").sum())
+        n_geofence = int(r["estado_base"].str.startswith("ALERTA").sum())
+        pct_efectividad = round((n_asistio + n_tardanza) / total * 100, 1) if total else 0.0
+
+        tendencia = r.groupby(r["fecha"].dt.date)["estado_base"].value_counts().unstack(fill_value=0)
+        for col in ["ASISTIÓ A TIEMPO", "TARDANZA", "FALTA"]:
+            if col not in tendencia.columns:
+                tendencia[col] = 0
+        tendencia = tendencia.sort_index().tail(30)  # ultimos 30 dias -- no saturar el grafico
+        max_tendencia = max(1, int(tendencia[["FALTA", "TARDANZA"]].to_numpy().max()))
+        serie_tendencia = [
+            {"dia": d.strftime("%d/%m"), "falta": int(fila["FALTA"]), "tardanza": int(fila["TARDANZA"])}
+            for d, fila in tendencia.iterrows()
+        ]
+
+        por_canal = (
+            r.groupby("canal")["estado_base"]
+            .apply(lambda s: round((s.isin(["ASISTIÓ A TIEMPO", "TARDANZA"])).sum() / len(s) * 100, 1))
+            .sort_values(ascending=False)
+        )
+
+        n_otro_canal = int(r["otro_canal"].sum())
+        n_alerta_analista = int(r["alerta_analista"].sum())
+
+        resumen_persona = r.groupby(["dni", "nombre"]).agg(
+            dias=("estado_base", "size"),
+            falta=("estado_base", lambda s: int((s == "FALTA").sum())),
+            tardanza=("estado_base", lambda s: int((s == "TARDANZA").sum())),
+        ).reset_index()
+        resumen_persona["pct_falta"] = (resumen_persona["falta"] / resumen_persona["dias"] * 100).round(1)
+        top_falta = resumen_persona.sort_values(["falta", "tardanza"], ascending=False).head(6).to_dict("records")
+        n_perfectas = int(((resumen_persona["falta"] == 0) & (resumen_persona["tardanza"] == 0)).sum())
+        n_personas = len(resumen_persona)
+
+        data = {
+            "periodo": {"desde": r["fecha"].min().strftime("%d/%m/%Y"), "hasta": r["fecha"].max().strftime("%d/%m/%Y")},
+            "resumen_hoy": resumen_hoy,
+            "resumen": {
+                "total": total, "asistio": n_asistio, "tardanza": n_tardanza, "falta": n_falta,
+                "geofence": n_geofence, "pct_efectividad": pct_efectividad,
+            },
+            "tendencia": serie_tendencia,
+            "max_tendencia": max_tendencia,
+            "efectividad_por_canal": list(por_canal.items()),
+            "alertas": {"otro_canal": n_otro_canal, "alerta_analista": n_alerta_analista, "geofence": n_geofence},
+            "top_falta": top_falta,
+            "asistencia_perfecta": {"n": n_perfectas, "total": n_personas},
+        }
+        return render_template("dashboard.html", usuario=current_user, hay_datos=True, data=data)
 
     @app.get("/personal")
     @login_required
