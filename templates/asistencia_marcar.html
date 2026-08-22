@@ -32,13 +32,19 @@
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; }
     .btn.primary { background:var(--brand); color:#fff; }
     .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+    .btn.sm { font-size:11.5px; padding:5px 10px; border-radius:6px; white-space:nowrap; }
 
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
     .ipt-filtro { font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+    .ipt-filtro.sm { font-size:11.5px; padding:5px 7px; }
 
-    .pendiente-card { border:1px solid var(--line); border-radius:10px; padding:12px 16px; }
-    .pendiente-card + .pendiente-card { margin-top:10px; }
+    .pendiente-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:7px 4px; border-bottom:1px solid var(--line); }
+    .pendiente-row:last-child { border-bottom:none; }
+    .pendiente-row .quien { flex:1 1 220px; min-width:160px; font-size:12.5px; line-height:1.3; }
+    .pendiente-row .quien b { font-weight:700; }
+    .pendiente-row .quien span { color:var(--muted); }
+    .pendiente-row form { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   </style>
 </head>
 <body>
@@ -106,35 +112,34 @@
         <p>No hay nadie pendiente de marcar para <b>{{ fecha_str }}</b> — todas las faltas/vacantes ya tienen un motivo cargado.</p>
       </div>
     {% else %}
-    <div class="panel">
-      <p class="panel-title">Pendientes de marcar ({{ pendientes|length }})</p>
+    <div class="panel" style="padding:14px 16px;">
+      <p class="panel-title" style="margin-bottom:6px;">Pendientes de marcar ({{ pendientes|length }})</p>
       <div>
         {% for p in pendientes %}
-        <div class="pendiente-card">
-          <b>{{ p.mercaderista|title }}</b>
-          <span style="color:var(--muted); font-size:12px;"> -- {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
-          <form method="post" action="{{ url_for('asistencia.marcar') }}" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+        <div class="pendiente-row">
+          <div class="quien"><b>{{ p.mercaderista|title }}</b><br><span>{{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
+          <form method="post" action="{{ url_for('asistencia.marcar') }}">
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
-            <button class="btn ghost" type="submit" name="accion" value="Asistió">✓ Asistió</button>
-            <button class="btn ghost" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo zona</button>
-            <button class="btn ghost" type="submit" name="accion" value="Vacante">Vacante</button>
-            <select class="ipt-filtro" name="motivo" style="min-width:170px;">
-              <option value="">Motivo de falta...</option>
+            <button class="btn ghost sm" type="submit" name="accion" value="Asistió">✓ Asistió</button>
+            <button class="btn ghost sm" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo</button>
+            <button class="btn ghost sm" type="submit" name="accion" value="Vacante">Vacante</button>
+            <select class="ipt-filtro sm" name="motivo" style="width:135px;">
+              <option value="">Motivo...</option>
               {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
             </select>
-            <button class="btn ghost" type="submit" name="accion" value="Falta">✕ Falta</button>
-            <a class="btn ghost" style="text-decoration:none;" href="{{ url_for('asistencia.reemplazo_form', dni_vacante=p.dni) }}">Tiene reemplazo</a>
+            <button class="btn ghost sm" type="submit" name="accion" value="Falta">✕ Falta</button>
+            <a class="btn ghost sm" style="text-decoration:none;" href="{{ url_for('asistencia.reemplazo_form', dni_vacante=p.dni) }}">Reemplazo</a>
           </form>
         </div>
         {% endfor %}
       </div>
-      <details style="margin-top:12px;">
-        <summary style="font-size:12px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar un motivo de falta nuevo a la lista</summary>
+      <details style="margin-top:10px;">
+        <summary style="font-size:11.5px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar un motivo de falta nuevo a la lista</summary>
         <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;">
           <input type="hidden" name="fecha" value="{{ fecha_str }}">
           <input class="ipt-filtro" name="motivo" placeholder="Nuevo motivo..." required style="flex:1;">
-          <button class="btn ghost" type="submit">Agregar</button>
+          <button class="btn ghost sm" type="submit">Agregar</button>
         </form>
       </details>
     </div>
