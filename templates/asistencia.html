@@ -156,7 +156,16 @@
     {% endif %}
 
     {% if not filas %}
-      <div class="panel"><p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p></div>
+      <div class="panel">
+        <p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p>
+        {% if fecha_reciente %}
+        <p style="margin:8px 0 0; font-size:13px; color:var(--muted);">¿Buscabas corregir un día anterior?
+          <a href="{{ url_for('asistencia.' + ('cliente' if vista == 'cliente' else 'reporte'), fecha=fecha_reciente) }}" style="color:var(--brand); font-weight:700; text-decoration:none;">
+            Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
+          </a>
+        </p>
+        {% endif %}
+      </div>
     {% else %}
       <div class="panel">
         <p class="panel-title">Filtros</p>

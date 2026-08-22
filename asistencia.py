@@ -183,6 +183,16 @@ def _pendientes_de_marcar(filas):
     return [f for f in filas if estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"]]
 
 
+def _fecha_mas_reciente_con_datos():
+    session = get_session()
+    try:
+        from sqlalchemy import func
+        (fecha,) = session.query(func.max(ClasificacionDiaria.fecha)).one()
+        return fecha
+    finally:
+        session.close()
+
+
 def _vista_reporte(fecha_str, vista):
     """vista: 'reporte' (columnas + edicion completa) o 'cliente' (columnas
     reducidas, sin Hora entrada/salida corregida)."""
@@ -194,8 +204,13 @@ def _vista_reporte(fecha_str, vista):
 
     resumen, filas, frescura = _cargar_reporte(fecha)
     pendientes = _pendientes_de_marcar(filas) if filas and vista == "reporte" else None
+    # Si no hay datos para la fecha pedida (ej. hoy, si el pipeline todavia
+    # no corrio), sugerir la fecha mas reciente que si tiene -- para poder
+    # seguir corrigiendo el pasado sin quedar en un callejon sin salida.
+    fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
     return render_template(
         "asistencia.html", usuario=current_user, activo=vista, vista=vista,
+        fecha_reciente=fecha_reciente,
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura,
         pendientes=pendientes, motivos=_motivos_falta() if pendientes else None,
         marcado=request.args.get("marcado"),
