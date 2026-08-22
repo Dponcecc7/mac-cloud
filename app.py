@@ -43,9 +43,11 @@ def create_app():
     from auth import bp as auth_bp
     from admin import bp as admin_bp
     from cargas import bp as cargas_bp
+    from asistencia import bp as asistencia_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cargas_bp)
+    app.register_blueprint(asistencia_bp)
 
     @app.get("/health")
     def health():

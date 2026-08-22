@@ -151,6 +151,26 @@ class PipelineLock(Base):
     adquirido_en = Column(TIMESTAMP, server_default=func.now(), nullable=False)
 
 
+class CorreccionWeb(Base):
+    """Correccion diaria de asistencia (comentario/hora corregida) hecha
+    desde el panel web de mac_cloud/asistencia.py. Escritura DOBLE a
+    proposito (decision del usuario, 2026-08-21): la Tabla 3 en SharePoint
+    (via Graph) sigue siendo la fuente REAL que lee el motor de
+    clasificacion -- esto es solo una copia para auditoria/consulta en
+    Postgres, ningun motor la lee todavia."""
+    __tablename__ = "correcciones_web"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+    fecha = Column(Date, nullable=False)
+    comentario_entrada = Column(Text)
+    comentario_salida = Column(Text)
+    hora_entrada_corregida = Column(String(10))
+    hora_salida_corregida = Column(String(10))
+    registrado_por = Column(String(150))
+    fecha_registro = Column(TIMESTAMP, server_default=func.now())
+
+
 VACANTES_VIEW_SQL = """
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,

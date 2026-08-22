@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Agregar reemplazo</title>
+  <style>
+    :root { --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6; --brand:#b5602c; --bad:#a3372e; --bad-bg:#fbe6e3; }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .panel { background:var(--card); border-radius:14px; padding:20px 22px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:14px; }
+    .panel-title { font-size:13px; font-weight:700; margin:0 0 12px; }
+    .form-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:14px; }
+    label.field { display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:700; color:var(--muted); }
+    .ipt { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+    .ipt:disabled { opacity:.6; }
+    .actions { display:flex; justify-content:flex-end; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+    details summary { cursor:pointer; font-weight:700; font-size:12.5px; color:var(--muted); }
+    .empty { color:var(--muted); font-size:13px; }
+    .error { color:var(--bad); background:var(--bad-bg); border-radius:8px; padding:10px 14px; font-size:12.5px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Corrección diaria de asistencia</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('asistencia.reporte') }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
+      <a href="{{ url_for('asistencia.reemplazo_form') }}" class="active">Agregar reemplazo</a>
+    </nav>
+
+    <div class="note"><b>Reemplazos pendientes de confirmar</b> — reportados por los supervisores desde la app, revisá los datos y confirmá.</div>
+
+    {% if error_pendientes %}
+      <div class="panel"><p class="error">No se pudo revisar reemplazos pendientes: {{ error_pendientes }}</p></div>
+    {% elif not pendientes %}
+      <div class="panel"><p class="empty">No hay reemplazos pendientes reportados por supervisores ahora mismo.</p></div>
+    {% else %}
+      {% for p in pendientes %}
+      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel">
+        <input type="hidden" name="dni_vacante" value="{{ p.dni_vacante }}">
+        <input type="hidden" name="dni_nuevo" value="{{ p.dni_reemplazo }}">
+        <input type="hidden" name="nombre_nuevo" value="{{ p.nombre_reemplazo or '' }}">
+        <p class="panel-title">{{ p.nombre_reemplazo or '(sin nombre)' }} — reemplaza a DNI {{ p.dni_vacante }}</p>
+        <div class="form-row">
+          <label class="field">DNI nuevo<input class="ipt" value="{{ p.dni_reemplazo }}" disabled></label>
+          <label class="field">Fecha de ingreso<input class="ipt" type="date" name="fecha_ingreso" value="{{ hoy }}" required></label>
+          <label class="field">Motivo de baja<input class="ipt" name="motivo_baja" value="{{ p.motivo_cese or '' }}"></label>
+        </div>
+        <div class="actions"><button class="btn" type="submit">Confirmar reemplazo</button></div>
+      </form>
+      {% endfor %}
+    {% endif %}
+
+    <details>
+      <summary>¿No aparece acá? Agregar manualmente</summary>
+      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel" style="margin-top:10px;">
+        <div class="form-row">
+          <label class="field">DNI vacante<input class="ipt" name="dni_vacante" required></label>
+          <label class="field">DNI nuevo<input class="ipt" name="dni_nuevo" required></label>
+          <label class="field">Nombre completo<input class="ipt" name="nombre_nuevo" required></label>
+        </div>
+        <div class="form-row">
+          <label class="field">Fecha de ingreso<input class="ipt" type="date" name="fecha_ingreso" value="{{ hoy }}" required></label>
+          <label class="field">Motivo de baja (si la vacante seguía Activo)<input class="ipt" name="motivo_baja"></label>
+        </div>
+        <div class="actions"><button class="btn" type="submit">Agregar reemplazo</button></div>
+      </form>
+    </details>
+  </div>
+</body>
+</html>

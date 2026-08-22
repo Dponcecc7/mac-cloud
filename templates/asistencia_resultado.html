@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Corrección diaria</title>
+  <style>
+    :root { --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6; --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --bad:#a3372e; --bad-bg:#fbe6e3; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:800px; margin:0 auto; padding:40px 24px; }
+    .panel { background:var(--card); border-radius:14px; padding:22px 24px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .panel.ok { border-left:4px solid var(--ok); } .panel.bad { border-left:4px solid var(--bad); }
+    h1 { font-size:17px; margin:0 0 12px; }
+    pre { white-space:pre-wrap; font-size:12.5px; background:var(--bg); border-radius:8px; padding:12px; max-height:400px; overflow:auto; }
+    a.volver { display:inline-block; margin-top:16px; color:var(--brand); font-weight:700; text-decoration:none; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel {{ 'ok' if ok else 'bad' }}">
+      <h1>{{ titulo }}</h1>
+      <pre>{{ detalle }}</pre>
+    </div>
+    <a class="volver" href="{{ volver }}">← Volver</a>
+  </div>
+</body>
+</html>

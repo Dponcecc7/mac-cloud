@@ -99,6 +99,7 @@
       <div class="brand"><span class="dot"></span> Proyecto MAC</div>
       <nav class="links">
         <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('asistencia.reporte') }}">Corrección diaria</a>
         <a href="{{ url_for('personal') }}">Personal</a>
         {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
         {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Corrección diaria</title>
+  <style>
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1500px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1500px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+
+    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .note b { color:var(--ink); }
+
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
+    .form-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:10px; align-items:end; }
+    @media (max-width:1200px) { .form-row { grid-template-columns:repeat(3, 1fr); } }
+    label.field { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
+    .ipt-filtro { font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+    label.chk { flex-direction:row; align-items:center; gap:6px; }
+    label.chk input { width:auto; }
+
+    .table-wrap { overflow-x:auto; }
+    table { border-collapse:collapse; width:100%; font-size:11.5px; }
+    th { text-align:left; padding:6px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:1px solid var(--line); white-space:nowrap; }
+    td { padding:3px 6px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+    tr.oculta { display:none; }
+    .ipt { font:inherit; font-size:11px; padding:4px 6px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; min-width:100px; }
+    .ipt-hora { min-width:66px; text-align:center; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .badge.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge.bad { background:var(--bad-bg); color:var(--bad); }
+    .badge.neutro { background:var(--line); color:var(--muted); }
+    td.corregida { background:#efe3f5; font-weight:700; }
+    td.temprana { background:var(--bad-bg); color:var(--bad); font-weight:700; }
+
+    .actions { display:flex; justify-content:flex-end; margin-top:16px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Corrección diaria de asistencia</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('asistencia.reporte', fecha=fecha_str) }}" class="{{ 'active' if vista=='reporte' else '' }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.cliente', fecha=fecha_str) }}" class="{{ 'active' if vista=='cliente' else '' }}">Enviar a cliente</a>
+      <a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>
+    </nav>
+
+    <div class="top-actions">
+      <form method="get"><input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()"></form>
+      {% if resumen %}
+      <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
+      {% endif %}
+      {% if frescura and frescura.ultima_sync %}
+      <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('asistencia.actualizar') }}">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="{{ vista }}">
+        <button class="btn ghost" type="submit">🔄 Actualizar ahora</button>
+      </form>
+    </div>
+
+    {% if not filas %}
+      <div class="panel"><p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p></div>
+    {% else %}
+      <div class="note"><b>Ojo:</b> "Entrada real"/"Salida real" son calculadas por el motor, no editables acá.
+        {% if vista == 'reporte' %}Corregí en "Entrada/Salida corregida" (a la derecha) -- se guarda en la Tabla 3, el motor la recoge en su próxima corrida.{% else %}Podés agregar/editar el comentario antes de enviar.{% endif %}</div>
+
+      <div class="panel">
+        <p class="panel-title">Filtros</p>
+        <div class="form-row">
+          <label class="field">Supervisor<select class="ipt-filtro" id="f-supervisor" onchange="filtrar()"><option value="">Todos</option></select></label>
+          <label class="field">Región<select class="ipt-filtro" id="f-region" onchange="filtrar()"><option value="">Todas</option></select></label>
+          <label class="field">Ciudad<select class="ipt-filtro" id="f-ciudad" onchange="filtrar()"><option value="">Todas</option></select></label>
+          <label class="field">Canal<select class="ipt-filtro" id="f-canal" onchange="filtrar()"><option value="">Todos</option></select></label>
+          <label class="field">Estado<select class="ipt-filtro" id="f-estado" onchange="filtrar()"><option value="">Todos</option></select></label>
+          <label class="field">Mercaderista<input class="ipt-filtro" id="f-buscar" type="text" placeholder="Buscar..." oninput="filtrar()"></label>
+          <label class="field chk"><input type="checkbox" id="f-temprana" onchange="filtrar()"> Solo salida temprana</label>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('asistencia.guardar') }}">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="{{ vista }}">
+        <div class="panel">
+          <p class="panel-title">Detalle del día</p>
+          <div class="table-wrap">
+          <table id="tabla">
+            <tr>
+              <th>Supervisor</th><th>Ciudad</th><th>Canal</th><th>Canal hoy</th><th>Mercaderista</th>
+              <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada{{ ' / tardanza' if vista=='cliente' else '' }}</th>
+              <th>Salida prog.</th><th>Salida real</th>
+              {% if vista == 'reporte' %}<th>Canal ayer</th>{% endif %}
+              <th>Comentario salida</th>
+              {% if vista == 'reporte' %}<th>Entrada corregida</th><th>Salida corregida</th>{% endif %}
+            </tr>
+            {% for f in filas %}
+            <tr data-supervisor="{{ f.supervisor or '' }}" data-region="{{ f.region or '' }}" data-ciudad="{{ f.ciudad or '' }}"
+                data-canal="{{ f.canal or '' }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ f.mercaderista or '' }}"
+                data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
+              <td>{{ f.supervisor or '' }}</td>
+              <td>{{ f.ciudad or '' }}</td>
+              <td>{{ f.canal or '' }}</td>
+              <td>{{ f.canal_hoy }}</td>
+              <td>{{ f.mercaderista }}</td>
+              <td>{{ f.entrada_prog or '' }}</td>
+              <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
+              <td>
+                {% set eb = (f.estado or '').split(' (')[0] %}
+                <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb }}</span>
+              </td>
+              <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
+              <td>{{ f.salida_prog or '' }}</td>
+              <td class="{{ 'corregida' if f.salida_corregida else ('temprana' if f.salida_temprana else '') }}">{{ f.salida_real or '' }}</td>
+              {% if vista == 'reporte' %}<td>{{ f.canal_ayer }}</td>{% endif %}
+              <td><input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}"></td>
+              {% if vista == 'reporte' %}
+              <td><input class="ipt ipt-hora" name="entrada_corr_{{ f.dni }}" placeholder="HH:MM"></td>
+              <td><input class="ipt ipt-hora" name="salida_corr_{{ f.dni }}" placeholder="HH:MM"></td>
+              {% endif %}
+              <input type="hidden" name="dni" value="{{ f.dni }}">
+            </tr>
+            {% endfor %}
+          </table>
+          </div>
+        </div>
+        <div class="actions"><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
+    {% endif %}
+  </div>
+
+<script>
+function filasDatos() {
+  return [...document.querySelectorAll('#tabla tr[data-supervisor]')].map(el => ({
+    el, supervisor: el.dataset.supervisor, region: el.dataset.region, ciudad: el.dataset.ciudad,
+    canal: el.dataset.canal, estado: el.dataset.estado, mercaderista: el.dataset.mercaderista,
+    temprana: el.dataset.temprana === 'true',
+  }));
+}
+const CAMPOS = ['supervisor', 'region', 'ciudad', 'canal', 'estado'];
+function valorFiltro(campo) { const el = document.getElementById('f-' + campo); return el ? el.value : ''; }
+function coinciden(filas, exceptoCampo) {
+  const mer = (document.getElementById('f-buscar')?.value || '').toLowerCase();
+  const soloTemprana = document.getElementById('f-temprana')?.checked;
+  return filas.filter(f => {
+    for (const c of CAMPOS) {
+      if (c === exceptoCampo) continue;
+      const v = valorFiltro(c);
+      if (v && f[c] !== v) return false;
+    }
+    if (exceptoCampo !== 'mercaderista' && mer && !f.mercaderista.toLowerCase().includes(mer)) return false;
+    if (soloTemprana && !f.temprana) return false;
+    return true;
+  });
+}
+function filtrar() {
+  const todas = filasDatos();
+  for (const campo of CAMPOS) {
+    const select = document.getElementById('f-' + campo);
+    if (!select) continue;
+    const actual = select.value;
+    const disponibles = coinciden(todas, campo);
+    const unicos = [...new Set(disponibles.map(f => f[campo]).filter(Boolean))].sort();
+    select.innerHTML = '<option value="">Todos</option>' + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
+    select.value = unicos.includes(actual) ? actual : '';
+  }
+  const visibles = new Set(coinciden(todas, null).map(f => f.el));
+  for (const f of todas) f.el.classList.toggle('oculta', !visibles.has(f.el));
+}
+document.addEventListener('DOMContentLoaded', filtrar);
+</script>
+</body>
+</html>
