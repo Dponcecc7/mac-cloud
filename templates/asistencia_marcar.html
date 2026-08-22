@@ -57,7 +57,7 @@
         <a href="{{ url_for('personal') }}">Personal</a>
         {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
         {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
-        <a href="{{ url_for('auth.logout') }}">Salir</a>
+        <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="background:none; border:none; padding:0; font:inherit; cursor:pointer; color:#e9dfc9; font-weight:600; opacity:.85;" onmouseover="this.style.opacity=1;this.style.color='#fff'" onmouseout="this.style.opacity=.85;this.style.color='#e9dfc9'">Salir</button></form>
       </nav>
     </div>
   </header>
@@ -68,7 +68,7 @@
       <a href="{{ url_for('asistencia.reporte', fecha=fecha_str) }}" class="{{ 'active' if activo=='reporte' else '' }}">Reporte diario</a>
       <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_str) }}" class="{{ 'active' if activo=='marcar' else '' }}">Marcar asistencia</a>
       <a href="{{ url_for('asistencia.cliente', fecha=fecha_str) }}" class="{{ 'active' if activo=='cliente' else '' }}">Enviar a cliente</a>
-      <a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>{% endif %}
     </nav>
 
     <div class="top-actions">

@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
-from extensions import csrf, db, login_manager
+from extensions import csrf, db, limiter, login_manager
 from models import Usuario
 from dimension_models import Persona
 from dimension_models import get_session as get_dim_session
@@ -33,10 +33,37 @@ def create_app():
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-no-usar-en-produccion")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Cookie de sesion solo por HTTPS -- Render sirve todo por HTTPS, asi
+    # que esto no rompe produccion. SESSION_COOKIE_SECURE=false permite
+    # override para correr local por http (python app.py en localhost).
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # 10 MB -- de sobra para un Excel de Headcount, evita que alguien suba
+    # un archivo gigante y cuelgue el worker (Render free tier, un solo
+    # proceso web para todos los usuarios).
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+    limiter.init_app(app)
+
+    @app.after_request
+    def _headers_seguridad(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # 'unsafe-inline' en script/style porque las plantillas usan <style>
+        # y <script> embebidos (sin build step de assets) -- igual bloquea
+        # cargar recursos desde dominios externos no autorizados, que es el
+        # riesgo principal que mitiga un CSP.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "frame-ancestors 'none'"
+        )
+        return response
 
     @login_manager.user_loader
     def load_user(user_id):

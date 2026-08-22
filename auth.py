@@ -5,13 +5,14 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
 
-from extensions import db
+from extensions import db, limiter
 from models import Usuario
 
 bp = Blueprint("auth", __name__)
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10/minute", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
@@ -33,7 +34,7 @@ def login():
     return render_template("login.html")
 
 
-@bp.route("/logout")
+@bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()

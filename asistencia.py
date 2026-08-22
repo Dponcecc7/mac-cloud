@@ -22,10 +22,11 @@ import io
 import os
 import re
 import sys
+from functools import wraps
 from zoneinfo import ZoneInfo
 
 import openpyxl
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, get_session
@@ -41,6 +42,22 @@ from db_lock import adquirir_lock, liberar_lock  # noqa: E402
 import reporte_diario_9am as r9am  # noqa: E402 -- reusa reemplazos_pendientes()/dnis_alguna_vez_en_maestro(), no se duplica
 
 bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
+
+
+def _analista_requerido(f):
+    """Igual que cargas.py::_analista_requerido -- "Agregar reemplazo" da de
+    baja/alta gente de verdad en Postgres (no es solo ver o marcar
+    asistencia), asi que queda reservado a analista/admin, no cualquier
+    rol logueado."""
+    @wraps(f)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if current_user.rol not in ("analista", "admin"):
+            flash("Esta sección es solo para analistas.", "error")
+            return redirect(url_for("asistencia.reporte"))
+        return f(*args, **kwargs)
+    return wrapper
+
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 TABLA3_RUTA_GRAPH = f"{RUTA_GRAPH_MAC}3_Registro_Diario_Supervisor.xlsx"
@@ -507,7 +524,7 @@ def estado_workflow():
 
 
 @bp.get("/reemplazo")
-@login_required
+@_analista_requerido
 def reemplazo_form():
     hoy = dt.date.today().isoformat()
     try:
@@ -535,7 +552,7 @@ def reemplazo_form():
 
 
 @bp.post("/reemplazo")
-@login_required
+@_analista_requerido
 def reemplazo_submit():
     from reemplazos import procesar_reemplazo
 
