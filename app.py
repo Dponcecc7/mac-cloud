@@ -24,7 +24,7 @@ from models import Usuario
 from dimension_models import Persona
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
-from scoping import correos_visibles
+from scoping import condicion_scope
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
 
@@ -144,7 +144,7 @@ def create_app():
             "mes": {"desde": hoy_peru.replace(day=1).isoformat(), "hasta": hoy_peru.isoformat()},
         }
 
-        correos = correos_visibles(current_user)  # None = sin restriccion (admin / usuario sin cliente asignado)
+        cond_scope = condicion_scope(Persona, current_user)  # None = sin restriccion
 
         dim_session = get_dim_session()
         try:
@@ -156,8 +156,8 @@ def create_app():
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
             )
-            if correos is not None:
-                query = query.filter(Persona.analista_propietario.in_(correos))
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
             filas = query.all()
 
             # "Hoy" es independiente del periodo elegido (si elegis un rango
@@ -168,13 +168,13 @@ def create_app():
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha == hoy_peru)
             )
-            if correos is not None:
-                query_hoy = query_hoy.filter(Persona.analista_propietario.in_(correos))
+            if cond_scope is not None:
+                query_hoy = query_hoy.filter(cond_scope)
             filas_hoy = query_hoy.all()
 
             headcount_query = dim_session.query(Persona.dni).filter(Persona.estado == "Activo")
-            if correos is not None:
-                headcount_query = headcount_query.filter(Persona.analista_propietario.in_(correos))
+            if cond_scope is not None:
+                headcount_query = headcount_query.filter(cond_scope)
             headcount_actual = headcount_query.count()
         finally:
             dim_session.close()
@@ -319,9 +319,9 @@ def create_app():
         dim_session = get_dim_session()
         try:
             query = dim_session.query(Persona)
-            correos = correos_visibles(current_user)
-            if correos is not None:
-                query = query.filter(Persona.analista_propietario.in_(correos))
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
             personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
         finally:
             dim_session.close()

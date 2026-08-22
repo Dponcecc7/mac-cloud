@@ -34,7 +34,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
-from scoping import correos_visibles
+from scoping import condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -119,18 +119,19 @@ def _cargar_reporte(fecha, usuario_actual=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
-    `usuario_actual`: si se pasa, acota a las Personas del mismo
-    cliente_id_athena (ver scoping.py) -- sin esto, un analista de otro
-    cliente veía nombres/DNI de todos los clientes."""
+    `usuario_actual`: si se pasa, acota a las Personas visibles para ese
+    usuario (ver scoping.py) -- sin esto, un analista de otro cliente veía
+    nombres/DNI de todos los clientes, y un supervisor veía todo el equipo
+    en vez de solo el suyo."""
     feriados = _cargar_feriados()
     ayer = _dia_habil_anterior(fecha, feriados)
 
     session = get_session()
     try:
         query_personas = session.query(Persona)
-        correos = correos_visibles(usuario_actual) if usuario_actual else None
-        if correos is not None:
-            query_personas = query_personas.filter(Persona.analista_propietario.in_(correos))
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query_personas = query_personas.filter(cond_scope)
         personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
 

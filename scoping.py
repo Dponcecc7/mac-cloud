@@ -1,34 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Filtra qué Personas puede ver cada usuario logueado, según el
-cliente_id_athena del analista (ver admin.py -- "un analista = un cliente
-fijo"). Sin esto, cualquier usuario logueado (aunque sea de otro cliente)
-veía el nombre/DNI de TODOS los clientes en Personal/Dashboard/Asistencia.
+"""Filtra qué Personas puede ver cada usuario logueado. Dos niveles:
 
-Admin ve todo (supervisión cruzada). Un usuario sin cliente_id_athena
-asignado todavía (ej. una cuenta de supervisor vieja, previa a esto) también
-ve todo -- para no romper accesos existentes en silencio; asignale un
-cliente_id_athena en Usuarios para acotarlo."""
+- **Analista**: acotado a su cliente_id_athena (ver admin.py -- "un
+  analista = un cliente fijo"). Sin esto, cualquier analista veía
+  nombres/DNI de clientes que no eran el suyo.
+- **Supervisor**: acotado a su equipo directo (Persona.supervisor_dni ==
+  su propio DNI, via Usuario.dni_asociado). Sin esto, un supervisor veía
+  todo el equipo del cliente, no solo el suyo.
+
+Admin ve todo (supervisión cruzada). Un usuario sin nada de esto asignado
+todavía también ve todo -- para no romper accesos existentes en silencio;
+asignale un cliente_id_athena/dni_asociado en Usuarios para acotarlo."""
 from models import Usuario
 
 
-def correos_visibles(usuario_actual):
-    """None = sin restricción (admin, o usuario sin cliente_id_athena
-    asignado todavía -- para no romper accesos existentes en silencio).
-    Si no es None, es la lista de correos de analista cuyas Personas puede
-    ver `usuario_actual` (mismo cliente_id_athena)."""
-    if usuario_actual.rol == "admin" or not usuario_actual.cliente_id_athena:
+def condicion_scope(persona_model, usuario_actual):
+    """None = sin restricción. Si no es None, es una condición SQLAlchemy
+    lista para pasarle a .filter(...) sobre una query que ya tenga
+    `persona_model` (dimension_models.Persona) unida/consultada."""
+    if usuario_actual.rol == "admin":
         return None
-    return [
-        u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
-    ]
-
-
-def personas_visibles(session, persona_model, usuario_actual):
-    """Devuelve un Query de `persona_model` (dimension_models.Persona)
-    acotado al mismo cliente_id_athena que `usuario_actual`, usando la
-    sesión standalone `session` (no la de Flask-SQLAlchemy)."""
-    q = session.query(persona_model)
-    correos = correos_visibles(usuario_actual)
-    if correos is None:
-        return q
-    return q.filter(persona_model.analista_propietario.in_(correos))
+    if usuario_actual.rol == "supervisor" and usuario_actual.dni_asociado:
+        return persona_model.supervisor_dni == usuario_actual.dni_asociado
+    if usuario_actual.cliente_id_athena:
+        correos = [
+            u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
+        ]
+        return persona_model.analista_propietario.in_(correos)
+    return None
