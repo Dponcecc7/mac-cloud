@@ -25,6 +25,7 @@ import os
 import sys
 
 import pandas as pd
+from sqlalchemy import func
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
@@ -82,6 +83,14 @@ def _upsert_postgres(session, existentes_por_clave, fila):
         alerta_geofence=_bool_si_no(fila["Alerta geofence (solo Punto Censo/fuera de rango)"]),
         fuente_dato=fila["Fuente del dato"], comentario_supervisor=_limpio(fila["Comentario supervisor"]),
         alerta_analista=_bool_si_no(fila["Alerta para analista"]),
+        # server_default=func.now() de la columna solo dispara en el INSERT
+        # original -- sin esto, una fila ya existente (el caso normal en
+        # cada corrida despues de la primera del dia) nunca actualizaba
+        # procesado_en, aunque su entrada_real/estado si se refrescaban.
+        # Resultado: "Datos hasta las X" en el reporte quedaba pegado a la
+        # hora de la primera corrida del dia, mostrando una hora mas vieja
+        # que datos que en realidad ya estaban frescos.
+        procesado_en=func.now(),
     )
     existente = existentes_por_clave.get((dni, fecha))
     if existente:
