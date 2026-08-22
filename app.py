@@ -34,8 +34,13 @@ _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 def _motivo_limpio(comentario):
     """Version chica de asistencia.py::_homologar_motivo() -- separada a
     proposito (evita acoplar app.py al modulo del blueprint) para agrupar
-    "Faltas por motivo" del dashboard."""
-    if not comentario:
+    "Faltas por motivo" del dashboard.
+
+    pd.isna() en vez de "not comentario": una fila FALTA sin comentario del
+    supervisor todavia llega como NaN de pandas (no None), y "not NaN" da
+    False -- sin este chequeo, str(NaN) = "nan" terminaba mostrandose
+    literal como motivo "Nan" en vez de agruparse en "Sin motivo"."""
+    if pd.isna(comentario) or not str(comentario).strip():
         return "Sin motivo"
     texto = str(comentario).strip()
     while True:
@@ -171,33 +176,6 @@ def create_app():
             if correos is not None:
                 headcount_query = headcount_query.filter(Persona.analista_propietario.in_(correos))
             headcount_actual = headcount_query.count()
-
-            # Dias abiertos por vacante: no se acota al periodo elegido (una
-            # vacante sigue "abierta" aunque el usuario mire una semana vieja)
-            # -- se cuenta el total de dias con estado VACANTE registrados
-            # para cada Persona que hoy figura como Vacante.
-            dnis_vacantes_query = dim_session.query(Persona.dni, Persona.nombre_completo).filter(Persona.estado == "Vacante")
-            if correos is not None:
-                dnis_vacantes_query = dnis_vacantes_query.filter(Persona.analista_propietario.in_(correos))
-            personas_vacantes = dnis_vacantes_query.all()
-            dias_por_vacante = []
-            if personas_vacantes:
-                dnis_vac = [dni for dni, _ in personas_vacantes]
-                nombre_de_vac = dict(personas_vacantes)
-                conteo = (
-                    dim_session.query(ClasificacionDiaria.dni, ClasificacionDiaria.estado)
-                    .filter(ClasificacionDiaria.dni.in_(dnis_vac))
-                    .all()
-                )
-                dias_vac = pd.DataFrame(conteo, columns=["dni", "estado"])
-                if len(dias_vac):
-                    dias_vac["estado_base"] = dias_vac["estado"].apply(lambda s: s.split(" (")[0])
-                    dias_vac = dias_vac[dias_vac["estado_base"] == "VACANTE"]
-                    conteo_dias = dias_vac.groupby("dni").size()
-                    dias_por_vacante = sorted(
-                        [{"nombre": nombre_de_vac[dni], "dias": int(n)} for dni, n in conteo_dias.items()],
-                        key=lambda x: -x["dias"],
-                    )
         finally:
             dim_session.close()
 
@@ -296,6 +274,16 @@ def create_app():
             .to_dict("records")
         )
 
+        # Dias marcados VACANTE dentro del periodo elegido -- antes solo
+        # miraba Personas que HOY siguen con estado="Vacante" en el Maestro,
+        # asi que una vacante ya cubierta durante el periodo no aparecia
+        # aunque si hubiera tenido dias vacante reales.
+        vacantes_detalle = (
+            r[r["estado_base"] == "VACANTE"].groupby(["dni", "nombre"]).size()
+            .reset_index(name="dias").sort_values("dias", ascending=False)
+            .to_dict("records")
+        )
+
         data = {
             "periodo": {"desde": desde.strftime("%d/%m/%Y"), "hasta": hasta.strftime("%d/%m/%Y")},
             "resumen_hoy": resumen_hoy,
@@ -314,7 +302,7 @@ def create_app():
             "top_falta": top_falta,
             "top_tardanza": top_tardanza,
             "vacaciones_detalle": vacaciones_detalle,
-            "vacantes_detalle": dias_por_vacante,
+            "vacantes_detalle": vacantes_detalle,
         }
         return render_template(
             "dashboard.html", usuario=current_user, hay_datos=True, data=data,
