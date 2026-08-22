@@ -57,9 +57,9 @@
     .table-wrap { overflow-x:auto; }
     table { border-collapse:collapse; width:100%; font-size:11px; table-layout:fixed; }
     th { text-align:left; padding:6px 4px; font-size:10.5px; color:var(--muted); font-weight:700; border-bottom:1px solid var(--line); white-space:normal; }
-    td { padding:3px 4px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:normal; word-break:break-word; overflow-wrap:break-word; }
+    td { padding:2px 4px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:normal; word-break:break-word; overflow-wrap:break-word; line-height:1.2; }
     tr.oculta { display:none; }
-    .ipt { font:inherit; font-size:10.5px; padding:4px 5px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; box-sizing:border-box; }
+    .ipt { font:inherit; font-size:10.5px; padding:3px 5px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; box-sizing:border-box; }
     .ipt-hora { text-align:center; }
     .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; color:#fff; }
     .badge.ok { background:var(--ok); }
@@ -138,12 +138,12 @@
           <div class="table-wrap">
           <table id="tabla">
             <tr>
-              <th>Supervisor</th><th>Ciudad</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
-              <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada{{ ' / tardanza' if vista=='cliente' else '' }}</th>
-              <th>Salida prog.</th><th>Salida real</th>
-              {% if vista == 'reporte' %}<th>Canal ayer</th>{% endif %}
-              <th>Comentario salida</th>
-              {% if vista == 'reporte' %}<th>Entrada corregida</th><th>Salida corregida</th>{% endif %}
+              <th style="width:10%">Supervisor</th><th style="width:6%">Ciudad</th><th style="width:7%">Rol</th><th style="width:6%">Canal hoy</th><th style="width:10%">Mercaderista</th>
+              <th style="width:5.5%">Entrada prog.</th><th style="width:5.5%">Entrada real</th><th style="width:8%">Estado</th><th style="width:10%">Comentario entrada{{ ' / tardanza' if vista=='cliente' else '' }}</th>
+              <th style="width:5.5%">Salida prog.</th><th style="width:5.5%">Salida real</th>
+              {% if vista == 'reporte' %}<th style="width:5.5%">Canal ayer</th>{% endif %}
+              <th style="width:10%">Comentario salida</th>
+              {% if vista == 'reporte' %}<th style="width:4.5%">Entrada corregida</th><th style="width:4.5%">Salida corregida</th>{% endif %}
             </tr>
             {% for f in filas %}
             {% set eb = (f.estado or '').split(' (')[0] %}
