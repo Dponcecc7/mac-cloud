@@ -252,14 +252,24 @@ def guardar():
 @bp.post("/actualizar")
 @login_required
 def actualizar():
+    # Dispara el pipeline COMPLETO (no solo reporte_9am.yml) a proposito:
+    # reporte_9am.yml unicamente regenera el reporte con lo YA calculado en
+    # Postgres -- aplicar_correcciones.py (su unico paso relevante) solo
+    # empuja ediciones hechas sobre el snapshot de auditoria Reporte_Asistencia_*.xlsx,
+    # y si no encuentra ninguna ahi (que es el caso normal: tanto el guardado
+    # de mac_cloud como la app movil de supervisores escriben DIRECTO a
+    # Tabla 3) se salta motor_clasificacion.py por completo -- los
+    # comentarios/motivos nuevos en Tabla 3 quedan sin aplicar. pipeline_completo.yml
+    # si corre motor_clasificacion.py siempre, asi que es lo unico que
+    # garantiza reflejar comentarios nuevos (via web o app movil).
     fecha_str = request.form["fecha"]
     vista = request.form.get("vista") or "reporte"
-    ok, mensaje = disparar_workflow("reporte_9am.yml")
+    ok, mensaje = disparar_workflow("pipeline_completo.yml")
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo=vista,
         titulo="Actualización disparada" if ok else "No se pudo disparar", ok=ok, detalle=mensaje,
         volver=url_for(f"asistencia.{'cliente' if vista == 'cliente' else 'reporte'}", fecha=fecha_str),
-        poll_workflow="reporte_9am.yml" if ok else None,
+        poll_workflow="pipeline_completo.yml" if ok else None,
     )
 
 
