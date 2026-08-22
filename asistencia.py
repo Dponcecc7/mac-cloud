@@ -216,15 +216,21 @@ def guardar():
                 if e["comentario_entrada"] or e["entrada_corr"]:
                     _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, e["comentario_entrada"], hora_ent=e["entrada_corr"])
                     fila_libre += 1
+                    session.add(CorreccionWeb(
+                        dni=e["dni"], fecha=fecha,
+                        comentario_entrada=e["comentario_entrada"] or None,
+                        hora_entrada_corregida=e["entrada_corr"] or None,
+                        registrado_por=current_user.email,
+                    ))
                 if e["comentario_salida"] or e["salida_corr"]:
                     _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer, e["comentario_salida"], hora_sal=e["salida_corr"])
                     fila_libre += 1
-                session.add(CorreccionWeb(
-                    dni=e["dni"], fecha=fecha,
-                    comentario_entrada=e["comentario_entrada"] or None, comentario_salida=e["comentario_salida"] or None,
-                    hora_entrada_corregida=e["entrada_corr"] or None, hora_salida_corregida=e["salida_corr"] or None,
-                    registrado_por=current_user.email,
-                ))
+                    session.add(CorreccionWeb(
+                        dni=e["dni"], fecha=ayer,
+                        comentario_salida=e["comentario_salida"] or None,
+                        hora_salida_corregida=e["salida_corr"] or None,
+                        registrado_por=current_user.email,
+                    ))
             session.commit()
         finally:
             session.close()
