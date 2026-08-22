@@ -6,13 +6,17 @@ app.py local que sigue corriendo en la laptop; no toca ni reemplaza nada de
 lo existente todavía. Por ahora solo resuelve login/roles/multiusuario --
 el reporte diario real llega en fases futuras (2 y 3 del roadmap).
 """
+import datetime as dt
 import os
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 from flask_login import current_user, login_required
 from sqlalchemy import text
+
+PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 from extensions import db, login_manager
 from models import Usuario
@@ -85,7 +89,12 @@ def create_app():
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
         r["region"] = r["region"].fillna("Sin región")
 
-        hoy = pd.Timestamp.today().normalize()
+        # Render corre en UTC, no en hora de Peru -- "hoy" calculado con el
+        # reloj del servidor puede ser un dia distinto al de Peru varias
+        # horas por dia (ej. entre las 19:00 y 23:59 hora Peru, UTC ya paso
+        # a "manana"). Los datos en Postgres estan en fecha calendario de
+        # Peru (vienen de Athena), asi que "hoy" tiene que calcularse igual.
+        hoy = pd.Timestamp(dt.datetime.now(PERU_TZ).date())
         hoy_df = r[r["fecha"] == hoy]
         resumen_hoy = {
             "asistio": int((hoy_df["estado_base"] == "ASISTIÓ A TIEMPO").sum()),
