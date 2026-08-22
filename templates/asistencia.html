@@ -134,14 +134,14 @@
               {% if vista == 'reporte' %}<th>Entrada corregida</th><th>Salida corregida</th>{% endif %}
             </tr>
             {% for f in filas %}
-            <tr data-supervisor="{{ f.supervisor or '' }}" data-region="{{ f.region or '' }}" data-ciudad="{{ f.ciudad or '' }}"
-                data-canal="{{ f.canal or '' }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ f.mercaderista or '' }}"
+            <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
+                data-canal="{{ (f.canal or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
-              <td>{{ f.supervisor or '' }}</td>
-              <td>{{ f.ciudad or '' }}</td>
-              <td>{{ f.canal or '' }}</td>
-              <td>{{ f.canal_hoy }}</td>
-              <td>{{ f.mercaderista }}</td>
+              <td>{{ (f.supervisor or '')|title }}</td>
+              <td>{{ (f.ciudad or '')|title }}</td>
+              <td>{{ (f.canal or '')|title }}</td>
+              <td>{{ f.canal_hoy|title }}</td>
+              <td>{{ f.mercaderista|title }}</td>
               <td>{{ f.entrada_prog or '' }}</td>
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
@@ -151,7 +151,7 @@
               <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
               <td>{{ f.salida_prog or '' }}</td>
               <td class="{{ 'corregida' if f.salida_corregida else ('temprana' if f.salida_temprana else '') }}">{{ f.salida_real or '' }}</td>
-              {% if vista == 'reporte' %}<td>{{ f.canal_ayer }}</td>{% endif %}
+              {% if vista == 'reporte' %}<td>{{ f.canal_ayer|title }}</td>{% endif %}
               <td><input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}"></td>
               {% if vista == 'reporte' %}
               <td><input class="ipt ipt-hora" name="entrada_corr_{{ f.dni }}" placeholder="HH:MM"></td>
