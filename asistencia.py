@@ -116,6 +116,14 @@ def _cargar_reporte(fecha):
             c.dni: c for c in
             session.query(ClasificacionDiaria).filter(ClasificacionDiaria.fecha == ayer).all()
         }
+        # DNIs ya marcados hoy desde "Marcar asistencia" (correcciones_web) --
+        # la Tabla 3 ya tiene su fila, pero clasificacion_diaria.comentario_supervisor
+        # recien se actualiza cuando el motor vuelve a correr. Sin esto, la
+        # persona seguia apareciendo en "Pendientes" varios minutos despues
+        # de haberla marcado.
+        dnis_marcados_hoy = {
+            dni for (dni,) in session.query(CorreccionWeb.dni).filter(CorreccionWeb.fecha == fecha).all()
+        }
     finally:
         session.close()
 
@@ -155,6 +163,7 @@ def _cargar_reporte(fecha):
             "comentario_salida": (_homologar_motivo(ayer_c.comentario_supervisor) or "") if ayer_c else "",
             "entrada_pendiente": MARCADOR_PENDIENTE in (c.comentario_supervisor or ""),
             "salida_pendiente": MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else ""),
+            "marcado_web": c.dni in dnis_marcados_hoy,
         })
         if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):
             ultima_sync = c.procesado_en
@@ -189,7 +198,10 @@ def _pendientes_de_marcar(filas):
     ni de la app móvil de supervisores ni de acá -- igual al panel
     "Pendientes" de la Power App (galPendientes, ver GUIA_POWER_APPS_SUPERVISOR.md)."""
     estado_base = lambda s: (s or "").split(" (")[0]  # noqa: E731
-    return [f for f in filas if estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"]]
+    return [
+        f for f in filas
+        if estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"] and not f["marcado_web"]
+    ]
 
 
 def _fecha_mas_reciente_con_datos():
@@ -407,6 +419,20 @@ def marcar():
         else:
             _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
         subir_in_place(TABLA3_RUTA_GRAPH, wb)
+
+        # Ademas de Tabla 3 (lo que lee el motor), se guarda en correcciones_web
+        # -- asi "Pendientes de marcar" puede sacar a esta persona de la
+        # lista de una, sin esperar a que el motor vuelva a correr.
+        session = get_session()
+        try:
+            session.add(CorreccionWeb(
+                dni=dni, fecha=fecha,
+                comentario_entrada=(f"Falta - {motivo}" if accion == "Falta" else accion),
+                registrado_por=current_user.email,
+            ))
+            session.commit()
+        finally:
+            session.close()
     finally:
         liberar_lock("tabla3_web")
 
