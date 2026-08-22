@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MAC — Agregar reemplazo</title>
+  <title>MAC — Asistencia diaria</title>
   <style>
     :root { --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6; --brand:#b5602c; --bad:#a3372e; --bad-bg:#fbe6e3; }
     * { box-sizing:border-box; }
@@ -55,9 +55,10 @@
   </header>
 
   <div class="wrap">
-    <h1 class="title">Corrección diaria de asistencia</h1>
+    <h1 class="title">Asistencia diaria</h1>
     <nav class="tabs">
       <a href="{{ url_for('asistencia.reporte') }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.marcar_vista') }}">Marcar asistencia</a>
       <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
       <a href="{{ url_for('asistencia.reemplazo_form') }}" class="active">Agregar reemplazo</a>
     </nav>

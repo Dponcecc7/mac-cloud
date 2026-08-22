@@ -22,7 +22,7 @@
 <body>
   <nav>
     <a href="{{ url_for('dashboard') }}">← MAC</a>
-    <a href="{{ url_for('asistencia.reporte') }}">Corrección diaria</a>
+    <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
     {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
     {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
     <a href="{{ url_for('auth.logout') }}">Salir</a>

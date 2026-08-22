@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Asistencia diaria</title>
+  <style>
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+
+    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
+    .ipt-filtro { font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+
+    .pendiente-card { border:1px solid var(--line); border-radius:10px; padding:12px 16px; }
+    .pendiente-card + .pendiente-card { margin-top:10px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Asistencia diaria</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('asistencia.reporte', fecha=fecha_str) }}" class="{{ 'active' if activo=='reporte' else '' }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_str) }}" class="{{ 'active' if activo=='marcar' else '' }}">Marcar asistencia</a>
+      <a href="{{ url_for('asistencia.cliente', fecha=fecha_str) }}" class="{{ 'active' if activo=='cliente' else '' }}">Enviar a cliente</a>
+      <a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>
+    </nav>
+
+    <div class="top-actions">
+      <form method="get"><input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()"></form>
+      {% if resumen %}
+      <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
+      {% endif %}
+      {% if frescura and frescura.ultima_sync %}
+      <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('asistencia.actualizar') }}">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="marcar">
+        <button class="btn ghost" type="submit">🔄 Actualizar ahora</button>
+      </form>
+    </div>
+
+    {% if marcado %}
+    <div class="panel" style="margin-bottom:14px; padding:10px 16px; border-left:4px solid {{ 'var(--bad)' if marcado == 'falta_sin_motivo' else 'var(--ok)' }};">
+      <p style="margin:0; font-size:13px;">
+        {% if marcado == 'ok' %}✓ Registrado -- se va a reflejar en el reporte en unos minutos (usá "Actualizar ahora" si querés verlo ya).
+        {% elif marcado == 'motivo_agregado' %}✓ Motivo agregado a la lista.
+        {% elif marcado == 'falta_sin_motivo' %}Elegí un motivo antes de confirmar la falta.
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {% if not resumen and not pendientes %}
+      <div class="panel">
+        <p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p>
+        {% if fecha_reciente %}
+        <p style="margin:8px 0 0; font-size:13px; color:var(--muted);">¿Buscabas marcar un día anterior?
+          <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_reciente) }}" style="color:var(--brand); font-weight:700; text-decoration:none;">
+            Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
+          </a>
+        </p>
+        {% endif %}
+      </div>
+    {% elif not pendientes %}
+      <div class="panel">
+        <p>No hay nadie pendiente de marcar para <b>{{ fecha_str }}</b> — todas las faltas/vacantes ya tienen un motivo cargado.</p>
+      </div>
+    {% else %}
+    <div class="panel">
+      <p class="panel-title">Pendientes de marcar ({{ pendientes|length }})</p>
+      <div>
+        {% for p in pendientes %}
+        <div class="pendiente-card">
+          <b>{{ p.mercaderista|title }}</b>
+          <span style="color:var(--muted); font-size:12px;"> -- {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
+          <form method="post" action="{{ url_for('asistencia.marcar') }}" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+            <input type="hidden" name="dni" value="{{ p.dni }}">
+            <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <button class="btn ghost" type="submit" name="accion" value="Asistió">✓ Asistió</button>
+            <button class="btn ghost" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo zona</button>
+            <button class="btn ghost" type="submit" name="accion" value="Vacante">Vacante</button>
+            <select class="ipt-filtro" name="motivo" style="min-width:170px;">
+              <option value="">Motivo de falta...</option>
+              {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <button class="btn ghost" type="submit" name="accion" value="Falta">✕ Falta</button>
+            <a class="btn ghost" style="text-decoration:none;" href="{{ url_for('asistencia.reemplazo_form', dni_vacante=p.dni) }}">Tiene reemplazo</a>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <details style="margin-top:12px;">
+        <summary style="font-size:12px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar un motivo de falta nuevo a la lista</summary>
+        <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;">
+          <input type="hidden" name="fecha" value="{{ fecha_str }}">
+          <input class="ipt-filtro" name="motivo" placeholder="Nuevo motivo..." required style="flex:1;">
+          <button class="btn ghost" type="submit">Agregar</button>
+        </form>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

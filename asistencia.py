@@ -212,7 +212,6 @@ def _vista_reporte(fecha_str, vista):
         fecha_str = fecha.isoformat()
 
     resumen, filas, frescura = _cargar_reporte(fecha)
-    pendientes = _pendientes_de_marcar(filas) if filas and vista == "reporte" else None
     # Si no hay datos para la fecha pedida (ej. hoy, si el pipeline todavia
     # no corrio), sugerir la fecha mas reciente que si tiene -- para poder
     # seguir corrigiendo el pasado sin quedar en un callejon sin salida.
@@ -221,6 +220,29 @@ def _vista_reporte(fecha_str, vista):
         "asistencia.html", usuario=current_user, activo=vista, vista=vista,
         fecha_reciente=fecha_reciente,
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura,
+    )
+
+
+@bp.get("/marcar")
+@login_required
+def marcar_vista():
+    """Pestaña propia (version web de galPendientes de la Power App) --
+    antes vivia dentro de "Reporte diario", ahora tiene su propio lugar
+    para no mezclar "ver/corregir el detalle" con "marcar rapido a los
+    pendientes de hoy"."""
+    fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
+    try:
+        fecha = dt.date.fromisoformat(fecha_str)
+    except ValueError:
+        fecha = dt.date.today()
+        fecha_str = fecha.isoformat()
+
+    resumen, filas, frescura = _cargar_reporte(fecha)
+    pendientes = _pendientes_de_marcar(filas) if filas else []
+    fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
+    return render_template(
+        "asistencia_marcar.html", usuario=current_user, activo="marcar",
+        fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
         pendientes=pendientes, motivos=_motivos_falta() if pendientes else None,
         marcado=request.args.get("marcado"),
     )
@@ -364,17 +386,17 @@ def marcar():
     motivo = request.form.get("motivo", "").strip()
 
     if accion not in ACCIONES_MARCAR:
-        return redirect(url_for("asistencia.reporte", fecha=fecha_str))
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
     if accion == "Falta" and not motivo:
-        return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="falta_sin_motivo"))
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
 
     ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
     if not ok_lock:
         return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="reporte",
+            "asistencia_resultado.html", usuario=current_user, activo="marcar",
             titulo="No se pudo guardar", ok=False,
             detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.reporte", fecha=fecha_str),
+            volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
         )
     try:
         wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
@@ -388,7 +410,7 @@ def marcar():
     finally:
         liberar_lock("tabla3_web")
 
-    return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="ok"))
+    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok"))
 
 
 @bp.post("/motivos/agregar")
@@ -397,7 +419,7 @@ def motivos_agregar():
     fecha_str = request.form.get("fecha") or dt.date.today().isoformat()
     motivo = request.form.get("motivo", "").strip()
     if not motivo:
-        return redirect(url_for("asistencia.reporte", fecha=fecha_str))
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
 
     session = get_session()
     try:
@@ -408,7 +430,7 @@ def motivos_agregar():
     finally:
         session.close()
 
-    return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="motivo_agregado"))
+    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="motivo_agregado"))
 
 
 @bp.post("/actualizar")
