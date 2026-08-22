@@ -85,11 +85,14 @@
       {% endfor %}
     {% endif %}
 
-    <details {{ 'open' if not pendientes else '' }}>
+    <details {{ 'open' if (not pendientes or dni_prellenado) else '' }}>
       <summary>Registrar un reemplazo manualmente</summary>
       <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel" style="border-radius:0 0 14px 14px; margin-top:0;">
+        {% if dni_prellenado %}
+        <p class="empty" style="margin:0 0 10px;">Reemplazo para <b>{{ nombre_prellenado or '(sin nombre)' }}</b> (DNI {{ dni_prellenado }}) -- reportado como "Tiene reemplazo" en el reporte de hoy.</p>
+        {% endif %}
         <div class="form-row">
-          <label class="field">DNI vacante<input class="ipt" name="dni_vacante" required></label>
+          <label class="field">DNI vacante<input class="ipt" name="dni_vacante" value="{{ dni_prellenado }}" required {{ 'readonly' if dni_prellenado else '' }}></label>
           <label class="field">DNI nuevo<input class="ipt" name="dni_nuevo" required></label>
           <label class="field">Nombre completo<input class="ipt" name="nombre_nuevo" required></label>
         </div>

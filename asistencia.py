@@ -27,7 +27,7 @@ import openpyxl
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from dimension_models import CorreccionWeb, Feriado, Persona, get_session
+from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
@@ -167,6 +167,22 @@ def _cargar_reporte(fecha):
     return resumen, filas, frescura
 
 
+def _motivos_falta():
+    session = get_session()
+    try:
+        return [m for (m,) in session.query(CatalogoMotivo.motivo).order_by(CatalogoMotivo.motivo).all()]
+    finally:
+        session.close()
+
+
+def _pendientes_de_marcar(filas):
+    """Personas con Falta/Vacante que todavía no tienen ningún comentario --
+    ni de la app móvil de supervisores ni de acá -- igual al panel
+    "Pendientes" de la Power App (galPendientes, ver GUIA_POWER_APPS_SUPERVISOR.md)."""
+    estado_base = lambda s: (s or "").split(" (")[0]  # noqa: E731
+    return [f for f in filas if estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"]]
+
+
 def _vista_reporte(fecha_str, vista):
     """vista: 'reporte' (columnas + edicion completa) o 'cliente' (columnas
     reducidas, sin Hora entrada/salida corregida)."""
@@ -177,9 +193,12 @@ def _vista_reporte(fecha_str, vista):
         fecha_str = fecha.isoformat()
 
     resumen, filas, frescura = _cargar_reporte(fecha)
+    pendientes = _pendientes_de_marcar(filas) if filas and vista == "reporte" else None
     return render_template(
         "asistencia.html", usuario=current_user, activo=vista, vista=vista,
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura,
+        pendientes=pendientes, motivos=_motivos_falta() if pendientes else None,
+        marcado=request.args.get("marcado"),
     )
 
 
@@ -197,12 +216,25 @@ def cliente():
     return _vista_reporte(fecha_str, "cliente")
 
 
-def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, hora_sal=None):
+def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, hora_sal=None, estado_reportado=None):
     """Mismo formato/columnas que aplicar_correcciones.py::_agregar_fila_t3()
     -- no cambiar sin revisar ese archivo primero, el motor de clasificacion
-    (local y nube) depende de este layout exacto."""
+    (local y nube) depende de este layout exacto.
+
+    `estado_reportado` (columna 3, "Estado reportado") es la MISMA columna
+    que llena la app Power Apps de los supervisores para "Asistió"/"Apoyo
+    zona"/"Vacante" -- ver GUIA_POWER_APPS_SUPERVISOR.md sección 3/4. Hasta
+    ahora esta función nunca la llenaba (solo Comentario), asi que esas 3
+    acciones no tenian forma de reportarse desde la web. "Falta" sigue
+    usando el Comentario con el prefijo "Falta - {motivo}" (columna 3 vacía),
+    igual que ya hace el resto del flujo -- motor_clasificacion.py lee
+    "Estado reportado" solo como respaldo cuando NO hay un comentario que
+    empiece con "FALTA"/tenga "VACANTE"/"VACACIONES".
+    """
     ws.cell(row=fila_libre, column=1, value=str(dni))
     ws.cell(row=fila_libre, column=2, value=str(fecha))
+    if estado_reportado:
+        ws.cell(row=fila_libre, column=3, value=estado_reportado)
     ws.cell(row=fila_libre, column=4, value=comentario)
     ws.cell(row=fila_libre, column=5, value="Web mac_cloud")
     ws.cell(row=fila_libre, column=6, value=dt.datetime.now().strftime("%H:%M"))
@@ -289,6 +321,72 @@ def guardar():
     )
 
 
+ACCIONES_MARCAR = ("Asistió", "Apoyo zona", "Vacante", "Falta")
+
+
+@bp.post("/marcar")
+@login_required
+def marcar():
+    """Version web de los botones Asistió/Apoyo zona/Vacante/Falta de la
+    Power App (galPendientes -- ver GUIA_POWER_APPS_SUPERVISOR.md secciones
+    3/4). Escribe a la MISMA Tabla 3 que la app móvil, con el mismo criterio
+    que usa motor_clasificacion.py para interpretarlo -- "Falta" via
+    Comentario="Falta - {motivo}" (mismo patron que ya usan las correcciones
+    web y la app), las otras 3 via la columna "Estado reportado"."""
+    dni = request.form["dni"].strip()
+    fecha_str = request.form["fecha"]
+    fecha = dt.date.fromisoformat(fecha_str)
+    accion = request.form.get("accion", "").strip()
+    motivo = request.form.get("motivo", "").strip()
+
+    if accion not in ACCIONES_MARCAR:
+        return redirect(url_for("asistencia.reporte", fecha=fecha_str))
+    if accion == "Falta" and not motivo:
+        return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="falta_sin_motivo"))
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reporte",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.reporte", fecha=fecha_str),
+        )
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+        ws = wb["Registro diario supervisor"]
+        fila_libre = ws.max_row + 1
+        if accion == "Falta":
+            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, f"Falta - {motivo}")
+        else:
+            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
+        subir_in_place(TABLA3_RUTA_GRAPH, wb)
+    finally:
+        liberar_lock("tabla3_web")
+
+    return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="ok"))
+
+
+@bp.post("/motivos/agregar")
+@login_required
+def motivos_agregar():
+    fecha_str = request.form.get("fecha") or dt.date.today().isoformat()
+    motivo = request.form.get("motivo", "").strip()
+    if not motivo:
+        return redirect(url_for("asistencia.reporte", fecha=fecha_str))
+
+    session = get_session()
+    try:
+        ya_existe = session.query(CatalogoMotivo).filter(CatalogoMotivo.motivo.ilike(motivo)).first()
+        if not ya_existe:
+            session.add(CatalogoMotivo(motivo=motivo, categoria="Falta"))
+            session.commit()
+    finally:
+        session.close()
+
+    return redirect(url_for("asistencia.reporte", fecha=fecha_str, marcado="motivo_agregado"))
+
+
 @bp.post("/actualizar")
 @login_required
 def actualizar():
@@ -330,9 +428,21 @@ def reemplazo_form():
     except Exception as e:
         pendientes = []
         error_pendientes = str(e)
+
+    dni_prellenado = request.args.get("dni_vacante", "").strip()
+    nombre_prellenado = None
+    if dni_prellenado:
+        session = get_session()
+        try:
+            p = session.query(Persona).filter(Persona.dni == dni_prellenado).first()
+            nombre_prellenado = p.nombre_completo if p else None
+        finally:
+            session.close()
+
     return render_template(
         "asistencia_reemplazo.html", usuario=current_user, activo="reemplazo",
         hoy=hoy, pendientes=pendientes, error_pendientes=error_pendientes,
+        dni_prellenado=dni_prellenado, nombre_prellenado=nombre_prellenado,
     )
 
 

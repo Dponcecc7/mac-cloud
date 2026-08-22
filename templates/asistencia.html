@@ -109,6 +109,52 @@
       </form>
     </div>
 
+    {% if marcado %}
+    <div class="panel" style="margin-bottom:14px; padding:10px 16px; border-left:4px solid {{ 'var(--bad)' if marcado == 'falta_sin_motivo' else 'var(--ok)' }};">
+      <p style="margin:0; font-size:13px;">
+        {% if marcado == 'ok' %}✓ Registrado -- se va a reflejar en el reporte en unos minutos (usá "Actualizar ahora" si querés verlo ya).
+        {% elif marcado == 'motivo_agregado' %}✓ Motivo agregado a la lista.
+        {% elif marcado == 'falta_sin_motivo' %}Elegí un motivo antes de confirmar la falta.
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {% if pendientes %}
+    <div class="panel" style="margin-bottom:16px;">
+      <p class="panel-title">Pendientes de marcar ({{ pendientes|length }})</p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for p in pendientes %}
+        <div style="border:1px solid var(--line); border-radius:10px; padding:10px 14px;">
+          <b>{{ p.mercaderista|title }}</b>
+          <span style="color:var(--muted); font-size:12px;"> -- {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
+          <form method="post" action="{{ url_for('asistencia.marcar') }}" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+            <input type="hidden" name="dni" value="{{ p.dni }}">
+            <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <button class="btn ghost" type="submit" name="accion" value="Asistió">✓ Asistió</button>
+            <button class="btn ghost" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo zona</button>
+            <button class="btn ghost" type="submit" name="accion" value="Vacante">Vacante</button>
+            <select class="ipt-filtro" name="motivo" style="min-width:170px;">
+              <option value="">Motivo de falta...</option>
+              {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <button class="btn ghost" type="submit" name="accion" value="Falta">✕ Falta</button>
+            <a class="btn ghost" style="text-decoration:none;" href="{{ url_for('asistencia.reemplazo_form', dni_vacante=p.dni) }}">Tiene reemplazo</a>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <details style="margin-top:12px;">
+        <summary style="font-size:12px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar un motivo de falta nuevo a la lista</summary>
+        <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;">
+          <input type="hidden" name="fecha" value="{{ fecha_str }}">
+          <input class="ipt-filtro" name="motivo" placeholder="Nuevo motivo..." required style="flex:1;">
+          <button class="btn ghost" type="submit">Agregar</button>
+        </form>
+      </details>
+    </div>
+    {% endif %}
+
     {% if not filas %}
       <div class="panel"><p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p></div>
     {% else %}
