@@ -37,6 +37,8 @@ def usuarios():
 
         if not email or not password:
             flash("Correo y contraseña son obligatorios.", "error")
+        elif len(password) < 8:
+            flash("La contraseña debe tener al menos 8 caracteres.", "error")
         elif Usuario.query.filter_by(email=email).first():
             flash(f"Ya existe un usuario con el correo {email}.", "error")
         elif cliente_id_athena and not cliente_id_athena.isdigit():

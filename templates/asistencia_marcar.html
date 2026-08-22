@@ -79,7 +79,7 @@
       {% if frescura and frescura.ultima_sync %}
       <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
       {% endif %}
-      <form method="post" action="{{ url_for('asistencia.actualizar') }}">
+      <form method="post" action="{{ url_for('asistencia.actualizar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="marcar">
         <button class="btn ghost" type="submit">🔄 Actualizar ahora</button>
       </form>
@@ -118,7 +118,7 @@
         {% for p in pendientes %}
         <div class="pendiente-row">
           <div class="quien"><b>{{ p.mercaderista|title }}</b><br><span>{{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
-          <form method="post" action="{{ url_for('asistencia.marcar') }}">
+          <form method="post" action="{{ url_for('asistencia.marcar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
             <button class="btn ghost sm" type="submit" name="accion" value="Asistió">✓ Asistió</button>
@@ -136,7 +136,7 @@
       </div>
       <details style="margin-top:10px;">
         <summary style="font-size:11.5px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar un motivo de falta nuevo a la lista</summary>
-        <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;">
+        <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="fecha" value="{{ fecha_str }}">
           <input class="ipt-filtro" name="motivo" placeholder="Nuevo motivo..." required style="flex:1;">
           <button class="btn ghost sm" type="submit">Agregar</button>

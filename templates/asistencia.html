@@ -104,7 +104,7 @@
       {% if frescura and frescura.ultima_sync %}
       <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
       {% endif %}
-      <form method="post" action="{{ url_for('asistencia.actualizar') }}">
+      <form method="post" action="{{ url_for('asistencia.actualizar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="{{ vista }}">
         <button class="btn ghost" type="submit">🔄 Actualizar ahora</button>
       </form>
@@ -138,7 +138,7 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('asistencia.guardar') }}">
+      <form method="post" action="{{ url_for('asistencia.guardar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="fecha" value="{{ fecha_str }}"><input type="hidden" name="vista" value="{{ vista }}">
         <div class="panel">
           <p class="panel-title">Detalle del día</p>

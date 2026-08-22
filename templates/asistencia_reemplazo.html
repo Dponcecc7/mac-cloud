@@ -71,7 +71,7 @@
       <div class="panel"><p class="empty">No hay reemplazos pendientes reportados por supervisores ahora mismo.</p></div>
     {% else %}
       {% for p in pendientes %}
-      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel">
+      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="dni_vacante" value="{{ p.dni_vacante }}">
         <input type="hidden" name="dni_nuevo" value="{{ p.dni_reemplazo }}">
         <input type="hidden" name="nombre_nuevo" value="{{ p.nombre_reemplazo or '' }}">
@@ -88,7 +88,7 @@
 
     <details {{ 'open' if (not pendientes or dni_prellenado) else '' }}>
       <summary>Registrar un reemplazo manualmente</summary>
-      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel" style="border-radius:0 0 14px 14px; margin-top:0;">
+      <form method="post" action="{{ url_for('asistencia.reemplazo_submit') }}" class="panel" style="border-radius:0 0 14px 14px; margin-top:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if dni_prellenado %}
         <p class="empty" style="margin:0 0 10px;">Reemplazo para <b>{{ nombre_prellenado or '(sin nombre)' }}</b> (DNI {{ dni_prellenado }}) -- reportado como "Tiene reemplazo" en el reporte de hoy.</p>
         {% endif %}

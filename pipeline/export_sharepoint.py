@@ -25,6 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
+from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
 from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
@@ -54,7 +55,11 @@ def escribir_tabla_auditoria(df, nombre_hoja, nombre_tabla):
     ws.title = nombre_hoja
     ws.append(list(df.columns))
     for _, row in df.iterrows():
-        ws.append([None if pd.isna(v) else v for v in row])
+        # texto_seguro_excel(): columnas como nombre_completo/comentario_supervisor
+        # vienen de texto libre subido por analistas o escrito desde la web
+        # -- sin esto, un valor que empiece con =/+/-/@ se interpretaria
+        # como formula al abrir este archivo en Excel (CSV/Excel Injection).
+        ws.append([None if pd.isna(v) else texto_seguro_excel(v) for v in row])
     n_filas = len(df) + 1
     n_cols = len(df.columns)
     ref = f"A1:{get_column_letter(n_cols)}{max(n_filas, 2)}"

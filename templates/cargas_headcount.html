@@ -140,7 +140,7 @@
 
     <div class="panel" style="max-width:640px;">
       <p class="panel-title">Subir archivo</p>
-      <form method="post" action="{{ url_for('cargas.headcount_submit') }}" enctype="multipart/form-data">
+      <form method="post" action="{{ url_for('cargas.headcount_submit') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Maestro Headcount (obligatorio)
           <input type="file" name="maestro" accept=".xlsx" required>
         </label>

@@ -29,9 +29,11 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 from flask_login import current_user, login_required
 
 from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, get_session
+from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
+from scoping import correos_visibles
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -96,25 +98,35 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha):
+def _cargar_reporte(fecha, usuario_actual=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
-    si no hay ninguna fila ese día (motor todavía no corrió para esa fecha)."""
+    si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
+
+    `usuario_actual`: si se pasa, acota a las Personas del mismo
+    cliente_id_athena (ver scoping.py) -- sin esto, un analista de otro
+    cliente veía nombres/DNI de todos los clientes."""
     feriados = _cargar_feriados()
     ayer = _dia_habil_anterior(fecha, feriados)
 
     session = get_session()
     try:
-        personas = {p.dni: p for p in session.query(Persona).all()}
+        query_personas = session.query(Persona)
+        correos = correos_visibles(usuario_actual) if usuario_actual else None
+        if correos is not None:
+            query_personas = query_personas.filter(Persona.analista_propietario.in_(correos))
+        personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
 
         filas_hoy = (
             session.query(ClasificacionDiaria)
-            .filter(ClasificacionDiaria.fecha == fecha)
+            .filter(ClasificacionDiaria.fecha == fecha, ClasificacionDiaria.dni.in_(personas.keys()))
             .all()
         )
         filas_ayer = {
             c.dni: c for c in
-            session.query(ClasificacionDiaria).filter(ClasificacionDiaria.fecha == ayer).all()
+            session.query(ClasificacionDiaria)
+            .filter(ClasificacionDiaria.fecha == ayer, ClasificacionDiaria.dni.in_(personas.keys()))
+            .all()
         }
         # DNIs ya marcados hoy desde "Marcar asistencia" (correcciones_web) --
         # la Tabla 3 ya tiene su fila, pero clasificacion_diaria.comentario_supervisor
@@ -223,7 +235,7 @@ def _vista_reporte(fecha_str, vista):
         fecha = dt.date.today()
         fecha_str = fecha.isoformat()
 
-    resumen, filas, frescura = _cargar_reporte(fecha)
+    resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user)
     # Si no hay datos para la fecha pedida (ej. hoy, si el pipeline todavia
     # no corrio), sugerir la fecha mas reciente que si tiene -- para poder
     # seguir corrigiendo el pasado sin quedar en un callejon sin salida.
@@ -249,7 +261,7 @@ def marcar_vista():
         fecha = dt.date.today()
         fecha_str = fecha.isoformat()
 
-    resumen, filas, frescura = _cargar_reporte(fecha)
+    resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user)
     pendientes = _pendientes_de_marcar(filas) if filas else []
     fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
     return render_template(
@@ -293,7 +305,11 @@ def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, 
     ws.cell(row=fila_libre, column=2, value=str(fecha))
     if estado_reportado:
         ws.cell(row=fila_libre, column=3, value=estado_reportado)
-    ws.cell(row=fila_libre, column=4, value=comentario)
+    # texto_seguro_excel(): comentario es texto libre tipeado por el usuario
+    # (o un motivo agregado por otro usuario) -- sin esto, un valor que
+    # empiece con =/+/-/@ se interpretaria como formula al abrir la Tabla 3
+    # en Excel (CSV/Excel Injection).
+    ws.cell(row=fila_libre, column=4, value=texto_seguro_excel(comentario))
     ws.cell(row=fila_libre, column=5, value="Web mac_cloud")
     ws.cell(row=fila_libre, column=6, value=dt.datetime.now().strftime("%H:%M"))
     if hora_ent:

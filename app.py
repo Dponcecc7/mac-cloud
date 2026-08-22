@@ -18,11 +18,12 @@ from sqlalchemy import text
 
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
-from extensions import db, login_manager
+from extensions import csrf, db, login_manager
 from models import Usuario
 from dimension_models import Persona
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
+from scoping import correos_visibles
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
 
@@ -35,6 +36,7 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -70,14 +72,20 @@ def create_app():
         # en Postgres, asi que no hay de donde consultarlos en vivo.
         dim_session = get_dim_session()
         try:
-            filas = (
+            query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
                                    ClasificacionDiaria.canal_esperado, ClasificacionDiaria.trabajo_otro_canal,
                                    ClasificacionDiaria.alerta_analista)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
-                .all()
             )
+            # correos_visibles(): un analista de otro cliente_id_athena no
+            # debe ver nombres/DNI de un cliente que no es el suyo -- admin
+            # (o un usuario todavia sin cliente asignado) ve todo.
+            correos = correos_visibles(current_user)
+            if correos is not None:
+                query = query.filter(Persona.analista_propietario.in_(correos))
+            filas = query.all()
         finally:
             dim_session.close()
 
@@ -169,7 +177,11 @@ def create_app():
         # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
         dim_session = get_dim_session()
         try:
-            personas = dim_session.query(Persona).order_by(Persona.estado, Persona.nombre_completo).all()
+            query = dim_session.query(Persona)
+            correos = correos_visibles(current_user)
+            if correos is not None:
+                query = query.filter(Persona.analista_propietario.in_(correos))
+            personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
         finally:
             dim_session.close()
         return render_template("personal.html", usuario=current_user, personas=personas)
