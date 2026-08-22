@@ -38,7 +38,7 @@
 
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
-    .form-row { display:grid; grid-template-columns:repeat(8, 1fr); gap:10px; align-items:end; }
+    .form-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:10px; align-items:end; }
     @media (max-width:1300px) { .form-row { grid-template-columns:repeat(4, 1fr); } }
     label.field { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
     .ipt-filtro { font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
@@ -118,7 +118,7 @@
       <div class="panel">
         <p class="panel-title">Filtros</p>
         <div class="form-row">
-          {% for campo, etiqueta in [('supervisor','Supervisor'), ('region','Región'), ('ciudad','Ciudad'), ('canal','Canal'), ('rol','Rol'), ('estado','Estado')] %}
+          {% for campo, etiqueta in [('supervisor','Supervisor'), ('region','Región'), ('ciudad','Ciudad'), ('rol','Rol'), ('estado','Estado')] %}
           <label class="field">{{ etiqueta }}
             <div class="ms">
               <button type="button" class="ms-toggle" id="btn-{{ campo }}" onclick="togglePanel('{{ campo }}')">Todos</button>
@@ -138,7 +138,7 @@
           <div class="table-wrap">
           <table id="tabla">
             <tr>
-              <th>Supervisor</th><th>Ciudad</th><th>Canal</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
+              <th>Supervisor</th><th>Ciudad</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
               <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada{{ ' / tardanza' if vista=='cliente' else '' }}</th>
               <th>Salida prog.</th><th>Salida real</th>
               {% if vista == 'reporte' %}<th>Canal ayer</th>{% endif %}
@@ -147,11 +147,10 @@
             </tr>
             {% for f in filas %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
-                data-canal="{{ (f.canal or '')|title }}" data-rol="{{ (f.rol or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
+                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
               <td>{{ (f.supervisor or '')|title }}</td>
               <td>{{ (f.ciudad or '')|title }}</td>
-              <td>{{ (f.canal or '')|title }}</td>
               <td>{{ (f.rol or '')|title }}</td>
               <td>{{ f.canal_hoy|title }}</td>
               <td>{{ f.mercaderista|title }}</td>
@@ -183,7 +182,7 @@
   </div>
 
 <script>
-const CAMPOS = ['supervisor', 'region', 'ciudad', 'canal', 'rol', 'estado'];
+const CAMPOS = ['supervisor', 'region', 'ciudad', 'rol', 'estado'];
 const seleccion = {};
 CAMPOS.forEach(c => seleccion[c] = new Set());
 
