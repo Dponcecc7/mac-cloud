@@ -5,135 +5,211 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC</title>
   <style>
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
-    nav { display:flex; align-items:center; gap:16px; font-size:13px; margin-bottom:24px; flex-wrap:wrap; }
-    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
-    .pill { background:#ece5d8; color:#6b6154; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; }
-    h1 { margin:0 0 4px; }
-    .sub { color:#6b6154; font-size:12.5px; margin:0 0 24px; }
-    h2 { font-size:15px; margin:32px 0 12px; color:#3a332b; }
-    .cards { display:flex; gap:14px; flex-wrap:wrap; }
-    .card { background:#fff; border-radius:10px; padding:16px 20px; min-width:120px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
-    .card .num { font-size:26px; font-weight:700; line-height:1.1; }
-    .card .lbl { font-size:11.5px; color:#6b6154; text-transform:uppercase; letter-spacing:.03em; margin-top:4px; }
-    .card.asistio .num { color:#2f6a45; }
-    .card.tardanza .num { color:#8a5c07; }
-    .card.falta .num { color:#a3372e; }
-    .card.neutro .num { color:#3a332b; }
-    .panel { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
-    .chart { display:flex; align-items:flex-end; gap:4px; height:140px; margin-top:12px; overflow-x:auto; }
-    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:22px; }
-    .chart-bars { display:flex; align-items:flex-end; gap:1px; height:110px; }
-    .chart-bar { width:9px; border-radius:2px 2px 0 0; }
-    .chart-bar.falta { background:#c0554b; }
-    .chart-bar.tardanza { background:#d9a441; }
-    .chart-day { font-size:9px; color:#6b6154; margin-top:4px; transform:rotate(-45deg); white-space:nowrap; }
-    .legend { display:flex; gap:16px; font-size:11.5px; color:#6b6154; margin-top:8px; }
-    .legend span { display:inline-flex; align-items:center; gap:5px; }
-    .swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
-    .canal-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
-    .canal-nombre { width:110px; flex-shrink:0; }
-    .canal-barra-wrap { flex:1; background:#ece5d8; border-radius:4px; height:16px; overflow:hidden; }
-    .canal-barra { background:#b5602c; height:100%; }
-    .canal-pct { width:44px; text-align:right; flex-shrink:0; color:#6b6154; }
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --brand-dark:#8f4a20;
+      --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body {
+      font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background:var(--bg); color:var(--ink); margin:0;
+    }
+    .wrap { max-width:1180px; margin:0 auto; padding:0 28px 60px; }
+    header.top {
+      background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff;
+      padding:18px 28px; margin-bottom:28px;
+    }
+    header.top .inner { max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; letter-spacing:.02em; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:20px; font-size:13px; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a:hover { opacity:1; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+
+    h1.title { font-size:22px; margin:0 0 2px; letter-spacing:-.01em; }
+    p.sub { color:var(--muted); font-size:13px; margin:0 0 28px; }
+    h2.section { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:36px 0 14px; font-weight:700; }
+    h2.section:first-of-type { margin-top:0; }
+
+    .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:14px; }
+    .card {
+      background:var(--card); border-radius:14px; padding:18px 20px;
+      box-shadow:0 1px 3px rgba(35,25,10,.06), 0 1px 1px rgba(35,25,10,.04);
+      border-left:4px solid var(--line);
+    }
+    .card .num { font-size:28px; font-weight:800; line-height:1.1; letter-spacing:-.01em; }
+    .card .lbl { font-size:11.5px; color:var(--muted); margin-top:6px; font-weight:600; }
+    .card.ok { border-left-color:var(--ok); } .card.ok .num { color:var(--ok); }
+    .card.warn { border-left-color:var(--warn); } .card.warn .num { color:var(--warn); }
+    .card.bad { border-left-color:var(--bad); } .card.bad .num { color:var(--bad); }
+    .card.neutro { border-left-color:var(--brand); }
+
+    .hero { display:flex; gap:22px; align-items:center; background:var(--card); border-radius:16px; padding:22px 26px;
+            box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:8px; flex-wrap:wrap; }
+    .ring { width:96px; height:96px; border-radius:50%; flex-shrink:0;
+            background:conic-gradient(var(--brand) calc(var(--pct) * 1%), var(--line) 0);
+            display:flex; align-items:center; justify-content:center; }
+    .ring-inner { width:74px; height:74px; border-radius:50%; background:var(--card);
+                  display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .ring-inner b { font-size:19px; }
+    .ring-inner span { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+    .hero-txt b { font-size:15px; }
+    .hero-txt p { margin:2px 0 0; color:var(--muted); font-size:12.5px; }
+
+    .panel { background:var(--card); border-radius:14px; padding:22px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .grid2 { display:grid; grid-template-columns:1.3fr 1fr; gap:20px; align-items:start; }
+    @media (max-width: 860px) { .grid2 { grid-template-columns:1fr; } .wrap { padding:0 16px 40px; } }
+
+    .chart { display:flex; align-items:flex-end; gap:5px; height:150px; margin-top:6px; overflow-x:auto;
+              padding-bottom:2px; border-bottom:1px solid var(--line); }
+    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:20px; flex-shrink:0; }
+    .chart-bars { display:flex; align-items:flex-end; gap:2px; height:120px; }
+    .chart-bar { width:8px; border-radius:3px 3px 0 0; min-height:2px; transition:opacity .15s; }
+    .chart-bar.falta { background:linear-gradient(180deg, #c85f52, var(--bad)); }
+    .chart-bar.tardanza { background:linear-gradient(180deg, #e6b463, var(--warn)); }
+    .chart-col:hover .chart-bar { opacity:.75; }
+    .chart-day { font-size:9px; color:var(--muted); margin-top:8px; white-space:nowrap; }
+    .legend { display:flex; gap:18px; font-size:12px; color:var(--muted); margin-top:14px; font-weight:600; }
+    .legend span { display:inline-flex; align-items:center; gap:6px; }
+    .swatch { width:10px; height:10px; border-radius:3px; display:inline-block; }
+
+    .canal-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; font-size:13px; }
+    .canal-row:last-child { margin-bottom:0; }
+    .canal-nombre { width:100px; flex-shrink:0; font-weight:600; }
+    .canal-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:10px; overflow:hidden; }
+    .canal-barra { background:linear-gradient(90deg, var(--brand-dark), var(--brand)); height:100%; border-radius:6px; }
+    .canal-pct { width:44px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:12px; }
+
     table { border-collapse:collapse; width:100%; }
-    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; }
-    th { font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; }
-    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-    @media (max-width: 800px) { .grid2 { grid-template-columns:1fr; } }
+    th { text-align:left; padding:0 10px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
+    td { padding:11px 10px; border-bottom:1px solid var(--line); font-size:13px; }
+    tr:last-child td { border-bottom:none; }
+    td.num, th.num { text-align:right; }
+    .badge-pct { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:700; background:var(--bad-bg); color:var(--bad); }
+
+    .panel + .panel { margin-top:20px; }
+    .empty { color:var(--muted); font-size:13px; padding:8px 0; }
   </style>
 </head>
 <body>
-  <nav>
-    <span>Hola, {{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
-    <a href="{{ url_for('personal') }}">Personal</a>
-    {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
-    {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
-    <a href="{{ url_for('auth.logout') }}">Salir</a>
-  </nav>
-  <h1>MAC — Asistencia</h1>
-
-  {% if not hay_datos %}
-    <p class="sub">Todavía no hay datos de clasificación en Postgres. Mirá <a href="{{ url_for('personal') }}">Personal</a> mientras tanto.</p>
-  {% else %}
-    <p class="sub">Histórico: {{ data.periodo.desde }} – {{ data.periodo.hasta }} · datos en vivo desde Postgres, se actualiza solo con cada corrida del pipeline.</p>
-
-    <h2>Hoy</h2>
-    <div class="cards">
-      <div class="card asistio"><div class="num">{{ data.resumen_hoy.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
-      <div class="card tardanza"><div class="num">{{ data.resumen_hoy.tardanza }}</div><div class="lbl">Tardanza</div></div>
-      <div class="card falta"><div class="num">{{ data.resumen_hoy.falta }}</div><div class="lbl">Falta</div></div>
-      <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacante }}</div><div class="lbl">Vacante</div></div>
-      <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacaciones }}</div><div class="lbl">Vacaciones</div></div>
-      <div class="card neutro"><div class="num">{{ data.resumen_hoy.total }}</div><div class="lbl">Total evaluado</div></div>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
     </div>
+  </header>
 
-    <h2>Resumen histórico</h2>
-    <div class="cards">
-      <div class="card neutro"><div class="num">{{ data.resumen.pct_efectividad }}%</div><div class="lbl">Efectividad</div></div>
-      <div class="card asistio"><div class="num">{{ data.resumen.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
-      <div class="card tardanza"><div class="num">{{ data.resumen.tardanza }}</div><div class="lbl">Tardanza</div></div>
-      <div class="card falta"><div class="num">{{ data.resumen.falta }}</div><div class="lbl">Falta</div></div>
-      <div class="card neutro"><div class="num">{{ data.resumen.geofence }}</div><div class="lbl">Alerta geofence</div></div>
-    </div>
+  <div class="wrap">
+    <h1 class="title">Asistencia</h1>
 
-    <div class="grid2">
-      <div>
-        <h2>Tendencia (últimos {{ data.tendencia|length }} días)</h2>
-        <div class="panel">
-          <div class="chart">
-            {% for d in data.tendencia %}
-            <div class="chart-col">
-              <div class="chart-bars">
-                <div class="chart-bar falta" style="height: {{ (d.falta / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="Falta: {{ d.falta }}"></div>
-                <div class="chart-bar tardanza" style="height: {{ (d.tardanza / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="Tardanza: {{ d.tardanza }}"></div>
+    {% if not hay_datos %}
+      <p class="sub">Todavía no hay datos de clasificación en Postgres. Mirá <a href="{{ url_for('personal') }}">Personal</a> mientras tanto.</p>
+    {% else %}
+      <p class="sub">Histórico {{ data.periodo.desde }} – {{ data.periodo.hasta }} · en vivo desde Postgres, se actualiza solo con cada corrida del pipeline</p>
+
+      <div class="hero">
+        <div class="ring" style="--pct: {{ data.resumen.pct_efectividad }};">
+          <div class="ring-inner"><b>{{ data.resumen.pct_efectividad }}%</b><span>Efectividad</span></div>
+        </div>
+        <div class="hero-txt">
+          <b>Hoy: {{ data.resumen_hoy.asistio }} asistieron a tiempo, {{ data.resumen_hoy.tardanza }} con tardanza, {{ data.resumen_hoy.falta }} con falta</b>
+          <p>de {{ data.resumen_hoy.total }} evaluados hoy · {{ data.resumen_hoy.vacante }} vacantes, {{ data.resumen_hoy.vacaciones }} de vacaciones</p>
+        </div>
+      </div>
+
+      <h2 class="section">Hoy</h2>
+      <div class="cards">
+        <div class="card ok"><div class="num">{{ data.resumen_hoy.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
+        <div class="card warn"><div class="num">{{ data.resumen_hoy.tardanza }}</div><div class="lbl">Tardanza</div></div>
+        <div class="card bad"><div class="num">{{ data.resumen_hoy.falta }}</div><div class="lbl">Falta</div></div>
+        <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacante }}</div><div class="lbl">Vacante</div></div>
+        <div class="card neutro"><div class="num">{{ data.resumen_hoy.vacaciones }}</div><div class="lbl">Vacaciones</div></div>
+        <div class="card neutro"><div class="num">{{ data.resumen_hoy.total }}</div><div class="lbl">Total evaluado</div></div>
+      </div>
+
+      <h2 class="section">Resumen histórico</h2>
+      <div class="cards">
+        <div class="card ok"><div class="num">{{ data.resumen.asistio }}</div><div class="lbl">Asistió a tiempo</div></div>
+        <div class="card warn"><div class="num">{{ data.resumen.tardanza }}</div><div class="lbl">Tardanza</div></div>
+        <div class="card bad"><div class="num">{{ data.resumen.falta }}</div><div class="lbl">Falta</div></div>
+        <div class="card neutro"><div class="num">{{ data.resumen.geofence }}</div><div class="lbl">Alerta geofence</div></div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <h2 class="section">Tendencia · últimos {{ data.tendencia|length }} días</h2>
+          <div class="panel">
+            <div class="chart">
+              {% for d in data.tendencia %}
+              <div class="chart-col">
+                <div class="chart-bars">
+                  <div class="chart-bar falta" style="height: {{ (d.falta / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="{{ d.dia }} · Falta: {{ d.falta }}"></div>
+                  <div class="chart-bar tardanza" style="height: {{ (d.tardanza / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="{{ d.dia }} · Tardanza: {{ d.tardanza }}"></div>
+                </div>
+                <div class="chart-day">{{ d.dia }}</div>
               </div>
-              <div class="chart-day">{{ d.dia }}</div>
+              {% endfor %}
+            </div>
+            <div class="legend">
+              <span><span class="swatch" style="background:var(--bad);"></span> Falta</span>
+              <span><span class="swatch" style="background:var(--warn);"></span> Tardanza</span>
+            </div>
+          </div>
+
+          <h2 class="section">Alertas</h2>
+          <div class="cards">
+            <div class="card neutro"><div class="num">{{ data.alertas.alerta_analista }}</div><div class="lbl">Para revisar (analista)</div></div>
+            <div class="card neutro"><div class="num">{{ data.alertas.otro_canal }}</div><div class="lbl">Trabajó otro canal</div></div>
+            <div class="card neutro"><div class="num">{{ data.alertas.geofence }}</div><div class="lbl">Fuera de geocerca</div></div>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="section">Efectividad por canal</h2>
+          <div class="panel">
+            {% for canal, pct in data.efectividad_por_canal %}
+            <div class="canal-row">
+              <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
+              <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
+              <div class="canal-pct">{{ pct }}%</div>
             </div>
             {% endfor %}
           </div>
-          <div class="legend">
-            <span><span class="swatch" style="background:#c0554b;"></span> Falta</span>
-            <span><span class="swatch" style="background:#d9a441;"></span> Tardanza</span>
+
+          <h2 class="section">Top 6 con más falta</h2>
+          <div class="panel">
+            {% if data.top_falta %}
+            <table>
+              <tr><th>Nombre</th><th class="num">Falta</th><th class="num">Tardanza</th><th class="num">% Falta</th></tr>
+              {% for p in data.top_falta %}
+              <tr>
+                <td>{{ p.nombre }}</td>
+                <td class="num">{{ p.falta }}</td>
+                <td class="num">{{ p.tardanza }}</td>
+                <td class="num"><span class="badge-pct">{{ p.pct_falta }}%</span></td>
+              </tr>
+              {% endfor %}
+            </table>
+            {% else %}
+            <p class="empty">Sin datos todavía.</p>
+            {% endif %}
+          </div>
+
+          <h2 class="section">Asistencia perfecta</h2>
+          <div class="cards">
+            <div class="card ok"><div class="num">{{ data.asistencia_perfecta.n }} <span style="font-size:14px; color:var(--muted); font-weight:600;">/ {{ data.asistencia_perfecta.total }}</span></div><div class="lbl">Personas sin falta ni tardanza</div></div>
           </div>
         </div>
-
-        <h2>Alertas</h2>
-        <div class="cards">
-          <div class="card neutro"><div class="num">{{ data.alertas.alerta_analista }}</div><div class="lbl">Para revisar (analista)</div></div>
-          <div class="card neutro"><div class="num">{{ data.alertas.otro_canal }}</div><div class="lbl">Trabajó otro canal</div></div>
-          <div class="card neutro"><div class="num">{{ data.alertas.geofence }}</div><div class="lbl">Fuera de geocerca</div></div>
-        </div>
       </div>
-
-      <div>
-        <h2>Efectividad por canal</h2>
-        <div class="panel">
-          {% for canal, pct in data.efectividad_por_canal %}
-          <div class="canal-row">
-            <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
-            <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
-            <div class="canal-pct">{{ pct }}%</div>
-          </div>
-          {% endfor %}
-        </div>
-
-        <h2>Top 6 con más Falta</h2>
-        <div class="panel">
-          <table>
-            <tr><th>Nombre</th><th>Falta</th><th>Tardanza</th><th>% Falta</th></tr>
-            {% for p in data.top_falta %}
-            <tr><td>{{ p.nombre }}</td><td>{{ p.falta }}</td><td>{{ p.tardanza }}</td><td>{{ p.pct_falta }}%</td></tr>
-            {% endfor %}
-          </table>
-        </div>
-
-        <h2>Asistencia perfecta</h2>
-        <div class="cards">
-          <div class="card asistio"><div class="num">{{ data.asistencia_perfecta.n }}</div><div class="lbl">de {{ data.asistencia_perfecta.total }} personas, sin falta ni tardanza</div></div>
-        </div>
-      </div>
-    </div>
-  {% endif %}
+    {% endif %}
+  </div>
 </body>
 </html>
