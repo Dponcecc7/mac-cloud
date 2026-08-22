@@ -159,7 +159,8 @@
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
                 {% set eb = (f.estado or '').split(' (')[0] %}
-                <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb }}</span>
+                {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+                <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
               </td>
               <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
               <td>{{ f.salida_prog or '' }}</td>
@@ -167,8 +168,8 @@
               {% if vista == 'reporte' %}<td>{{ f.canal_ayer|title }}</td>{% endif %}
               <td><input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}"></td>
               {% if vista == 'reporte' %}
-              <td><input class="ipt ipt-hora" name="entrada_corr_{{ f.dni }}" placeholder="HH:MM"></td>
-              <td><input class="ipt ipt-hora" name="salida_corr_{{ f.dni }}" placeholder="HH:MM"></td>
+              <td><input class="ipt ipt-hora" name="entrada_corr_{{ f.dni }}" title="Formato HH:MM"></td>
+              <td><input class="ipt ipt-hora" name="salida_corr_{{ f.dni }}" title="Formato HH:MM"></td>
               {% endif %}
               <input type="hidden" name="dni" value="{{ f.dni }}">
             </tr>
