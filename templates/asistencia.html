@@ -146,8 +146,10 @@
               {% if vista == 'reporte' %}<th>Entrada corregida</th><th>Salida corregida</th>{% endif %}
             </tr>
             {% for f in filas %}
+            {% set eb = (f.estado or '').split(' (')[0] %}
+            {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
-                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
+                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ eb_corto }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
               <td>{{ (f.supervisor or '')|title }}</td>
               <td>{{ (f.ciudad or '')|title }}</td>
@@ -157,8 +159,6 @@
               <td>{{ f.entrada_prog or '' }}</td>
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
-                {% set eb = (f.estado or '').split(' (')[0] %}
-                {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
                 <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
               </td>
               <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
