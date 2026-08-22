@@ -10,9 +10,13 @@
     .wrap { max-width:800px; margin:0 auto; padding:40px 24px; }
     .panel { background:var(--card); border-radius:14px; padding:22px 24px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .panel.ok { border-left:4px solid var(--ok); } .panel.bad { border-left:4px solid var(--bad); }
+    .panel.wait { border-left:4px solid #96660a; }
     h1 { font-size:17px; margin:0 0 12px; }
     pre { white-space:pre-wrap; font-size:12.5px; background:var(--bg); border-radius:8px; padding:12px; max-height:400px; overflow:auto; }
     a.volver { display:inline-block; margin-top:16px; color:var(--brand); font-weight:700; text-decoration:none; font-size:13px; }
+    #poll-panel { margin-top:14px; }
+    #poll-panel p { margin:0; font-size:13px; }
+    #poll-panel a { color:var(--brand); font-weight:700; text-decoration:none; }
   </style>
 </head>
 <body>
@@ -21,6 +25,36 @@
       <h1>{{ titulo }}</h1>
       <pre>{{ detalle }}</pre>
     </div>
+    {% if poll_workflow %}
+    <div class="panel wait" id="poll-panel"><p id="poll-msg">⏳ Corriendo en GitHub Actions...</p></div>
+    <script>
+      const wf = {{ poll_workflow|tojson }};
+      let intentos = 0;
+      function checar() {
+        intentos++;
+        fetch(`{{ url_for('asistencia.estado_workflow') }}?wf=${encodeURIComponent(wf)}`)
+          .then(r => r.json())
+          .then(info => {
+            const msg = document.getElementById('poll-msg');
+            const panel = document.getElementById('poll-panel');
+            if (!info || !info.status) { msg.textContent = 'No se pudo consultar el estado -- revisá github.com/Dponcecc7/mac-cloud/actions.'; return; }
+            if (info.status === 'completed') {
+              const bien = info.conclusion === 'success';
+              panel.className = 'panel ' + (bien ? 'ok' : 'bad');
+              msg.innerHTML = (bien ? '✅ Listo, ya está actualizado.' : `⚠️ Terminó con estado: ${info.conclusion}.`)
+                + ` <a href="{{ volver }}">Ver reporte</a>`;
+            } else if (intentos < 40) {
+              msg.textContent = `⏳ ${info.status === 'queued' ? 'En cola' : 'Corriendo'}... (revisando cada 10s)`;
+              setTimeout(checar, 10000);
+            } else {
+              msg.textContent = 'Está tardando más de lo normal -- revisá GitHub Actions directamente.';
+            }
+          })
+          .catch(() => setTimeout(checar, 10000));
+      }
+      document.addEventListener('DOMContentLoaded', checar);
+    </script>
+    {% endif %}
     <a class="volver" href="{{ volver }}">← Volver</a>
   </div>
 </body>

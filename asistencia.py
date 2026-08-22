@@ -23,13 +23,13 @@ import os
 import sys
 
 import openpyxl
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from dimension_models import CorreccionWeb, Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
-from github_actions import disparar_workflow
+from github_actions import disparar_workflow, estado_ultima_corrida
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -259,7 +259,15 @@ def actualizar():
         "asistencia_resultado.html", usuario=current_user, activo=vista,
         titulo="Actualización disparada" if ok else "No se pudo disparar", ok=ok, detalle=mensaje,
         volver=url_for(f"asistencia.{'cliente' if vista == 'cliente' else 'reporte'}", fecha=fecha_str),
+        poll_workflow="reporte_9am.yml" if ok else None,
     )
+
+
+@bp.get("/estado_workflow")
+@login_required
+def estado_workflow():
+    nombre = request.args.get("wf", "")
+    return jsonify(estado_ultima_corrida(nombre) or {})
 
 
 @bp.get("/reemplazo")
@@ -303,4 +311,5 @@ def reemplazo_submit():
         "asistencia_resultado.html", usuario=current_user, activo="reemplazo",
         titulo=titulo, ok=(titulo == "Reemplazo agregado"), detalle=detalle,
         volver=url_for("asistencia.reemplazo_form"),
+        poll_workflow="pipeline_completo.yml" if ok_disparo else None,
     )
