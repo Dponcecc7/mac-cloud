@@ -22,6 +22,7 @@ import io
 import os
 import re
 import sys
+from zoneinfo import ZoneInfo
 
 import openpyxl
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
@@ -42,6 +43,8 @@ bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 TABLA3_RUTA_GRAPH = f"{RUTA_GRAPH_MAC}3_Registro_Diario_Supervisor.xlsx"
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que usaba la app local para resaltar "salida temprana"
+
+PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 # aplicar_correcciones.py escribe este texto exacto en el comentario cuando
 # un supervisor reporta "Asistió" desde la app movil pero todavia nadie
@@ -163,7 +166,13 @@ def _cargar_reporte(fecha):
         "falta": sum(1 for f in filas if estado_base(f["estado"]) == "FALTA"),
         "total": len(filas),
     }
-    frescura = {"ultima_sync": ultima_sync, "fecha": fecha, "ayer": ayer}
+    # procesado_en se guarda con func.now() de Postgres -- en UTC, no hora
+    # Peru. Sin esto, "Datos hasta las X" mostraba la hora UTC directo (5
+    # horas atrás de la hora real de Peru), pareciendo desactualizado.
+    ultima_sync_peru = (
+        ultima_sync.replace(tzinfo=ZoneInfo("UTC")).astimezone(PERU_TZ) if ultima_sync else None
+    )
+    frescura = {"ultima_sync": ultima_sync_peru, "fecha": fecha, "ayer": ayer}
     return resumen, filas, frescura
 
 
