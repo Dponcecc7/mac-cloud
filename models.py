@@ -14,6 +14,11 @@ class Usuario(db.Model, UserMixin):
     password_hash = db.Column(db.String(255), nullable=False)
     rol = db.Column(db.Enum("admin", "analista", "supervisor", name="rol_usuario"), nullable=False)
     dni_asociado = db.Column(db.String(8), nullable=True)  # FK a personas.dni cuando esa tabla exista (Fase 2)
+    # cliente_id de Athena (livetradebi.dim_lf_general_visitas.cliente_id) que
+    # este analista gestiona -- un analista = un cliente fijo. El pipeline lo
+    # usa para saber que workgroup/cliente_id consultar para las Personas que
+    # ese analista cargo (Persona.analista_propietario == este email).
+    cliente_id_athena = db.Column(db.Integer, nullable=True)
     activo = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)

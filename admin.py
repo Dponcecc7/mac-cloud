@@ -33,17 +33,21 @@ def usuarios():
         password = request.form.get("password", "")
         rol = request.form.get("rol", "supervisor")
         dni_asociado = request.form.get("dni_asociado", "").strip() or None
+        cliente_id_athena = request.form.get("cliente_id_athena", "").strip() or None
 
         if not email or not password:
             flash("Correo y contraseña son obligatorios.", "error")
         elif Usuario.query.filter_by(email=email).first():
             flash(f"Ya existe un usuario con el correo {email}.", "error")
+        elif cliente_id_athena and not cliente_id_athena.isdigit():
+            flash("El cliente ID de Athena tiene que ser un número.", "error")
         else:
             nuevo = Usuario(
                 email=email,
                 password_hash=generate_password_hash(password),
                 rol=rol,
                 dni_asociado=dni_asociado,
+                cliente_id_athena=int(cliente_id_athena) if cliente_id_athena else None,
             )
             db.session.add(nuevo)
             db.session.commit()
@@ -64,4 +68,18 @@ def toggle_usuario(usuario_id):
         usuario.activo = not usuario.activo
         db.session.commit()
         flash(f"Usuario {usuario.email} {'activado' if usuario.activo else 'desactivado'}.", "ok")
+    return redirect(url_for("admin.usuarios"))
+
+
+@bp.route("/usuarios/<int:usuario_id>/cliente", methods=["POST"])
+@admin_required
+def set_cliente_usuario(usuario_id):
+    usuario = Usuario.query.get_or_404(usuario_id)
+    valor = request.form.get("cliente_id_athena", "").strip()
+    if valor and not valor.isdigit():
+        flash("El cliente ID de Athena tiene que ser un número.", "error")
+    else:
+        usuario.cliente_id_athena = int(valor) if valor else None
+        db.session.commit()
+        flash(f"Cliente de {usuario.email} actualizado.", "ok")
     return redirect(url_for("admin.usuarios"))
