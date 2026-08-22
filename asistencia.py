@@ -565,6 +565,34 @@ def reemplazo_submit():
 
     try:
         log = procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, motivo_baja=motivo_baja)
+
+        # Cierra el pendiente de HOY de la persona reemplazada -- sin esto,
+        # "Agregar reemplazo" resuelve el futuro (quien entra) pero la
+        # persona saliente seguia apareciendo en "Pendientes de marcar"
+        # porque su Falta de hoy nunca queda justificada por separado.
+        try:
+            hoy = dt.date.today()
+            ok_lock, _ = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+            if ok_lock:
+                try:
+                    wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+                    ws = wb["Registro diario supervisor"]
+                    _agregar_fila_tabla3(ws, ws.max_row + 1, dni_vacante, hoy, f"Falta - {motivo_baja or 'Reemplazo'}")
+                    subir_in_place(TABLA3_RUTA_GRAPH, wb)
+                    session = get_session()
+                    try:
+                        session.add(CorreccionWeb(
+                            dni=dni_vacante, fecha=hoy, comentario_entrada=f"Falta - {motivo_baja or 'Reemplazo'}",
+                            registrado_por=current_user.email,
+                        ))
+                        session.commit()
+                    finally:
+                        session.close()
+                finally:
+                    liberar_lock("tabla3_web")
+        except Exception:
+            pass  # el reemplazo en si ya se guardo bien -- esto es solo prolijidad, no bloquea el flujo principal
+
         ok_disparo, _ = disparar_workflow("pipeline_completo.yml")
         detalle = "\n".join(log)
         if not ok_disparo:
