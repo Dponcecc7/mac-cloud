@@ -113,13 +113,16 @@ def _cargar_reporte(fecha):
             "entrada_real": c.entrada_real,
             "entrada_corregida": c.fuente_dato == "Corregido manualmente (Tabla 3)",
             "estado": c.estado,
-            "comentario_entrada": c.comentario_supervisor or "",
+            # limpiar_motivo() saca el prefijo redundante "Falta - " (el
+            # badge de Estado ya dice "Falta") -- misma funcion que ya usa
+            # el motor de clasificacion para esto, no se reinventa.
+            "comentario_entrada": r9am.limpiar_motivo(c.comentario_supervisor, "Falta") or "",
             "salida_prog": ayer_c.salida_esperada if ayer_c else None,
             "salida_real": ayer_c.salida_real if ayer_c else None,
             "salida_corregida": bool(ayer_c and ayer_c.fuente_dato == "Corregido manualmente (Tabla 3)"),
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
-            "comentario_salida": (ayer_c.comentario_supervisor or "") if ayer_c else "",
+            "comentario_salida": (r9am.limpiar_motivo(ayer_c.comentario_supervisor, "Falta") or "") if ayer_c else "",
             "entrada_pendiente": MARCADOR_PENDIENTE in (c.comentario_supervisor or ""),
             "salida_pendiente": MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else ""),
         })
