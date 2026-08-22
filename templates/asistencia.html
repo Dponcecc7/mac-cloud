@@ -148,8 +148,10 @@
             {% for f in filas %}
             {% set eb = (f.estado or '').split(' (')[0] %}
             {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+            {% set pendiente = f.entrada_pendiente or f.salida_pendiente %}
+            {% set estado_tags = eb_corto + (',Pendiente confirmar salida' if pendiente else '') %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
-                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ eb_corto }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
+                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ estado_tags }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
               <td>{{ (f.supervisor or '')|title }}</td>
               <td>{{ (f.ciudad or '')|title }}</td>
@@ -160,6 +162,7 @@
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
                 <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
+                {% if pendiente %}<span class="badge warn" style="margin-left:4px;" title="Falta confirmar la hora real -- escribila en Entrada/Salida corregida">⚠ Confirmar</span>{% endif %}
               </td>
               <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
               <td>{{ f.salida_prog or '' }}</td>
@@ -193,6 +196,12 @@ function filasDatos() {
     return f;
   });
 }
+function tags(f, campo) {
+  // 'estado' puede traer varias etiquetas por fila (ej. "Falta,Pendiente
+  // confirmar salida") -- separadas por coma. El resto de campos son un
+  // solo valor.
+  return campo === 'estado' ? (f[campo] || '').split(',').filter(Boolean) : [f[campo]];
+}
 function coinciden(filas, exceptoCampo) {
   const mer = (document.getElementById('f-buscar')?.value || '').toLowerCase();
   const soloTemprana = document.getElementById('f-temprana')?.checked;
@@ -200,7 +209,7 @@ function coinciden(filas, exceptoCampo) {
     for (const c of CAMPOS) {
       if (c === exceptoCampo) continue;
       const sel = seleccion[c];
-      if (sel.size > 0 && !sel.has(f[c])) return false;
+      if (sel.size > 0 && !tags(f, c).some(v => sel.has(v))) return false;
     }
     if (exceptoCampo !== 'mercaderista' && mer && !f.mercaderista.toLowerCase().includes(mer)) return false;
     if (soloTemprana && !f.temprana) return false;
@@ -223,7 +232,9 @@ function filtrar() {
   const todas = filasDatos();
   for (const campo of CAMPOS) {
     const disponibles = coinciden(todas, campo);
-    const unicos = [...new Set(disponibles.map(f => f[campo]).filter(Boolean))].sort();
+    const set = new Set();
+    disponibles.forEach(f => tags(f, campo).forEach(v => set.add(v)));
+    const unicos = [...set].sort();
     for (const v of [...seleccion[campo]]) if (!unicos.includes(v)) seleccion[campo].delete(v);
 
     const panel = document.getElementById('panel-' + campo);

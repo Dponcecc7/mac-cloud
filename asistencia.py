@@ -42,6 +42,13 @@ RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 TABLA3_RUTA_GRAPH = f"{RUTA_GRAPH_MAC}3_Registro_Diario_Supervisor.xlsx"
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que usaba la app local para resaltar "salida temprana"
 
+# aplicar_correcciones.py escribe este texto exacto en el comentario cuando
+# un supervisor reporta "Asistió" desde la app movil pero todavia nadie
+# confirmo la hora real en "Entrada/Salida corregida" -- hay que poder
+# encontrar estos casos facil para no perderlos (ver TEXTO_PENDIENTE_ENTRADA/
+# TEXTO_PENDIENTE_SALIDA en pipeline/aplicar_correcciones.py).
+MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
+
 
 def _cargar_feriados():
     session = get_session()
@@ -113,6 +120,8 @@ def _cargar_reporte(fecha):
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
             "comentario_salida": (ayer_c.comentario_supervisor or "") if ayer_c else "",
+            "entrada_pendiente": MARCADOR_PENDIENTE in (c.comentario_supervisor or ""),
+            "salida_pendiente": MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else ""),
         })
         if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):
             ultima_sync = c.procesado_en
