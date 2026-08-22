@@ -117,7 +117,7 @@ def plantilla_patron():
 @bp.get("/headcount")
 @_analista_requerido
 def headcount_form():
-    return render_template("cargas_headcount.html", resultado=False)
+    return render_template("cargas_headcount.html", usuario=current_user, resultado=False)
 
 
 @bp.post("/headcount")
@@ -225,6 +225,6 @@ def headcount_submit():
         "ok" if not conflictos else "error",
     )
     return render_template(
-        "cargas_headcount.html", resultado=True,
+        "cargas_headcount.html", usuario=current_user, resultado=True,
         nuevas=nuevas, actualizadas=actualizadas, conflictos=conflictos, n_patron=n_patron,
     )

@@ -51,7 +51,7 @@ def usuarios():
         return redirect(url_for("admin.usuarios"))
 
     todos = Usuario.query.order_by(Usuario.created_at.desc()).all()
-    return render_template("admin_usuarios.html", usuarios=todos)
+    return render_template("admin_usuarios.html", usuario=current_user, usuarios=todos)
 
 
 @bp.route("/usuarios/<int:usuario_id>/toggle", methods=["POST"])

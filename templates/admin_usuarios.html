@@ -5,72 +5,104 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Usuarios</title>
   <style>
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
-    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
-    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
-    table { border-collapse:collapse; width:100%; margin-top:16px; background:#fff; border-radius:8px; overflow:hidden; }
-    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #ece5d8; font-size:13px; }
-    th { background:#f2ddca; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; }
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:900px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:900px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 14px; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:20px; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:13px; }
+    th { background:var(--bg); font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
     form.inline { display:inline; }
-    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:16px; margin-top:20px; max-width:420px; }
-    label { display:block; font-size:12px; font-weight:600; color:#6b6154; margin-bottom:4px; }
-    input, select { width:100%; padding:6px 8px; margin-bottom:10px; border:1px solid #ddd4c6; border-radius:6px; box-sizing:border-box; font:inherit; }
-    button { padding:8px 14px; background:#b5602c; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:12.5px; }
-    .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; }
-    .flash.error { background:#f8e0dc; color:#a33b2c; }
-    .flash.ok { background:#e4f0e6; color:#2f6a45; }
-    .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-    .pill.si { background:#e4f0e6; color:#2f6a45; }
-    .pill.no { background:#f8e0dc; color:#a33b2c; }
+    label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+    input, select { width:100%; padding:8px 10px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; box-sizing:border-box; font:inherit; background:var(--bg); color:var(--ink); }
+    button { padding:9px 16px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:12.5px; }
+    button.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+    .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
+    .estado-pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+    .estado-pill.si { background:var(--ok-bg); color:var(--ok); }
+    .estado-pill.no { background:var(--bad-bg); color:var(--bad); }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 14px; }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="{{ url_for('dashboard') }}">← MAC</a>
-    <a href="{{ url_for('personal') }}">Personal</a>
-    <a href="{{ url_for('auth.logout') }}">Salir</a>
-  </nav>
-  <h1>Usuarios</h1>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-      <div class="flash {{ category }}">{{ message }}</div>
-    {% endfor %}
-  {% endwith %}
-  <table>
-    <tr><th>Correo</th><th>Rol</th><th>DNI asociado</th><th>Activo</th><th>Último login</th><th></th></tr>
-    {% for u in usuarios %}
-    <tr>
-      <td>{{ u.email }}</td>
-      <td>{{ u.rol }}</td>
-      <td>{{ u.dni_asociado or "—" }}</td>
-      <td><span class="pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
-      <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "Nunca" }}</td>
-      <td>
-        <form class="inline" method="post" action="{{ url_for('admin.toggle_usuario', usuario_id=u.id) }}">
-          <button type="submit">{{ "Desactivar" if u.activo else "Activar" }}</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+        <a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>
+        <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
+    </div>
+  </header>
 
-  <div class="card">
-    <h2 style="font-size:14px; margin-top:0;">Crear usuario nuevo</h2>
-    <form method="post">
-      <label>Correo</label>
-      <input type="email" name="email" required>
-      <label>Contraseña</label>
-      <input type="password" name="password" required>
-      <label>Rol</label>
-      <select name="rol">
-        <option value="analista">Analista</option>
-        <option value="supervisor">Supervisor</option>
-        <option value="admin">Admin</option>
-      </select>
-      <label>DNI asociado (opcional)</label>
-      <input type="text" name="dni_asociado">
-      <button type="submit">Crear</button>
-    </form>
+  <div class="wrap">
+    <h1 class="title">Usuarios</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="panel">
+      <p class="panel-title">Cuentas</p>
+      <table>
+        <tr><th>Correo</th><th>Rol</th><th>DNI asociado</th><th>Activo</th><th>Último login</th><th></th></tr>
+        {% for u in usuarios %}
+        <tr>
+          <td>{{ u.email }}</td>
+          <td>{{ u.rol }}</td>
+          <td>{{ u.dni_asociado or "—" }}</td>
+          <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
+          <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "Nunca" }}</td>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('admin.toggle_usuario', usuario_id=u.id) }}">
+              <button class="ghost" type="submit">{{ "Desactivar" if u.activo else "Activar" }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div class="panel" style="max-width:420px;">
+      <p class="panel-title">Crear usuario nuevo</p>
+      <form method="post">
+        <label>Correo</label>
+        <input type="email" name="email" required>
+        <label>Contraseña</label>
+        <input type="password" name="password" required>
+        <label>Rol</label>
+        <select name="rol">
+          <option value="analista">Analista</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="admin">Admin</option>
+        </select>
+        <label>DNI asociado (opcional)</label>
+        <input type="text" name="dni_asociado">
+        <button type="submit">Crear</button>
+      </form>
+    </div>
   </div>
 </body>
 </html>

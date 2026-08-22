@@ -5,124 +5,155 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Cargar Headcount</title>
   <style>
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
-    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
-    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
-    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:20px; max-width:640px; margin-bottom:20px; }
-    label { display:block; font-size:12.5px; font-weight:600; color:#6b6154; margin-bottom:6px; margin-top:14px; }
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:900px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:900px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:12.5px; margin:2px 0 0; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:18px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
+    label { display:block; font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:6px; margin-top:14px; }
     input[type=file] { width:100%; font-size:12.5px; }
-    .sub { color:#6b6154; font-size:12px; margin:2px 0 0; }
-    button { margin-top:18px; padding:9px 18px; background:#b5602c; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
-    .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; max-width:640px; }
-    .flash.error { background:#f8e0dc; color:#a33b2c; }
-    .flash.ok { background:#e4f0e6; color:#2f6a45; }
-    table { border-collapse:collapse; width:100%; max-width:700px; background:#fff; border-radius:8px; overflow:hidden; margin-top:10px; }
-    th, td { text-align:left; padding:6px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; vertical-align:top; }
-    th { background:#f2ddca; font-size:10.5px; text-transform:uppercase; color:#6b6154; }
-    .resumen { display:flex; gap:16px; margin:14px 0; flex-wrap:wrap; }
-    .stat { background:#fff; border:1px solid #ddd4c6; border-radius:8px; padding:10px 16px; font-size:12.5px; }
-    .stat b { display:block; font-size:20px; color:#211c16; }
-    .plantillas { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 20px; max-width:640px; }
-    .btn-plantilla { display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #ddd4c6; border-radius:8px; padding:10px 16px; text-decoration:none; color:#211c16; font-size:13px; font-weight:600; }
-    .btn-plantilla:hover { border-color:#b5602c; }
-    .btn-plantilla span.ico { color:#b5602c; }
-    details { max-width:700px; margin-bottom:20px; }
-    details summary { cursor:pointer; font-weight:700; font-size:13.5px; color:#b5602c; padding:10px 0; }
-    .pill { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:999px; }
-    .pill.obl { background:#e4f0e6; color:#2f6a45; }
-    .pill.sit { background:#fbedd3; color:#8a5c07; }
-    code { font-family: ui-monospace, Consolas, monospace; background:#f2ede2; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+    button { margin-top:18px; padding:9px 18px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+    .flash { padding:9px 14px; border-radius:8px; margin-bottom:16px; font-size:13px; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
+    table { border-collapse:collapse; width:100%; margin-top:6px; }
+    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; vertical-align:top; }
+    th { background:var(--bg); font-size:10.5px; text-transform:uppercase; color:var(--muted); }
+    .resumen { display:flex; gap:14px; margin:14px 0; flex-wrap:wrap; }
+    .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 16px; font-size:12.5px; }
+    .stat b { display:block; font-size:20px; color:var(--ink); }
+    .plantillas { display:flex; gap:12px; flex-wrap:wrap; }
+    .btn-plantilla { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 16px; text-decoration:none; color:var(--ink); font-size:13px; font-weight:600; }
+    .btn-plantilla:hover { border-color:var(--brand); }
+    .btn-plantilla span.ico { color:var(--brand); }
+    details summary { cursor:pointer; font-weight:700; font-size:13px; color:var(--brand); }
+    .campo-pill { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; }
+    .campo-pill.obl { background:var(--ok-bg); color:var(--ok); }
+    .campo-pill.sit { background:var(--warn-bg); color:var(--warn); }
+    code { font-family: ui-monospace, Consolas, monospace; background:var(--bg); padding:1px 5px; border-radius:4px; font-size:11.5px; }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="{{ url_for('dashboard') }}">← MAC</a>
-    <a href="{{ url_for('personal') }}">Personal</a>
-    <a href="{{ url_for('auth.logout') }}">Salir</a>
-  </nav>
-  <h1>Cargar Headcount</h1>
-  <p class="sub" style="max-width:640px;">Subí tu Maestro Headcount (y opcionalmente tu Patrón Recurrente) con el mismo formato que ya usa el sistema. Las personas quedan asociadas a tu cuenta — si un DNI ya pertenece a otro analista, no se toca, se reporta como conflicto.</p>
-
-  <div class="plantillas">
-    <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_maestro') }}"><span class="ico">⬇</span> Plantilla Maestro Headcount (.xlsx)</a>
-    <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_patron') }}"><span class="ico">⬇</span> Plantilla Patrón Recurrente (.xlsx)</a>
-  </div>
-
-  <details>
-    <summary>Ver qué va en cada campo</summary>
-
-    <p class="sub" style="margin-top:6px;"><b>Maestro Headcount</b> — hoja "Maestro Headcount", encabezados en la fila 4. Una fila por persona.</p>
-    <table>
-      <tr><th>Campo</th><th></th><th>Qué va</th></tr>
-      <tr><td><code>DNI</code></td><td><span class="pill obl">obligatorio</span></td><td>Documento sin puntos ni espacios. Ej.: <code>18074336</code></td></tr>
-      <tr><td><code>Nombre completo</code></td><td><span class="pill obl">obligatorio</span></td><td>Apellidos y nombres, en MAYÚSCULAS.</td></tr>
-      <tr><td><code>Fecha de ingreso</code></td><td><span class="pill obl">obligatorio</span></td><td>Fecha en que empezó a trabajar.</td></tr>
-      <tr><td><code>Fecha de baja</code></td><td><span class="pill sit">si aplica</span></td><td>Solo si ya dejó de trabajar. Vacío mientras siga Activo.</td></tr>
-      <tr><td><code>Estado</code></td><td><span class="pill obl">obligatorio</span></td><td><code>Activo</code> · <code>Inactivo</code> · <code>Vacante</code></td></tr>
-      <tr><td><code>Reemplaza_a (DNI)</code></td><td><span class="pill sit">si aplica</span></td><td>DNI al que reemplaza, si el puesto ya existía.</td></tr>
-      <tr><td><code>Es reingreso (Sí/No)</code></td><td><span class="pill obl">obligatorio</span></td><td><code>Sí</code> · <code>No</code></td></tr>
-      <tr><td><code>Rol</code></td><td><span class="pill obl">obligatorio</span></td><td>En MAYÚSCULAS: <code>MERCADERISTAS</code> · <code>ASESORA</code> · <code>SUPERVISORES</code> · <code>BACK UP</code></td></tr>
-      <tr><td><code>Canal</code></td><td><span class="pill obl">obligatorio</span></td><td>En MAYÚSCULAS: <code>TRADICIONAL</code> · <code>MULTICANAL</code> · <code>AUTOSERVICIO</code> · <code>FARMACIA</code></td></tr>
-      <tr><td><code>Región</code></td><td><span class="pill obl">obligatorio</span></td><td>En MAYÚSCULAS. Ej.: <code>LIMA</code>, <code>NORTE</code></td></tr>
-      <tr><td><code>Ciudad / Mercado</code></td><td><span class="pill obl">obligatorio</span></td><td>En MAYÚSCULAS. Ej.: <code>TRUJILLO</code></td></tr>
-      <tr><td><code>Zona / Ruta asignada</code></td><td><span class="pill obl">obligatorio</span></td><td>Nombre libre de la zona/mercado/ruta.</td></tr>
-      <tr><td><code>Supervisor asignado</code></td><td><span class="pill obl">obligatorio</span></td><td>Nombre completo <b>exacto</b> del supervisor — debe coincidir con el "Nombre completo" de otra fila con Rol = SUPERVISORES.</td></tr>
-      <tr><td><code>Correo corporativo</code></td><td><span class="pill sit">si lo tenés</span></td><td>Puede quedar vacío.</td></tr>
-      <tr><td><code>Motivo de baja</code></td><td><span class="pill sit">si aplica</span></td><td>Solo cuando Estado = Inactivo.</td></tr>
-      <tr><td><code>Registrado por</code></td><td><span class="pill obl">obligatorio</span></td><td>Tu nombre o el de quien carga.</td></tr>
-      <tr><td><code>Fecha de registro</code></td><td><span class="pill obl">obligatorio</span></td><td>Fecha en que cargás el dato.</td></tr>
-    </table>
-
-    <p class="sub" style="margin-top:18px;"><b>Patrón recurrente</b> — hoja "Patrón recurrente", encabezados en la fila 4. Una fila por cada día que esa persona trabaja (si trabaja lunes a sábado, son 6 filas con el mismo DNI).</p>
-    <table>
-      <tr><th>Campo</th><th></th><th>Qué va</th></tr>
-      <tr><td><code>DNI</code></td><td><span class="pill obl">obligatorio</span></td><td>El mismo DNI del Maestro Headcount.</td></tr>
-      <tr><td><code>Día de la semana</code></td><td><span class="pill obl">obligatorio</span></td><td>En minúsculas: <code>lunes</code> ... <code>sábado</code></td></tr>
-      <tr><td><code>Hora entrada programada</code></td><td><span class="pill obl">obligatorio</span></td><td>Formato hora. Ej.: <code>08:00</code></td></tr>
-      <tr><td><code>Hora salida programada</code></td><td><span class="pill obl">obligatorio</span></td><td>Formato hora. Ej.: <code>17:30</code> (sábados suele ser antes)</td></tr>
-      <tr><td><code>Canal del día</code></td><td><span class="pill obl">obligatorio</span></td><td>Capitalizado. Ej.: <code>Farmacia</code>, <code>Autoservicio</code> — puede variar día a día si trabaja mixto.</td></tr>
-      <tr><td><code>Refrigerio</code></td><td><span class="pill obl">obligatorio</span></td><td><code>Con refrigerio</code> · <code>Sin refrigerio</code> · <code>Medio refrigerio</code></td></tr>
-    </table>
-  </details>
-
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-      <div class="flash {{ category }}">{{ message }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  {% if resultado %}
-    <div class="resumen">
-      <div class="stat"><b>{{ nuevas|length }}</b>nuevas</div>
-      <div class="stat"><b>{{ actualizadas|length }}</b>actualizadas</div>
-      <div class="stat"><b>{{ conflictos|length }}</b>en conflicto</div>
-      <div class="stat"><b>{{ n_patron }}</b>filas de Patrón</div>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}">Personal</a>
+        <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+        <a href="{{ url_for('cargas.headcount_form') }}" class="active">Cargar Headcount</a>
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
     </div>
-    {% if conflictos %}
-      <p class="sub"><b>DNIs que no se tocaron</b> (ya pertenecen a otro analista):</p>
-      <table>
-        <tr><th>DNI</th><th>Nombre</th><th>Pertenece a</th></tr>
-        {% for c in conflictos %}
-        <tr><td>{{ c.dni }}</td><td>{{ c.nombre }}</td><td>{{ c.dueño_actual }}</td></tr>
-        {% endfor %}
-      </table>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Cargar Headcount</h1>
+    <p class="sub" style="margin-bottom:20px;">Subí tu Maestro Headcount (y opcionalmente tu Patrón Recurrente) con el mismo formato que ya usa el sistema. Las personas quedan asociadas a tu cuenta — si un DNI ya pertenece a otro analista, no se toca, se reporta como conflicto.</p>
+
+    <div class="panel">
+      <p class="panel-title">Plantillas</p>
+      <div class="plantillas">
+        <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_maestro') }}"><span class="ico">⬇</span> Plantilla Maestro Headcount (.xlsx)</a>
+        <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_patron') }}"><span class="ico">⬇</span> Plantilla Patrón Recurrente (.xlsx)</a>
+      </div>
+      <details style="margin-top:14px;">
+        <summary>Ver qué va en cada campo</summary>
+
+        <p class="sub" style="margin-top:12px;"><b style="color:var(--ink);">Maestro Headcount</b> — hoja "Maestro Headcount", encabezados en la fila 4. Una fila por persona.</p>
+        <table>
+          <tr><th>Campo</th><th></th><th>Qué va</th></tr>
+          <tr><td><code>DNI</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Documento sin puntos ni espacios. Ej.: <code>18074336</code></td></tr>
+          <tr><td><code>Nombre completo</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Apellidos y nombres, en MAYÚSCULAS.</td></tr>
+          <tr><td><code>Fecha de ingreso</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Fecha en que empezó a trabajar.</td></tr>
+          <tr><td><code>Fecha de baja</code></td><td><span class="campo-pill sit">si aplica</span></td><td>Solo si ya dejó de trabajar. Vacío mientras siga Activo.</td></tr>
+          <tr><td><code>Estado</code></td><td><span class="campo-pill obl">obligatorio</span></td><td><code>Activo</code> · <code>Inactivo</code> · <code>Vacante</code></td></tr>
+          <tr><td><code>Reemplaza_a (DNI)</code></td><td><span class="campo-pill sit">si aplica</span></td><td>DNI al que reemplaza, si el puesto ya existía.</td></tr>
+          <tr><td><code>Es reingreso (Sí/No)</code></td><td><span class="campo-pill obl">obligatorio</span></td><td><code>Sí</code> · <code>No</code></td></tr>
+          <tr><td><code>Rol</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>En MAYÚSCULAS: <code>MERCADERISTAS</code> · <code>ASESORA</code> · <code>SUPERVISORES</code> · <code>BACK UP</code></td></tr>
+          <tr><td><code>Canal</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>En MAYÚSCULAS: <code>TRADICIONAL</code> · <code>MULTICANAL</code> · <code>AUTOSERVICIO</code> · <code>FARMACIA</code></td></tr>
+          <tr><td><code>Región</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>En MAYÚSCULAS. Ej.: <code>LIMA</code>, <code>NORTE</code></td></tr>
+          <tr><td><code>Ciudad / Mercado</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>En MAYÚSCULAS. Ej.: <code>TRUJILLO</code></td></tr>
+          <tr><td><code>Zona / Ruta asignada</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Nombre libre de la zona/mercado/ruta.</td></tr>
+          <tr><td><code>Supervisor asignado</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Nombre completo <b>exacto</b> del supervisor — debe coincidir con el "Nombre completo" de otra fila con Rol = SUPERVISORES.</td></tr>
+          <tr><td><code>Correo corporativo</code></td><td><span class="campo-pill sit">si lo tenés</span></td><td>Puede quedar vacío.</td></tr>
+          <tr><td><code>Motivo de baja</code></td><td><span class="campo-pill sit">si aplica</span></td><td>Solo cuando Estado = Inactivo.</td></tr>
+          <tr><td><code>Registrado por</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Tu nombre o el de quien carga.</td></tr>
+          <tr><td><code>Fecha de registro</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Fecha en que cargás el dato.</td></tr>
+        </table>
+
+        <p class="sub" style="margin-top:18px;"><b style="color:var(--ink);">Patrón recurrente</b> — hoja "Patrón recurrente", encabezados en la fila 4. Una fila por cada día que esa persona trabaja (si trabaja lunes a sábado, son 6 filas con el mismo DNI).</p>
+        <table>
+          <tr><th>Campo</th><th></th><th>Qué va</th></tr>
+          <tr><td><code>DNI</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>El mismo DNI del Maestro Headcount.</td></tr>
+          <tr><td><code>Día de la semana</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>En minúsculas: <code>lunes</code> ... <code>sábado</code></td></tr>
+          <tr><td><code>Hora entrada programada</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Formato hora. Ej.: <code>08:00</code></td></tr>
+          <tr><td><code>Hora salida programada</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Formato hora. Ej.: <code>17:30</code> (sábados suele ser antes)</td></tr>
+          <tr><td><code>Canal del día</code></td><td><span class="campo-pill obl">obligatorio</span></td><td>Capitalizado. Ej.: <code>Farmacia</code>, <code>Autoservicio</code> — puede variar día a día si trabaja mixto.</td></tr>
+          <tr><td><code>Refrigerio</code></td><td><span class="campo-pill obl">obligatorio</span></td><td><code>Con refrigerio</code> · <code>Sin refrigerio</code> · <code>Medio refrigerio</code></td></tr>
+        </table>
+      </details>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if resultado %}
+      <div class="resumen">
+        <div class="stat"><b>{{ nuevas|length }}</b>nuevas</div>
+        <div class="stat"><b>{{ actualizadas|length }}</b>actualizadas</div>
+        <div class="stat"><b>{{ conflictos|length }}</b>en conflicto</div>
+        <div class="stat"><b>{{ n_patron }}</b>filas de Patrón</div>
+      </div>
+      {% if conflictos %}
+        <div class="panel">
+          <p class="panel-title">DNIs que no se tocaron (ya pertenecen a otro analista)</p>
+          <table>
+            <tr><th>DNI</th><th>Nombre</th><th>Pertenece a</th></tr>
+            {% for c in conflictos %}
+            <tr><td>{{ c.dni }}</td><td>{{ c.nombre }}</td><td>{{ c.dueño_actual }}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% endif %}
     {% endif %}
-  {% endif %}
 
-  <div class="card">
-    <form method="post" action="{{ url_for('cargas.headcount_submit') }}" enctype="multipart/form-data">
-      <label>Maestro Headcount (obligatorio)
-        <input type="file" name="maestro" accept=".xlsx" required>
-      </label>
-      <p class="sub">Mismo formato: hoja "Maestro Headcount", encabezados en la fila 4.</p>
+    <div class="panel" style="max-width:640px;">
+      <p class="panel-title">Subir archivo</p>
+      <form method="post" action="{{ url_for('cargas.headcount_submit') }}" enctype="multipart/form-data">
+        <label>Maestro Headcount (obligatorio)
+          <input type="file" name="maestro" accept=".xlsx" required>
+        </label>
+        <p class="sub">Mismo formato: hoja "Maestro Headcount", encabezados en la fila 4.</p>
 
-      <label>Patrón Recurrente (opcional, pero sin esto no se puede calcular asistencia)
-        <input type="file" name="patron" accept=".xlsx">
-      </label>
-      <p class="sub">Mismo formato: hoja "Patrón recurrente", encabezados en la fila 4.</p>
+        <label>Patrón Recurrente (opcional, pero sin esto no se puede calcular asistencia)
+          <input type="file" name="patron" accept=".xlsx">
+        </label>
+        <p class="sub">Mismo formato: hoja "Patrón recurrente", encabezados en la fila 4.</p>
 
-      <button type="submit">Cargar</button>
-    </form>
+        <button type="submit">Cargar</button>
+      </form>
+    </div>
   </div>
 </body>
 </html>

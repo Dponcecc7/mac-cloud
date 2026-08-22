@@ -5,56 +5,82 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Personal</title>
   <style>
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; margin:0; padding:24px; }
-    nav { display:flex; gap:16px; font-size:13px; margin-bottom:20px; }
-    nav a { color:#b5602c; text-decoration:none; font-weight:600; }
-    .sub { color:#6b6154; font-size:12.5px; margin:0 0 18px; }
-    table { border-collapse:collapse; width:100%; background:#fff; border-radius:8px; overflow:hidden; }
-    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid #ece5d8; font-size:12.5px; white-space:nowrap; }
-    th { background:#f2ddca; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:#6b6154; position:sticky; top:0; }
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
+    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
+    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:12.5px; margin:0 0 18px; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    table { border-collapse:collapse; width:100%; }
+    th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
+    th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); position:sticky; top:0; }
     .table-wrap { overflow-x:auto; max-height:75vh; overflow-y:auto; border-radius:8px; }
-    .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-    .pill.activo { background:#e4f0e6; color:#2f6a45; }
-    .pill.inactivo { background:#ece5d8; color:#6b6154; }
-    .pill.vacante { background:#fbedd3; color:#8a5c07; }
+    .estado-pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }
+    .estado-pill.activo { background:var(--ok); }
+    .estado-pill.inactivo { background:var(--line); color:var(--muted); }
+    .estado-pill.vacante { background:var(--warn); }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="{{ url_for('dashboard') }}">← MAC</a>
-    <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-    {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
-    {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
-    <a href="{{ url_for('auth.logout') }}">Salir</a>
-  </nav>
-  <h1>Personal</h1>
-  <p class="sub">{{ personas|length }} personas — datos en vivo desde Postgres (Fase 2 de la migración).</p>
-  <div class="table-wrap">
-  <table>
-    <tr>
-      <th>DNI</th><th>Nombre</th><th>Estado</th><th>Rol</th><th>Canal</th>
-      <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
-    </tr>
-    {% for p in personas %}
-    <tr>
-      <td>{{ p.dni }}</td>
-      <td>{{ p.nombre_completo }}</td>
-      <td>
-        {% if p.estado == "Activo" %}<span class="pill activo">Activo</span>
-        {% elif p.estado == "Vacante" %}<span class="pill vacante">Vacante</span>
-        {% else %}<span class="pill inactivo">Inactivo</span>{% endif %}
-      </td>
-      <td>{{ p.rol or "—" }}</td>
-      <td>{{ p.canal or "—" }}</td>
-      <td>{{ p.region or "—" }}</td>
-      <td>{{ p.ciudad or "—" }}</td>
-      <td>{{ p.zona or "—" }}</td>
-      <td>{{ p.supervisor_dni or "—" }}</td>
-      <td>{{ p.correo or "—" }}</td>
-      <td>{{ p.analista_propietario or "—" }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('personal') }}" class="active">Personal</a>
+        <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+        {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+        {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Salir</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Personal</h1>
+    <p class="sub">{{ personas|length }} personas — datos en vivo desde Postgres.</p>
+    <div class="panel">
+      <div class="table-wrap">
+      <table>
+        <tr>
+          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Rol</th><th>Canal</th>
+          <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
+        </tr>
+        {% for p in personas %}
+        <tr>
+          <td>{{ p.dni }}</td>
+          <td>{{ p.nombre_completo }}</td>
+          <td>
+            {% if p.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
+            {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>
+            {% else %}<span class="estado-pill inactivo">Inactivo</span>{% endif %}
+          </td>
+          <td>{{ (p.rol or "—")|title }}</td>
+          <td>{{ (p.canal or "—")|title }}</td>
+          <td>{{ (p.region or "—")|title }}</td>
+          <td>{{ (p.ciudad or "—")|title }}</td>
+          <td>{{ (p.zona or "—")|title }}</td>
+          <td>{{ p.supervisor_dni or "—" }}</td>
+          <td>{{ p.correo or "—" }}</td>
+          <td>{{ p.analista_propietario or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      </div>
+    </div>
   </div>
 </body>
 </html>
