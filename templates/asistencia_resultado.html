@@ -5,55 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Corrección diaria</title>
   <style>
-    :root { --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6; --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --bad:#a3372e; --bad-bg:#fbe6e3; }
+    :root { --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6; --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --bad:#a3372e; --bad-bg:#fbe6e3; --warn:#96660a; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
     .wrap { max-width:800px; margin:0 auto; padding:40px 24px; }
     .panel { background:var(--card); border-radius:14px; padding:22px 24px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .panel.ok { border-left:4px solid var(--ok); } .panel.bad { border-left:4px solid var(--bad); }
-    .panel.wait { border-left:4px solid #96660a; }
-    h1 { font-size:17px; margin:0 0 12px; }
-    pre { white-space:pre-wrap; font-size:12.5px; background:var(--bg); border-radius:8px; padding:12px; max-height:400px; overflow:auto; }
+    .panel.wait { border-left:4px solid var(--warn); }
+    h1 { font-size:17px; margin:0 0 8px; }
+    p.sub { margin:0; font-size:13px; color:var(--muted); }
+    pre { white-space:pre-wrap; font-size:12.5px; background:var(--bg); border-radius:8px; padding:12px; max-height:400px; overflow:auto; margin-top:12px; }
     a.volver { display:inline-block; margin-top:16px; color:var(--brand); font-weight:700; text-decoration:none; font-size:13px; }
-    #poll-panel { margin-top:14px; }
-    #poll-panel p { margin:0; font-size:13px; }
-    #poll-panel a { color:var(--brand); font-weight:700; text-decoration:none; }
+    .progress-bar { height:8px; border-radius:999px; background:var(--bg); overflow:hidden; margin:14px 0 4px; }
+    .progress-fill { height:100%; width:35%; border-radius:999px; background:linear-gradient(90deg, var(--brand), #e8a15c); animation:mover 1.3s ease-in-out infinite; }
+    .progress-fill.listo { animation:none; width:100%; background:var(--ok); }
+    .progress-fill.fallo { animation:none; width:100%; background:var(--bad); }
+    @keyframes mover { 0% { margin-left:-35%; } 100% { margin-left:100%; } }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="panel {{ 'ok' if ok else 'bad' }}">
-      <h1>{{ titulo }}</h1>
-      <pre>{{ detalle }}</pre>
-    </div>
-    {% if poll_workflow %}
-    <div class="panel wait" id="poll-panel"><p id="poll-msg">⏳ Corriendo en GitHub Actions...</p></div>
-    <script>
-      const wf = {{ poll_workflow|tojson }};
-      let intentos = 0;
-      function checar() {
-        intentos++;
-        fetch(`{{ url_for('asistencia.estado_workflow') }}?wf=${encodeURIComponent(wf)}`)
-          .then(r => r.json())
-          .then(info => {
-            const msg = document.getElementById('poll-msg');
-            const panel = document.getElementById('poll-panel');
-            if (!info || !info.status) { msg.textContent = 'No se pudo consultar el estado -- revisá github.com/Dponcecc7/mac-cloud/actions.'; return; }
-            if (info.status === 'completed') {
-              const bien = info.conclusion === 'success';
-              panel.className = 'panel ' + (bien ? 'ok' : 'bad');
-              msg.innerHTML = (bien ? '✅ Listo, ya está actualizado.' : `⚠️ Terminó con estado: ${info.conclusion}.`)
-                + ` <a href="{{ volver }}">Ver reporte</a>`;
-            } else if (intentos < 40) {
-              msg.textContent = `⏳ ${info.status === 'queued' ? 'En cola' : 'Corriendo'}... (revisando cada 10s)`;
-              setTimeout(checar, 10000);
-            } else {
-              msg.textContent = 'Está tardando más de lo normal -- revisá GitHub Actions directamente.';
-            }
-          })
-          .catch(() => setTimeout(checar, 10000));
-      }
-      document.addEventListener('DOMContentLoaded', checar);
-    </script>
+    {% if poll_workflow and ok %}
+      <div class="panel wait" id="poll-panel">
+        <h1 id="poll-titulo">Actualizando...</h1>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <p class="sub" id="poll-msg">Esto puede tardar unos minutos, podés esperar acá o volver más tarde.</p>
+      </div>
+      <script>
+        const wf = {{ poll_workflow|tojson }};
+        let intentos = 0;
+        function checar() {
+          intentos++;
+          fetch(`{{ url_for('asistencia.estado_workflow') }}?wf=${encodeURIComponent(wf)}`)
+            .then(r => r.json())
+            .then(info => {
+              const panel = document.getElementById('poll-panel');
+              const titulo = document.getElementById('poll-titulo');
+              const msg = document.getElementById('poll-msg');
+              const barra = document.getElementById('progress-fill');
+              if (!info || !info.status) {
+                if (intentos < 40) { setTimeout(checar, 10000); return; }
+                titulo.textContent = 'No se pudo confirmar';
+                msg.textContent = 'Está tardando en responder -- probá volver a entrar en unos minutos.';
+                return;
+              }
+              if (info.status === 'completed') {
+                const bien = info.conclusion === 'success';
+                panel.className = 'panel ' + (bien ? 'ok' : 'bad');
+                barra.className = 'progress-fill ' + (bien ? 'listo' : 'fallo');
+                titulo.textContent = bien ? 'Listo' : 'Algo falló';
+                msg.innerHTML = (bien ? 'Ya está actualizado.' : 'No se pudo completar la actualización -- probá de nuevo en un rato.')
+                  + ` <a href="{{ volver }}" style="color:inherit; font-weight:700;">Ver reporte →</a>`;
+              } else if (intentos < 60) {
+                setTimeout(checar, 10000);
+              } else {
+                titulo.textContent = 'Está tardando más de lo normal';
+                msg.textContent = 'Probá volver a entrar en unos minutos.';
+              }
+            })
+            .catch(() => setTimeout(checar, 10000));
+        }
+        document.addEventListener('DOMContentLoaded', checar);
+      </script>
+    {% else %}
+      <div class="panel {{ 'ok' if ok else 'bad' }}">
+        <h1>{{ titulo }}</h1>
+        {% if detalle %}<pre>{{ detalle }}</pre>{% endif %}
+      </div>
     {% endif %}
     <a class="volver" href="{{ volver }}">← Volver</a>
   </div>

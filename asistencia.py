@@ -240,11 +240,12 @@ def guardar():
     finally:
         liberar_lock("tabla3_web")
 
+    plural = "personas" if len(ediciones) != 1 else "persona"
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo=vista,
         titulo="Correcciones guardadas", ok=True,
-        detalle=(f"{len(ediciones)} fila(s) agregadas a la Tabla 3. El motor de clasificación las va a "
-                 "recoger en su próxima corrida (cada 5-10 min) -- si querés forzarlo ya, usá \"Actualizar ahora\"."),
+        detalle=(f"Se guardaron los cambios de {len(ediciones)} {plural}. Se van a reflejar en el reporte en "
+                 "unos minutos -- si querés verlos ya, usá \"Actualizar ahora\"."),
         volver=url_for(f"asistencia.{'cliente' if vista == 'cliente' else 'reporte'}", fecha=fecha_str),
     )
 
@@ -309,8 +310,10 @@ def reemplazo_submit():
 
     try:
         log = procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, motivo_baja=motivo_baja)
-        ok_disparo, msg_disparo = disparar_workflow("pipeline_completo.yml")
-        detalle = "\n".join(log) + f"\n\n{msg_disparo}"
+        ok_disparo, _ = disparar_workflow("pipeline_completo.yml")
+        detalle = "\n".join(log)
+        if not ok_disparo:
+            detalle += "\n\nEl reemplazo se guardó, pero no se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario."
         titulo = "Reemplazo agregado"
     except Exception as e:
         detalle = str(e)

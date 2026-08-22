@@ -112,8 +112,8 @@
     {% if not filas %}
       <div class="panel"><p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p></div>
     {% else %}
-      <div class="note"><b>Ojo:</b> "Entrada real"/"Salida real" son calculadas por el motor, no editables acá.
-        {% if vista == 'reporte' %}Corregí en "Entrada/Salida corregida" (a la derecha) -- se guarda en la Tabla 3, el motor la recoge en su próxima corrida.{% else %}Podés agregar/editar el comentario antes de enviar.{% endif %}</div>
+      <div class="note"><b>Nota:</b> "Entrada real"/"Salida real" las calcula el sistema, no se pueden editar directamente.
+        {% if vista == 'reporte' %}Para corregir una hora, escribila en "Entrada/Salida corregida" y guardá -- el cambio se aplica en unos minutos.{% else %}Podés agregar o editar el comentario antes de enviar.{% endif %}</div>
 
       <div class="panel">
         <p class="panel-title">Filtros</p>
