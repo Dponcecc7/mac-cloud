@@ -99,6 +99,7 @@ def _cargar_reporte(fecha):
             "region": p.region if p else None,
             "ciudad": p.ciudad if p else None,
             "canal": p.canal if p else None,
+            "rol": p.rol if p else None,
             "mercado": p.zona if p else None,
             "canal_hoy": c.canales_marcados or "",
             "entrada_prog": c.entrada_esperada,

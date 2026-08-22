@@ -38,12 +38,21 @@
 
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
-    .form-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:10px; align-items:end; }
-    @media (max-width:1200px) { .form-row { grid-template-columns:repeat(3, 1fr); } }
+    .form-row { display:grid; grid-template-columns:repeat(8, 1fr); gap:10px; align-items:end; }
+    @media (max-width:1300px) { .form-row { grid-template-columns:repeat(4, 1fr); } }
     label.field { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
     .ipt-filtro { font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
     label.chk { flex-direction:row; align-items:center; gap:6px; }
     label.chk input { width:auto; }
+
+    .ms { position:relative; }
+    .ms-toggle { width:100%; text-align:left; font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ms-toggle:hover { border-color:var(--brand); }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(35,25,10,.18); padding:6px; min-width:180px; max-height:240px; overflow-y:auto; }
+    .ms-panel.abierto { display:block; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt:hover { background:var(--bg); }
+    .ms-opt input { width:auto; margin:0; }
 
     .table-wrap { overflow-x:auto; }
     table { border-collapse:collapse; width:100%; font-size:11px; table-layout:fixed; }
@@ -109,11 +118,14 @@
       <div class="panel">
         <p class="panel-title">Filtros</p>
         <div class="form-row">
-          <label class="field">Supervisor<select class="ipt-filtro" id="f-supervisor" onchange="filtrar()"><option value="">Todos</option></select></label>
-          <label class="field">Región<select class="ipt-filtro" id="f-region" onchange="filtrar()"><option value="">Todas</option></select></label>
-          <label class="field">Ciudad<select class="ipt-filtro" id="f-ciudad" onchange="filtrar()"><option value="">Todas</option></select></label>
-          <label class="field">Canal<select class="ipt-filtro" id="f-canal" onchange="filtrar()"><option value="">Todos</option></select></label>
-          <label class="field">Estado<select class="ipt-filtro" id="f-estado" onchange="filtrar()"><option value="">Todos</option></select></label>
+          {% for campo, etiqueta in [('supervisor','Supervisor'), ('region','Región'), ('ciudad','Ciudad'), ('canal','Canal'), ('rol','Rol'), ('estado','Estado')] %}
+          <label class="field">{{ etiqueta }}
+            <div class="ms">
+              <button type="button" class="ms-toggle" id="btn-{{ campo }}" onclick="togglePanel('{{ campo }}')">Todos</button>
+              <div class="ms-panel" id="panel-{{ campo }}"></div>
+            </div>
+          </label>
+          {% endfor %}
           <label class="field">Mercaderista<input class="ipt-filtro" id="f-buscar" type="text" placeholder="Buscar..." oninput="filtrar()"></label>
           <label class="field chk"><input type="checkbox" id="f-temprana" onchange="filtrar()"> Solo salida temprana</label>
         </div>
@@ -126,7 +138,7 @@
           <div class="table-wrap">
           <table id="tabla">
             <tr>
-              <th>Supervisor</th><th>Ciudad</th><th>Canal</th><th>Canal hoy</th><th>Mercaderista</th>
+              <th>Supervisor</th><th>Ciudad</th><th>Canal</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
               <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada{{ ' / tardanza' if vista=='cliente' else '' }}</th>
               <th>Salida prog.</th><th>Salida real</th>
               {% if vista == 'reporte' %}<th>Canal ayer</th>{% endif %}
@@ -135,11 +147,12 @@
             </tr>
             {% for f in filas %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
-                data-canal="{{ (f.canal or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
+                data-canal="{{ (f.canal or '')|title }}" data-rol="{{ (f.rol or '')|title }}" data-estado="{{ f.estado or '' }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
               <td>{{ (f.supervisor or '')|title }}</td>
               <td>{{ (f.ciudad or '')|title }}</td>
               <td>{{ (f.canal or '')|title }}</td>
+              <td>{{ (f.rol or '')|title }}</td>
               <td>{{ f.canal_hoy|title }}</td>
               <td>{{ f.mercaderista|title }}</td>
               <td>{{ f.entrada_prog or '' }}</td>
@@ -169,39 +182,59 @@
   </div>
 
 <script>
+const CAMPOS = ['supervisor', 'region', 'ciudad', 'canal', 'rol', 'estado'];
+const seleccion = {};
+CAMPOS.forEach(c => seleccion[c] = new Set());
+
 function filasDatos() {
-  return [...document.querySelectorAll('#tabla tr[data-supervisor]')].map(el => ({
-    el, supervisor: el.dataset.supervisor, region: el.dataset.region, ciudad: el.dataset.ciudad,
-    canal: el.dataset.canal, estado: el.dataset.estado, mercaderista: el.dataset.mercaderista,
-    temprana: el.dataset.temprana === 'true',
-  }));
+  return [...document.querySelectorAll('#tabla tr[data-supervisor]')].map(el => {
+    const f = { el, mercaderista: el.dataset.mercaderista, temprana: el.dataset.temprana === 'true' };
+    for (const c of CAMPOS) f[c] = el.dataset[c];
+    return f;
+  });
 }
-const CAMPOS = ['supervisor', 'region', 'ciudad', 'canal', 'estado'];
-function valorFiltro(campo) { const el = document.getElementById('f-' + campo); return el ? el.value : ''; }
 function coinciden(filas, exceptoCampo) {
   const mer = (document.getElementById('f-buscar')?.value || '').toLowerCase();
   const soloTemprana = document.getElementById('f-temprana')?.checked;
   return filas.filter(f => {
     for (const c of CAMPOS) {
       if (c === exceptoCampo) continue;
-      const v = valorFiltro(c);
-      if (v && f[c] !== v) return false;
+      const sel = seleccion[c];
+      if (sel.size > 0 && !sel.has(f[c])) return false;
     }
     if (exceptoCampo !== 'mercaderista' && mer && !f.mercaderista.toLowerCase().includes(mer)) return false;
     if (soloTemprana && !f.temprana) return false;
     return true;
   });
 }
+function onCheck(campo, input) {
+  if (input.checked) seleccion[campo].add(input.value);
+  else seleccion[campo].delete(input.value);
+  filtrar();
+}
+function togglePanel(campo) {
+  document.querySelectorAll('.ms-panel').forEach(p => { if (p.id !== 'panel-' + campo) p.classList.remove('abierto'); });
+  document.getElementById('panel-' + campo).classList.toggle('abierto');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(p => p.classList.remove('abierto'));
+});
 function filtrar() {
   const todas = filasDatos();
   for (const campo of CAMPOS) {
-    const select = document.getElementById('f-' + campo);
-    if (!select) continue;
-    const actual = select.value;
     const disponibles = coinciden(todas, campo);
     const unicos = [...new Set(disponibles.map(f => f[campo]).filter(Boolean))].sort();
-    select.innerHTML = '<option value="">Todos</option>' + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
-    select.value = unicos.includes(actual) ? actual : '';
+    for (const v of [...seleccion[campo]]) if (!unicos.includes(v)) seleccion[campo].delete(v);
+
+    const panel = document.getElementById('panel-' + campo);
+    panel.innerHTML = unicos.map(v => {
+      const marcado = seleccion[campo].has(v) ? 'checked' : '';
+      return `<label class="ms-opt"><input type="checkbox" value="${v}" ${marcado} onchange="onCheck('${campo}', this)"> ${v}</label>`;
+    }).join('') || '<span class="ms-opt" style="cursor:default">(sin opciones)</span>';
+
+    const btn = document.getElementById('btn-' + campo);
+    const n = seleccion[campo].size;
+    btn.textContent = n === 0 ? 'Todos' : (n === 1 ? [...seleccion[campo]][0] : `${n} seleccionados`);
   }
   const visibles = new Set(coinciden(todas, null).map(f => f.el));
   for (const f of todas) f.el.classList.toggle('oculta', !visibles.has(f.el));
