@@ -250,9 +250,13 @@
           <div class="tabla-wrap">
           {% if data.vacaciones_detalle %}
             <table>
-              <tr><th>Fecha</th><th>Colaborador</th></tr>
+              <tr><th>Colaborador</th><th>Salida</th><th>Regreso</th><th class="num">Días</th></tr>
               {% for v in data.vacaciones_detalle %}
-              <tr><td>{{ v.fecha }}</td><td>{{ v.nombre }}</td></tr>
+              <tr>
+                <td>{{ v.nombre }}</td><td>{{ v.inicio }}</td>
+                <td>{{ v.regreso or '—' }}</td>
+                <td class="num"><span class="badge-pct">{{ v.dias if v.dias is not none else 'En curso' }}</span></td>
+              </tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Nadie de vacaciones.</p>{% endif %}
