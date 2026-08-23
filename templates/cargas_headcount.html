@@ -145,7 +145,7 @@
           <table>
             <tr><th>DNI</th><th>Nombre</th><th>Pertenece a</th></tr>
             {% for c in conflictos %}
-            <tr><td>{{ c.dni }}</td><td>{{ c.nombre }}</td><td>{{ c.dueño_actual }}</td></tr>
+            <tr><td>{{ c.dni }}</td><td>{{ c.nombre|title }}</td><td>{{ c.dueño_actual }}</td></tr>
             {% endfor %}
           </table>
         </div>

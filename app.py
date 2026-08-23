@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from flask_login import current_user, login_required
 from sqlalchemy import text
+from sqlalchemy.orm import aliased
 
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
@@ -151,8 +152,26 @@ def create_app():
 
         cond_scope = condicion_scope(Persona, current_user)  # None = sin restriccion
 
+        # Filtros adicionales (2026-08-22, pedido explicito) -- Rol/Región/
+        # Supervisor, encima del scope de acceso (cond_scope). "" en el query
+        # string se trata como "sin filtro" (opción "Todos" del <select>).
+        rol_filtro = request.args.get("rol") or None
+        region_filtro = request.args.get("region") or None
+        supervisor_filtro = request.args.get("supervisor") or None
+
         dim_session = get_dim_session()
         try:
+            def _con_filtros(q):
+                if cond_scope is not None:
+                    q = q.filter(cond_scope)
+                if rol_filtro:
+                    q = q.filter(Persona.rol == rol_filtro)
+                if region_filtro:
+                    q = q.filter(Persona.region == region_filtro)
+                if supervisor_filtro:
+                    q = q.filter(Persona.supervisor_dni == supervisor_filtro)
+                return q
+
             query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
@@ -161,9 +180,7 @@ def create_app():
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
             )
-            if cond_scope is not None:
-                query = query.filter(cond_scope)
-            filas = query.all()
+            filas = _con_filtros(query).all()
 
             # "Hoy" es independiente del periodo elegido (si elegis un rango
             # pasado, igual queres ver como viene el dia de hoy) -- consulta
@@ -173,23 +190,45 @@ def create_app():
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha == hoy_peru)
             )
-            if cond_scope is not None:
-                query_hoy = query_hoy.filter(cond_scope)
-            filas_hoy = query_hoy.all()
+            filas_hoy = _con_filtros(query_hoy).all()
 
             headcount_query = dim_session.query(Persona.dni).filter(Persona.estado == "Activo")
+            headcount_actual = _con_filtros(headcount_query).count()
+
+            # Opciones de los 3 <select> -- acotadas al mismo scope de acceso
+            # (cond_scope) para que un analista/supervisor no vea roles/
+            # regiones/supervisores de gente que de todos modos no puede ver.
+            q_roles = dim_session.query(Persona.rol).filter(Persona.rol.isnot(None))
             if cond_scope is not None:
-                headcount_query = headcount_query.filter(cond_scope)
-            headcount_actual = headcount_query.count()
+                q_roles = q_roles.filter(cond_scope)
+            roles_disponibles = sorted({r for (r,) in q_roles.distinct().all()})
+
+            q_regiones = dim_session.query(Persona.region).filter(Persona.region.isnot(None))
+            if cond_scope is not None:
+                q_regiones = q_regiones.filter(cond_scope)
+            regiones_disponibles = sorted({r for (r,) in q_regiones.distinct().all()})
+
+            SupervisorPersona = aliased(Persona)
+            q_sup = (
+                dim_session.query(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
+                .join(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
+                .filter(Persona.supervisor_dni.isnot(None))
+            )
+            if cond_scope is not None:
+                q_sup = q_sup.filter(cond_scope)
+            supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: t[1].title())
         finally:
             dim_session.close()
 
         periodo_args = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
+        filtro_args = {"rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or ""}
 
         if not filas:
             return render_template(
                 "dashboard.html", usuario=current_user, hay_datos=False,
                 periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
+                filtro_args=filtro_args, roles_disponibles=roles_disponibles,
+                regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
             )
 
         r = pd.DataFrame(filas, columns=[
@@ -338,17 +377,22 @@ def create_app():
             for v in viajes:
                 candidatas = sorted(f for f in fechas_por_dni.get(v["dni"], set()) if f > v["fin"])
                 if candidatas:
-                    v["regreso"] = candidatas[0].strftime("%d/%m/%Y")
                     v["dias"] = (candidatas[0] - v["inicio"]).days
+                    v["regreso_dt"] = candidatas[0]
                 else:
-                    v["regreso"] = None
                     v["dias"] = None
-                v["inicio"] = v["inicio"].strftime("%d/%m/%Y")
+                    v["regreso_dt"] = None
                 del v["fin"], v["dni"]
 
-            vacaciones_detalle = sorted(
-                viajes, key=lambda v: dt.datetime.strptime(v["inicio"], "%d/%m/%Y"), reverse=True
-            )
+            viajes.sort(key=lambda v: v["inicio"], reverse=True)
+            # Sin año en la fecha (%d/%m) -- la tabla tiene 4 columnas
+            # angostas, el año sale sobreentendido del periodo elegido
+            # arriba y así entran las 4 sin scroll horizontal.
+            for v in viajes:
+                v["inicio"] = v["inicio"].strftime("%d/%m")
+                v["regreso"] = v["regreso_dt"].strftime("%d/%m") if v["regreso_dt"] else None
+                del v["regreso_dt"]
+            vacaciones_detalle = viajes
         else:
             vacaciones_detalle = []
 
@@ -385,6 +429,8 @@ def create_app():
         return render_template(
             "dashboard.html", usuario=current_user, hay_datos=True, data=data,
             periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
+            filtro_args=filtro_args, roles_disponibles=roles_disponibles,
+            regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
         )
 
     @app.get("/personal")

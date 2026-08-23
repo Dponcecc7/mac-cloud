@@ -76,7 +76,7 @@
         {% for p in personas %}
         <tr>
           <td>{{ p.dni }}</td>
-          <td>{{ p.nombre_completo }}</td>
+          <td>{{ p.nombre_completo|title }}</td>
           <td>
             {% if p.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
             {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>

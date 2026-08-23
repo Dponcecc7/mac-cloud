@@ -44,6 +44,7 @@
     .top-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
     .periodo-form { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; }
     .periodo-form input[type=date] { font:inherit; font-size:12px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .periodo-form select { font:inherit; font-size:12px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:160px; }
     .periodo-form button.aplicar { font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
     .preset { font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); text-decoration:none; }
     .preset.activo { background:var(--brand); color:#fff; border-color:var(--brand); }
@@ -111,7 +112,7 @@
 
     .panel + .panel { margin-top:14px; }
     .empty { color:var(--muted); font-size:12px; padding:6px 0; }
-    .tabla-wrap { max-height:220px; overflow-y:auto; }
+    .tabla-wrap { max-height:220px; overflow-y:auto; overflow-x:auto; }
   </style>
 </head>
 <body>
@@ -138,12 +139,24 @@
     <div class="top-row">
       <h1 class="title">Asistencia</h1>
       <form class="periodo-form" method="get">
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta) }}">7 días</a>
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta) }}">30 días</a>
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta) }}">Este mes</a>
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">7 días</a>
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">30 días</a>
+        <a class="preset" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">Este mes</a>
         <input type="date" name="desde" value="{{ periodo_args.desde }}">
         <span style="color:var(--muted);">→</span>
         <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
+        <select name="rol">
+          <option value="">Rol: todos</option>
+          {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="region">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="supervisor">
+          <option value="">Supervisor: todos</option>
+          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+        </select>
         <button class="aplicar" type="submit">Aplicar</button>
       </form>
     </div>
@@ -238,7 +251,7 @@
             <table>
               <tr><th>Nombre</th><th class="num">Días</th></tr>
               {% for p in data.top_tardanza %}
-              <tr><td>{{ p.nombre }}</td><td class="num"><span class="badge-pct warn">{{ p.tardanza }}</span></td></tr>
+              <tr><td>{{ p.nombre|title }}</td><td class="num"><span class="badge-pct warn">{{ p.tardanza }}</span></td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin tardanzas.</p>{% endif %}
@@ -252,7 +265,7 @@
             <table>
               <tr><th>Nombre</th><th class="num">Días</th></tr>
               {% for p in data.top_falta %}
-              <tr><td>{{ p.nombre }}</td><td class="num"><span class="badge-pct">{{ p.falta }}</span></td></tr>
+              <tr><td>{{ p.nombre|title }}</td><td class="num"><span class="badge-pct">{{ p.falta }}</span></td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin faltas.</p>{% endif %}
@@ -267,7 +280,7 @@
               <tr><th>Colaborador</th><th>Salida</th><th>Regreso</th><th class="num">Días</th></tr>
               {% for v in data.vacaciones_detalle %}
               <tr>
-                <td>{{ v.nombre }}</td><td>{{ v.inicio }}</td>
+                <td>{{ v.nombre|title }}</td><td>{{ v.inicio }}</td>
                 <td>{{ v.regreso or '—' }}</td>
                 <td class="num"><span class="badge-pct">{{ v.dias if v.dias is not none else 'En curso' }}</span></td>
               </tr>
@@ -284,7 +297,7 @@
             <table>
               <tr><th>Posición</th><th class="num">Días abierta</th></tr>
               {% for v in data.vacantes_detalle %}
-              <tr><td>{{ v.nombre }}</td><td class="num">{{ v.dias }}</td></tr>
+              <tr><td>{{ v.nombre|title }}</td><td class="num">{{ v.dias }}</td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin vacantes.</p>{% endif %}
