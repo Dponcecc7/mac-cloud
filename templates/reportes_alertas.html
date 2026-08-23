@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Reportes</title>
+  <style>
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#c9bfae; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e9dfc9; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+
+    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+
+    .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
+    .alerta.falta { border-left-color:var(--bad); }
+    .alerta.tardanza { border-left-color:var(--warn); }
+    .alerta .icono { font-size:20px; line-height:1; margin-top:2px; }
+    .alerta .cuerpo { flex:1; }
+    .alerta .nombre { font-weight:700; font-size:14px; }
+    .alerta .nombre a { color:inherit; text-decoration:none; }
+    .alerta .nombre a:hover { color:var(--brand); text-decoration:underline; }
+    .alerta .mensaje { font-size:13px; margin:2px 0 8px; }
+    .alerta.falta .mensaje { color:var(--bad); }
+    .alerta.tardanza .mensaje { color:var(--warn); }
+    .alerta .detalle { font-size:11.5px; color:var(--muted); }
+    .alerta .fechas { margin-top:4px; }
+    .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
+
+    .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.horas') }}" class="active">Reportes</a>
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <span class="correo">{{ usuario.email }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Reportes</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
+      <a href="{{ url_for('reportes.alertas', mes=mes_str) }}" class="active">Alertas</a>
+    </nav>
+
+    <div class="top-actions">
+      <form method="get">
+        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+      </form>
+      <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
+    </div>
+
+    {% if not alertas %}
+      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas o 3 faltas.</p>
+    {% else %}
+      {% for a in alertas %}
+      <div class="alerta {{ a.tipo }}">
+        <div class="icono">{{ '⚠️' if a.tipo == 'tardanza' else '🛑' }}</div>
+        <div class="cuerpo">
+          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
+          <p class="mensaje">{{ a.mensaje }}</p>
+          <div class="detalle">
+            Fechas: {{ a.fechas|join(', ') }}
+            {% if a.motivos %}<div class="fechas">Motivos: {{ a.motivos|join(', ') }}</div>{% endif %}
+          </div>
+        </div>
+        <span class="nivel">Nivel {{ a.nivel }}</span>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+</body>
+</html>

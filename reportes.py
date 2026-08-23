@@ -2,14 +2,17 @@
 """Blueprint de reportes nuevos para supervisores (2026-08-22, lista de
 ideas de Davor) -- Horas semanales (#2) primero; Alertas (#1) y Ficha del
 trabajador (#6) se agregan en los siguientes pasos del mismo plan."""
+import calendar
 import datetime as dt
 import io
+import re
 
 import openpyxl
 from flask import Blueprint, request, render_template, send_file
 from flask_login import current_user, login_required
 from openpyxl.styles import Font
 
+from alertas import alertas_periodo
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
@@ -80,11 +83,28 @@ def horas_exportar():
     )
 
 
+def _mes_desde_query():
+    """Lee ?mes=2026-08 -- si falta o es inválido, usa el mes calendario actual."""
+    hoy = dt.date.today()
+    mes_str = request.args.get("mes", "")
+    if re.match(r"^\d{4}-\d{2}$", mes_str):
+        anio, mes = int(mes_str[:4]), int(mes_str[5:7])
+    else:
+        anio, mes = hoy.year, hoy.month
+    desde = dt.date(anio, mes, 1)
+    hasta = dt.date(anio, mes, calendar.monthrange(anio, mes)[1])
+    return desde, hasta, f"{anio}-{mes:02d}"
+
+
 @bp.get("/alertas")
 @login_required
 def alertas():
-    # Placeholder -- se completa en el siguiente paso del plan (alertas.py).
-    return render_template("reportes_horas.html", usuario=current_user, activo="alertas", semana_str="", desde=None, hasta=None, filas=[])
+    desde, hasta, mes_str = _mes_desde_query()
+    lista = alertas_periodo(desde, hasta, current_user)
+    return render_template(
+        "reportes_alertas.html", usuario=current_user, activo="alertas",
+        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista,
+    )
 
 
 @bp.get("/ficha/<dni>")
