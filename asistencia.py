@@ -79,6 +79,15 @@ MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
 # supervisor, asi que hay que buscarlo aparte.
 MARCADOR_SIN_APP = "según supervisor, sin marcación app"
 
+# Solo Asistió/Apoyo zona implican una hora real pendiente de escribir --
+# Vacante/Falta no tienen entrada/salida que confirmar, asi que no deben
+# mostrar el aviso aunque tambien vengan de "Marcar asistencia".
+_ESTADOS_CON_HORA_PENDIENTE = ("ASISTIÓ", "APOYO ZONA")
+
+
+def _estado_base(estado):
+    return (estado or "").split(" (")[0]
+
 _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 
 
@@ -200,22 +209,27 @@ def _cargar_reporte(fecha, usuario_actual=None):
             "comentario_salida": (_homologar_motivo(ayer_c.comentario_supervisor) or "") if ayer_c else "",
             "entrada_pendiente": (
                 MARCADOR_PENDIENTE in (c.comentario_supervisor or "")
-                or MARCADOR_SIN_APP in (c.estado or "")
+                or (
+                    MARCADOR_SIN_APP in (c.estado or "")
+                    and _estado_base(c.estado) in _ESTADOS_CON_HORA_PENDIENTE
+                )
             ),
             "salida_pendiente": (
                 MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else "")
-                or MARCADOR_SIN_APP in ((ayer_c.estado or "") if ayer_c else "")
+                or (
+                    MARCADOR_SIN_APP in ((ayer_c.estado or "") if ayer_c else "")
+                    and _estado_base(ayer_c.estado if ayer_c else None) in _ESTADOS_CON_HORA_PENDIENTE
+                )
             ),
             "marcado_web": c.dni in dnis_marcados_hoy,
         })
         if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):
             ultima_sync = c.procesado_en
 
-    estado_base = lambda s: (s or "").split(" (")[0]  # noqa: E731
     resumen = {
-        "asistio": sum(1 for f in filas if estado_base(f["estado"]) == "ASISTIÓ A TIEMPO"),
-        "tardanza": sum(1 for f in filas if estado_base(f["estado"]) == "TARDANZA"),
-        "falta": sum(1 for f in filas if estado_base(f["estado"]) == "FALTA"),
+        "asistio": sum(1 for f in filas if _estado_base(f["estado"]) == "ASISTIÓ A TIEMPO"),
+        "tardanza": sum(1 for f in filas if _estado_base(f["estado"]) == "TARDANZA"),
+        "falta": sum(1 for f in filas if _estado_base(f["estado"]) == "FALTA"),
         "total": len(filas),
     }
     # procesado_en se guarda con func.now() de Postgres -- en UTC, no hora
@@ -240,10 +254,9 @@ def _pendientes_de_marcar(filas):
     """Personas con Falta/Vacante que todavía no tienen ningún comentario --
     ni de la app móvil de supervisores ni de acá -- igual al panel
     "Pendientes" de la Power App (galPendientes, ver GUIA_POWER_APPS_SUPERVISOR.md)."""
-    estado_base = lambda s: (s or "").split(" (")[0]  # noqa: E731
     return [
         f for f in filas
-        if estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"] and not f["marcado_web"]
+        if _estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"] and not f["marcado_web"]
     ]
 
 
