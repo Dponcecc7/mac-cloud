@@ -16,7 +16,7 @@ import os
 
 from dotenv import load_dotenv
 from sqlalchemy import (
-    Boolean, CheckConstraint, Column, Date, ForeignKey, Integer, String,
+    Boolean, CheckConstraint, Column, Date, Float, ForeignKey, Integer, String,
     Text, Time, TIMESTAMP, UniqueConstraint, create_engine, func,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -169,6 +169,38 @@ class CorreccionWeb(Base):
     hora_salida_corregida = Column(String(10))
     registrado_por = Column(String(150))
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
+
+
+class Visita(Base):
+    """Fase 6+ (2026-08-23): detalle de visitas a PDV (GPS), tal cual llega
+    de Athena (ver pipeline/athena_client.py::traer_visitas()) -- antes solo
+    volaba por el runner de GitHub Actions (disco efímero) y se descartaba
+    al terminar cada corrida. Sin FK a personas a propósito: el filtro de
+    Athena (cliente_id=295) trae DNIs que no están en nuestra tabla
+    `personas` (personal de otros clientes/roles no migrados) -- una FK
+    estricta haría fallar el upsert masivo por esas filas. Los reportes que
+    sí necesitan cruzar con Persona lo hacen con un JOIN normal, que
+    descarta solas las filas sin match."""
+    __tablename__ = "visitas"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), nullable=False, index=True)
+    punto_venta_id = Column(String(50))
+    punto_venta = Column(String(200))
+    tipo_negocio = Column(String(30))
+    fecha_inicio = Column(Date, nullable=False, index=True)
+    hora_inicio = Column(String(10))
+    fecha_fin = Column(Date)
+    hora_fin = Column(String(10))
+    distancia_metros_inicio = Column(Float)
+    motivo_visita = Column(String(100))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "dni", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin",
+            name="uq_visita_dedup",
+        ),
+    )
 
 
 VACANTES_VIEW_SQL = """
