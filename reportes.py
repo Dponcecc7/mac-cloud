@@ -14,6 +14,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Font
 
 from alertas import alertas_periodo
+from cobertura import matriz_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
@@ -122,6 +123,72 @@ def recomendaciones():
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
         insights=lista,
+    )
+
+
+def _rango_desde_query(dias_por_defecto=21):
+    """Lee ?desde=&hasta= -- si faltan o son inválidos, usa los últimos
+    `dias_por_defecto` días hasta hoy (mismo patrón que el Dashboard)."""
+    hoy = dt.date.today()
+    try:
+        hasta = dt.date.fromisoformat(request.args["hasta"]) if request.args.get("hasta") else hoy
+    except ValueError:
+        hasta = hoy
+    try:
+        desde = dt.date.fromisoformat(request.args["desde"]) if request.args.get("desde") else hasta - dt.timedelta(days=dias_por_defecto)
+    except ValueError:
+        desde = hasta - dt.timedelta(days=dias_por_defecto)
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    return desde, hasta
+
+
+@bp.get("/cobertura")
+@login_required
+def cobertura():
+    desde, hasta = _rango_desde_query()
+    personas, fechas, celdas = matriz_cobertura(desde, hasta, current_user)
+
+    # Resaltado simple: celda por debajo de la mitad del promedio de ESA
+    # persona en el periodo elegido -- mismo criterio "umbral simple" del
+    # plan, no intenta reproducir el cruce con Falta/Vacaciones del mockup.
+    promedios = {}
+    for p in personas:
+        valores = [celdas[(p["dni"], f)] for f in fechas if (p["dni"], f) in celdas]
+        promedios[p["dni"]] = (sum(valores) / len(valores)) if valores else 0
+
+    return render_template(
+        "reportes_cobertura.html", usuario=current_user, activo="cobertura",
+        desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas, promedios=promedios,
+    )
+
+
+@bp.get("/cobertura/exportar")
+@login_required
+def cobertura_exportar():
+    desde, hasta = _rango_desde_query()
+    personas, fechas, celdas = matriz_cobertura(desde, hasta, current_user)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cobertura Diaria"
+    encabezado = ["DNI", "Nombre", "Ciudad", "Supervisor"] + [f.strftime("%d/%m") for f in fechas]
+    ws.append(encabezado)
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for p in personas:
+        fila = [p["dni"], p["nombre"], p["ciudad"], p["supervisor"]]
+        fila += [celdas.get((p["dni"], f), "") for f in fechas]
+        ws.append(fila)
+    for i in range(1, 5):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, as_attachment=True, download_name=f"Cobertura_Diaria_{desde}_a_{hasta}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 

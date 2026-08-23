@@ -11,9 +11,9 @@
     }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
-    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
     header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
-    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
     nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
@@ -33,27 +33,28 @@
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
-    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
-    .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
-    .alerta.falta { border-left-color:var(--bad); }
-    .alerta.tardanza, .alerta.salida_temprana, .alerta.visita_larga { border-left-color:var(--warn); }
-    .alerta.otro_canal, .alerta.punto_censo { border-left-color:var(--brand); }
-    .alerta .icono { font-size:20px; line-height:1; margin-top:2px; }
-    .alerta .cuerpo { flex:1; }
-    .alerta .nombre { font-weight:700; font-size:14px; }
-    .alerta .nombre a { color:inherit; text-decoration:none; }
-    .alerta .nombre a:hover { color:var(--brand); text-decoration:underline; }
-    .alerta .mensaje { font-size:13px; margin:2px 0 8px; }
-    .alerta.falta .mensaje { color:var(--bad); }
-    .alerta.tardanza .mensaje, .alerta.salida_temprana .mensaje, .alerta.visita_larga .mensaje { color:var(--warn); }
-    .alerta.otro_canal .mensaje, .alerta.punto_censo .mensaje { color:var(--brand); }
-    .alerta .detalle { font-size:11.5px; color:var(--muted); }
-    .alerta .fechas { margin-top:4px; }
-    .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
 
-    .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
+    .table-wrap { overflow-x:auto; max-height:70vh; }
+    table { border-collapse:collapse; width:100%; font-size:12px; }
+    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
+    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:center; }
+    td.info { text-align:left; }
+    td.info a { color:var(--ink); text-decoration:none; font-weight:600; }
+    td.info a:hover { color:var(--brand); text-decoration:underline; }
+    th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
+    th:nth-child(1), td:nth-child(1) { left:0; }
+    tr:last-child td { border-bottom:none; }
+
+    .celda-baja { background:var(--warn-bg); color:var(--warn); font-weight:700; border-radius:5px; }
+    .celda-vacia { color:var(--muted); }
+    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -61,15 +62,12 @@
       nav.links { gap:8px 14px; font-size:12.5px; }
       .nav-pages a { padding:5px 9px; }
       .nav-user { padding-left:0; border-left:none; }
-
       nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
-
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
-
-      .alerta { padding:12px 14px; gap:10px; }
-      .alerta .nivel { font-size:9px; padding:2px 6px; }
+      .top-actions input[type=date] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
+      .panel { padding:12px !important; border-radius:12px; }
     }
   </style>
 </head>
@@ -99,37 +97,54 @@
     <h1 class="title">Reportes</h1>
     <nav class="tabs">
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
-      <a href="{{ url_for('reportes.alertas', mes=mes_str) }}" class="active">Alertas</a>
+      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
       <a href="{{ url_for('reportes.recomendaciones') }}">Recomendaciones</a>
-      <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
+      <a href="{{ url_for('reportes.cobertura') }}" class="active">Cobertura</a>
     </nav>
 
     <div class="top-actions">
-      <form method="get">
-        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+      <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <input type="date" name="desde" value="{{ desde.isoformat() }}">
+        <span style="color:var(--muted);">→</span>
+        <input type="date" name="hasta" value="{{ hasta.isoformat() }}">
+        <button class="btn primary" type="submit">Aplicar</button>
       </form>
-      <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
+      <a class="btn ghost" href="{{ url_for('reportes.cobertura_exportar', desde=desde.isoformat(), hasta=hasta.isoformat()) }}">↓ Exportar Excel</a>
     </div>
 
-    {% if not alertas %}
-      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
-    {% else %}
-      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍'} %}
-      {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}">
-        <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
-        <div class="cuerpo">
-          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
-          <p class="mensaje">{{ a.mensaje }}</p>
-          <div class="detalle">
-            Fechas: {{ a.fechas|join(', ') }}
-            {% if a.motivos %}<div class="fechas">Motivos: {{ a.motivos|join(', ') }}</div>{% endif %}
-          </div>
-        </div>
-        <span class="nivel">Nivel {{ a.nivel }}</span>
+    <div class="panel">
+      {% if not personas %}
+        <p class="empty">Sin visitas registradas en este periodo.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
+            {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
+          </tr>
+          {% for p in personas %}
+          <tr>
+            <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
+            <td>{{ (p.ciudad or '—')|title }}</td>
+            <td>{{ (p.supervisor or '—')|title }}</td>
+            {% for f in fechas %}
+              {% set v = celdas.get((p.dni, f)) %}
+              {% set prom = promedios.get(p.dni, 0) %}
+              {% if v is none %}
+                <td class="celda-vacia">—</td>
+              {% elif prom > 0 and v < prom * 0.5 %}
+                <td class="celda-baja" title="Bien por debajo de su promedio del periodo ({{ prom|round(1) }})">{{ v }}</td>
+              {% else %}
+                <td>{{ v }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </table>
       </div>
-      {% endfor %}
-    {% endif %}
+      <p class="note">Un número = PDVs distintos visitados ese día (Punto Censo cuenta cada relevo aparte, sin ubicación fija real que colapsar). Solo aparece quien tuvo al menos una visita registrada en el rango elegido. Celda resaltada = menos de la mitad del promedio propio de esa persona en el periodo.</p>
+      {% endif %}
+    </div>
   </div>
 </body>
 </html>

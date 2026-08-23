@@ -190,7 +190,7 @@
         <p class="panel-title">Alertas del mes ({{ alertas_mes|length }})</p>
         {% if not alertas_mes %}<p class="empty">Sin alertas este mes.</p>
         {% else %}
-          {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪'} %}
+          {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍'} %}
           {% for a in alertas_mes %}
           <div class="alerta-mini">
             <span class="tipo">{{ iconos.get(a.tipo, '⚠️') }}</span>

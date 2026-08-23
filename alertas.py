@@ -7,6 +7,7 @@ la renovación". "Por cada 3" se interpreta como niveles: 3-5 = nivel 1, 6-8
 = nivel 2, etc. (`cantidad // 3`), no una alerta única al llegar a 3."""
 import pandas as pd
 
+from cobertura import alertas_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from scoping import condicion_scope
@@ -58,16 +59,20 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     finally:
         session.close()
 
-    if not filas:
-        return []
-
-    r = pd.DataFrame(filas, columns=[
-        "dni", "nombre", "fecha", "estado", "comentario",
-        "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
-    ])
-    r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
-
     alertas = []
+
+    if filas:
+        r = pd.DataFrame(filas, columns=[
+            "dni", "nombre", "fecha", "estado", "comentario",
+            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
+        ])
+        r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
+    else:
+        r = pd.DataFrame(columns=[
+            "dni", "nombre", "fecha", "estado", "comentario", "estado_base",
+            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
+        ])
+
     for tipo, estado_objetivo, mensaje_base in (
         ("tardanza", "TARDANZA", "Posible memorándum"),
         ("falta", "FALTA", "Observación para la renovación"),
@@ -130,6 +135,12 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
                 "motivos": [],
             })
+
+    # Visita larga / Punto Censo -- tabla `visitas` (Postgres), ver
+    # cobertura.py. Antes esto ya se calculaba cada 5 min en el pipeline
+    # (pipeline/alerta_visita_larga.py) pero el resultado se descartaba al
+    # terminar la corrida; ahora vive en Postgres y se puede mostrar acá.
+    alertas.extend(alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=dni_filtro))
 
     alertas.sort(key=lambda a: (-a["nivel"], -a["cantidad"], a["nombre"]))
     return alertas
