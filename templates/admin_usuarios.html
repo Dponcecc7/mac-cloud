@@ -16,9 +16,18 @@
     header.top .inner { max-width:900px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
-    nav.links { display:flex; align-items:center; gap:18px; font-size:13px; flex-wrap:wrap; }
-    nav.links a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.85; }
-    nav.links a.active, nav.links a:hover { opacity:1; color:#fff; }
+    /* Nav agrupada en 2 bloques (paginas | usuario) en vez de todo en una
+       sola fila de texto plano -- separador vertical entre ambos, links con
+       fondo propio (se ven como botones de nav real, no texto suelto). */
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#c9bfae; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e9dfc9; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
     .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
     h1.title { font-size:20px; margin:0 0 14px; }
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:20px; }
@@ -44,13 +53,18 @@
     <div class="inner">
       <div class="brand"><span class="dot"></span> Proyecto MAC</div>
       <nav class="links">
-        <span>{{ usuario.email }} <span class="pill">{{ usuario.rol }}</span></span>
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('personal') }}">Personal</a>
-        <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-        <a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>
-        <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
-        <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="background:none; border:none; padding:0; font:inherit; cursor:pointer; color:#e9dfc9; font-weight:600; opacity:.85;" onmouseover="this.style.opacity=1;this.style.color='#fff'" onmouseout="this.style.opacity=.85;this.style.color='#e9dfc9'">Salir</button></form>
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>
+          <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
+        </div>
+        <div class="nav-user">
+          <span class="correo">{{ usuario.email }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
       </nav>
     </div>
   </header>
