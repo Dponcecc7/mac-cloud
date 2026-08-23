@@ -9,7 +9,7 @@ import datetime as dt
 
 import pandas as pd
 
-from alertas import UMBRAL
+from alertas import UMBRAL, _tiene_sustento
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 
 UMBRAL_CAIDA_PCT = 15  # puntos porcentuales de caída en % Cumplimiento sin faltas (B)
@@ -42,7 +42,13 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
     mes_desde = hoy.replace(day=1)
     detalle_mes = detalle[detalle["fecha"] >= pd.Timestamp(mes_desde)]
     tardanzas_mes = detalle_mes[detalle_mes["estado_base"] == "TARDANZA"].groupby("dni").size()
-    faltas_mes = detalle_mes[detalle_mes["estado_base"] == "FALTA"].groupby("dni").size()
+    # Mismo criterio que alertas.py: descanso médico/licencia/feriado
+    # regional tienen sustento, no cuentan para "a un paso de la alerta
+    # formal" (esa regla espeja directamente el umbral de alertas.py).
+    faltas_sin_sustento = detalle_mes[
+        (detalle_mes["estado_base"] == "FALTA") & ~detalle_mes["comentario"].apply(_tiene_sustento)
+    ]
+    faltas_mes = faltas_sin_sustento.groupby("dni").size()
 
     insights = []
     for dni in detalle["dni"].unique():

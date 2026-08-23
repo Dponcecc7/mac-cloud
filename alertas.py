@@ -13,6 +13,19 @@ from scoping import condicion_scope
 
 UMBRAL = 3
 
+# Faltas "con sustento" (Davor, 2026-08-23) -- descanso médico, licencia y
+# feriado regional tienen respaldo/justificación, así que NO deben sumar
+# para la alerta de "observación para la renovación" (esa es para faltas
+# injustificadas). Sí se siguen contando como Falta en todos lados donde ya
+# contaban (Horas semanales, Dashboard) -- esto solo afecta el umbral de
+# ESTA alerta puntual.
+MOTIVOS_CON_SUSTENTO = ("descanso médico", "descanso medico", "licencia", "feriado regional")
+
+
+def _tiene_sustento(comentario):
+    texto = (comentario or "").lower()
+    return any(m in texto for m in MOTIVOS_CON_SUSTENTO)
+
 
 def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     """Devuelve la lista de alertas (tardanza y falta) para el rango
@@ -49,6 +62,8 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
         ("falta", "FALTA", "Observación para la renovación"),
     ):
         grupo_tipo = r[r["estado_base"] == estado_objetivo]
+        if tipo == "falta":
+            grupo_tipo = grupo_tipo[~grupo_tipo["comentario"].apply(_tiene_sustento)]
         for dni, grupo in grupo_tipo.groupby("dni"):
             cantidad = len(grupo)
             if cantidad < UMBRAL:
