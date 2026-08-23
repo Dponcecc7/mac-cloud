@@ -10,13 +10,11 @@ con subir_creando_si_no_existe() (crea o reemplaza el contenido preservando
 el ID del archivo -- PUT por ruta, no hace falta el paso de resolver-y-parchear
 que si necesitaba el original para coexistir con una copia local).
 
-IMPORTANTE (validacion en paralelo, ver plan Fase 6): mientras no este
-validado, este script NO toca el Clasificacion_Diaria.xlsx real ni la Lista
-"ClasificacionDiaria" de SharePoint que ya lee Power Apps -- escribe a una
-ruta de auditoria aparte (NOMBRE_SALIDA_AUDITORIA) y solo IMPRIME lo que
-sincronizaria en la Lista, sin tocarla. El corte a produccion (cuando Davor
-lo apruebe) es: cambiar NOMBRE_SALIDA_AUDITORIA a la ruta real y descomentar
-la llamada a graph_lists.reemplazar_todos_los_items() -- ver mas abajo.
+CORTE A PRODUCCION (2026-08-22): tras 1 dia corriendo en paralelo contra la
+ruta de auditoria (_nube_Clasificacion_Diaria.xlsx) sin discrepancias, este
+script ya escribe el Clasificacion_Diaria.xlsx real y sincroniza la Lista
+"ClasificacionDiaria" de SharePoint que lee Power Apps -- ver RUTA_SALIDA
+mas abajo.
 """
 import os
 import sys
@@ -31,12 +29,12 @@ from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
-import graph_lists  # noqa: E402 -- importado para cuando se habilite el corte (ver docstring); no se usa todavia
+import graph_lists  # noqa: E402
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
-# Ruta de auditoria mientras dure la validacion en paralelo -- NUNCA la
-# produccion (ASISTENCIA/Clasificacion_Diaria.xlsx) hasta el corte manual.
-NOMBRE_SALIDA_AUDITORIA = "_nube_Clasificacion_Diaria.xlsx"
+# Ruta real que lee Power Apps -- NO vive bajo ASISTENCIA/MAC/, un nivel
+# arriba (ver export_sharepoint.py original, CARPETA_SHAREPOINT).
+RUTA_SALIDA = "ASISTENCIA/Clasificacion_Diaria.xlsx"
 
 NOMBRE_CORTO = {
     "40628345": "KARINA", "40817159": "DANIELA CABANILLAS", "80270250": "ANA CARBAJAL",
@@ -45,7 +43,7 @@ NOMBRE_CORTO = {
 }
 
 
-def escribir_tabla_auditoria(df, nombre_hoja, nombre_tabla):
+def escribir_tabla(df, nombre_hoja, nombre_tabla):
     import openpyxl
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -69,7 +67,10 @@ def escribir_tabla_auditoria(df, nombre_hoja, nombre_tabla):
     for col_idx, col_name in enumerate(df.columns, start=1):
         ancho = max(12, min(40, len(str(col_name)) + 4))
         ws.column_dimensions[get_column_letter(col_idx)].width = ancho
-    subir_creando_si_no_existe(RUTA_GRAPH_MAC + NOMBRE_SALIDA_AUDITORIA, wb)
+    # subir_creando_si_no_existe() hace PUT por ruta preservando el ID del
+    # archivo si ya existe (que es el caso siempre, salvo la primerisima
+    # corrida) -- no rompe la conexion de Power Apps al Excel.
+    subir_creando_si_no_existe(RUTA_SALIDA, wb)
 
 
 def construir_correo_map():
@@ -173,15 +174,21 @@ def generar_clasificacion_diaria():
     if sin_correo:
         print(f"Aviso: {sin_correo} filas sin correo de supervisor (Supervisor asignado sin match)")
 
-    escribir_tabla_auditoria(out, "Clasificacion Diaria", "ClasificacionDiaria")
-    print(f"Guardado (auditoría nube): {NOMBRE_SALIDA_AUDITORIA} ({len(out)} filas, hoy={hoy.date()})")
+    escribir_tabla(out, "Clasificacion Diaria", "ClasificacionDiaria")
+    print(f"Guardado: {RUTA_SALIDA} ({len(out)} filas, hoy={hoy.date()})")
 
-    # Mientras dure la validacion en paralelo: NO se toca la Lista real de
-    # SharePoint que ya lee Power Apps -- solo se informa lo que se
-    # sincronizaria. Corte a produccion: reemplazar este print por la
-    # llamada real a graph_lists.reemplazar_todos_los_items("ClasificacionDiaria", out.to_dict("records")),
-    # igual que hace la version local.
-    print(f"[modo sombra] Se sincronizarían {len(out)} filas en la Lista 'ClasificacionDiaria' (no ejecutado todavía).")
+    resultado = graph_lists.reemplazar_todos_los_items("ClasificacionDiaria", out.to_dict("records"))
+    fallidos = resultado["fallidos"]
+    print(f"Lista SharePoint 'ClasificacionDiaria' sincronizada: "
+          f"{resultado['creados']} creados, {resultado['actualizados']} actualizados, {resultado['borrados']} borrados.")
+    if fallidos:
+        # Igual que la version local: si algo no sincronizo, se lanza para
+        # que pipeline_completo.py lo marque como FALLO -- no se traga en
+        # silencio, la Lista quedaria incompleta sin que nadie se entere.
+        detalle = "; ".join(f"{f['accion']} DNI {f['dni']}: {f['error']}" for f in fallidos)
+        raise RuntimeError(
+            f"{len(fallidos)} de {len(out)} filas no se sincronizaron en la Lista 'ClasificacionDiaria' -- {detalle}"
+        )
 
 
 if __name__ == "__main__":
