@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Reportes</title>
+  <style>
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#c9bfae; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e9dfc9; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+
+    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .top-actions input[type=week] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
+
+    .table-wrap { overflow-x:auto; }
+    table { border-collapse:collapse; width:100%; font-size:12px; }
+    th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
+    th:hover { color:var(--ink); }
+    th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
+    th.num, td.num { text-align:right; }
+    td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    a.nombre-link { color:var(--ink); text-decoration:none; font-weight:600; }
+    a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
+
+    .badge-pct { display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+    .badge-pct.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge-pct.bad { background:var(--bad-bg); color:var(--bad); }
+    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.horas') }}" class="active">Reportes</a>
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <span class="correo">{{ usuario.email }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Reportes</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('reportes.horas', semana=semana_str) }}" class="active">Horas semanales</a>
+      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
+    </nav>
+
+    <div class="top-actions">
+      <form method="get">
+        <input type="week" name="semana" value="{{ semana_str }}" onchange="this.form.submit()">
+      </form>
+      <span style="color:var(--muted); font-size:12.5px;">{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado)</span>
+      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', semana=semana_str) }}">↓ Exportar Excel</a>
+    </div>
+
+    <div class="panel">
+      {% if not filas %}
+        <p class="empty">No hay datos de clasificación para esa semana.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-horas">
+          <thead>
+            <tr>
+              <th data-tipo="texto">Nombre <span class="flecha">↕</span></th>
+              <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
+              <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
+              <th data-tipo="texto">Región <span class="flecha">↕</span></th>
+              <th data-tipo="texto">Días Falta/Vacante <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Horas trabajadas <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Horas a trabajar <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Horas a trabajar sin faltas <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Diferencia (h) <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">% Cumplimiento <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">% Cumplimiento sin faltas <span class="flecha">↕</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in filas %}
+            {% set pct = f.pct_cumplimiento_sin_faltas %}
+            {% set clase_pct = 'ok' if pct is not none and pct >= 95 else ('warn' if pct is not none and pct >= 80 else 'bad') %}
+            <tr>
+              <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ f.nombre|title }}</a></td>
+              <td>{{ (f.supervisor or '—')|title }}</td>
+              <td>{{ (f.ciudad or '—')|title }}</td>
+              <td>{{ (f.region or '—')|title }}</td>
+              <td>{{ f.dias_falta_vacante }}</td>
+              <td class="num">{{ f.horas_trabajadas }}</td>
+              <td class="num">{{ f.horas_a_trabajar }}</td>
+              <td class="num">{{ f.horas_a_trabajar_sin_faltas }}</td>
+              <td class="num">{{ f.diferencia_h }}</td>
+              <td class="num">{% if f.pct_cumplimiento is not none %}<span class="badge-pct {{ clase_pct }}">{{ f.pct_cumplimiento }}%</span>{% else %}—{% endif %}</td>
+              <td class="num">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      <p class="note">Fuente: misma regla de <code>reporte_semanal.py</code> — horas fijas L-V 8.5h / Sábado 5.5h / feriados 0h, descuenta refrigerio según el patrón (no el real marcado). "Horas a trabajar" ya descuenta Vacante; "sin faltas" además descuenta Falta y Vacaciones — compara el cumplimiento solo contra los días que sí vino. % Cumplimiento = Horas trabajadas ÷ Horas a trabajar.</p>
+    </div>
+  </div>
+
+  <script>
+    const tabla = document.getElementById('tabla-horas');
+    if (tabla) {
+      const ths = tabla.querySelectorAll('th');
+      let ordenActual = { col: null, asc: true };
+      ths.forEach((th, idx) => {
+        th.addEventListener('click', () => {
+          const tbody = tabla.querySelector('tbody');
+          const filas = Array.from(tbody.querySelectorAll('tr'));
+          const esNum = th.dataset.tipo === 'num';
+          const asc = ordenActual.col === idx ? !ordenActual.asc : true;
+          ordenActual = { col: idx, asc };
+          filas.sort((a, b) => {
+            let va = a.children[idx].innerText.trim();
+            let vb = b.children[idx].innerText.trim();
+            if (esNum) {
+              va = va === '—' ? -Infinity : parseFloat(va.replace('%', '').replace(',', '.'));
+              vb = vb === '—' ? -Infinity : parseFloat(vb.replace('%', '').replace(',', '.'));
+              return asc ? va - vb : vb - va;
+            }
+            return asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');
+          });
+          filas.forEach(f => tbody.appendChild(f));
+          ths.forEach(t => t.querySelector('.flecha').textContent = '↕');
+          th.querySelector('.flecha').textContent = asc ? '▲' : '▼';
+        });
+      });
+    }
+  </script>
+</body>
+</html>

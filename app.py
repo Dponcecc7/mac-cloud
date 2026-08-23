@@ -107,8 +107,10 @@ def create_app():
     from admin import bp as admin_bp
     from cargas import bp as cargas_bp
     from asistencia import bp as asistencia_bp
+    from reportes import bp as reportes_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(reportes_bp)
     app.register_blueprint(cargas_bp)
     app.register_blueprint(asistencia_bp)
 
