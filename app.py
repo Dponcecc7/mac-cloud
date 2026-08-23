@@ -52,7 +52,12 @@ def _motivo_limpio(comentario):
             break
         texto = resto
     texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
-    return (texto[0].upper() + texto[1:]) if texto else "Sin motivo"
+    texto = (texto[0].upper() + texto[1:]) if texto else "Sin motivo"
+    # Homologaciones -- mismo motivo real, tipeado distinto por cada
+    # supervisor. Se agregan acá a medida que se detectan (ver "Tráfico /
+    # clima" == "Paro / clima": ambos son transito cortado por el clima).
+    HOMOLOGACIONES = {"tráfico / clima": "Paro / clima", "trafico / clima": "Paro / clima"}
+    return HOMOLOGACIONES.get(texto.lower(), texto)
 
 
 def create_app():
