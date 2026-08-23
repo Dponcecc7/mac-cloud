@@ -23,6 +23,8 @@ from vacaciones import calcular_viajes_vacaciones
 
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
 
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
 COLUMNAS_HORAS = [
     ("nombre", "Nombre"), ("supervisor", "Supervisor"), ("ciudad", "Ciudad"), ("region", "Región"),
     ("dias_falta_vacante", "Días Falta/Vacante"), ("horas_trabajadas", "Horas trabajadas"),
@@ -193,7 +195,8 @@ def ficha(dni):
         session.close()
 
     # Cumplimiento semanal, últimas 6 semanas ISO (incluye la actual) --
-    # mismo cálculo de Horas semanales, una corrida por semana.
+    # mismo cálculo de Horas semanales, una corrida por semana. Cada semana
+    # queda linkeable (?semana=) para ver su detalle día a día abajo.
     anio_actual, num_actual, _ = hoy.isocalendar()
     cumplimiento_semanal = []
     for i in range(5, -1, -1):
@@ -204,8 +207,53 @@ def ficha(dni):
         resumen_s = resumen_por_persona(detalle_s)
         pct = resumen_s.iloc[0]["pct_cumplimiento_sin_faltas"] if len(resumen_s) else None
         cumplimiento_semanal.append({
-            "semana": f"S{num_s}", "desde": desde_s, "pct": None if pct is None or pd.isna(pct) else pct,
+            "semana": f"S{num_s}", "semana_str": f"{anio_s}-W{num_s:02d}",
+            "desde": desde_s, "pct": None if pct is None or pd.isna(pct) else pct,
         })
+
+    # Detalle día a día -- para ver DÓNDE está el cuello de botella detrás
+    # de un % bajo (Davor, 2026-08-23), no solo el número agregado. Semana
+    # seleccionable igual que Horas semanales (?semana=2026-W34); si no se
+    # pasa, la última semana con datos reales (no necesariamente la
+    # calendario actual, que puede no tener nada cargado todavía).
+    semana_str_qs = request.args.get("semana", "")
+    if len(semana_str_qs) == 8 and semana_str_qs[4] == "-" and semana_str_qs[5] == "W":
+        try:
+            anio_v, num_v = int(semana_str_qs[:4]), int(semana_str_qs[6:])
+        except ValueError:
+            anio_v, num_v = anio_actual, num_actual
+    else:
+        anio_v, num_v = anio_actual, num_actual
+    desde_v, hasta_v = semana_iso(anio_v, num_v)
+    detalle_semana_vista = calcular_detalle_semana(desde_v, hasta_v, None, dni_filtro=dni)
+    detalle_dias = []
+    if len(detalle_semana_vista):
+        for _, row in detalle_semana_vista.sort_values("fecha").iterrows():
+            detalle_dias.append({
+                "fecha": row["fecha"].strftime("%d/%m"),
+                "dia_semana": DIAS_ES[row["fecha"].weekday()],
+                "estado": row["estado"],
+                "estado_base": row["estado"].split(" (")[0],
+                "entrada_real": row["entrada_real"] or "—",
+                "entrada_esperada": row["entrada_esperada"] or "—",
+                "salida_real": row["salida_real"] or "—",
+                "salida_esperada": row["salida_esperada"] or "—",
+                "horas_trabajadas": row["horas_trabajadas"] if pd.notna(row["horas_trabajadas"]) else None,
+                "horas_a_trabajar": row["horas_a_trabajar"],
+            })
+    semana_vista_str = f"{anio_v}-W{num_v:02d}"
+
+    # Tardanzas del mes -- lista explícita (no solo el conteo agregado),
+    # para ver a simple vista qué días llegó tarde y por cuánto.
+    tardanzas_mes = []
+    if len(detalle_mes):
+        for _, row in detalle_mes[detalle_mes["estado"].str.startswith("TARDANZA")].sort_values("fecha", ascending=False).iterrows():
+            tardanzas_mes.append({
+                "fecha": row["fecha"].strftime("%d/%m"),
+                "estado": row["estado"],
+                "entrada_real": row["entrada_real"] or "—",
+                "entrada_esperada": row["entrada_esperada"] or "—",
+            })
 
     alertas_mes = alertas_periodo(mes_desde, mes_hasta, None, dni_filtro=dni)
     insights = insights_equipo(None, dni_filtro=dni, hoy=hoy)
@@ -215,5 +263,7 @@ def ficha(dni):
         persona=persona, nombre_supervisor=nombre_supervisor,
         indicador_mes=indicador_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal,
+        detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
+        desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes,
         alertas_mes=alertas_mes, insights=insights,
     )
