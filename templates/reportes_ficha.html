@@ -51,12 +51,18 @@
     .kpi .num { font-size:19px; font-weight:800; }
     .kpi .lbl { font-size:10px; color:var(--muted); font-weight:600; margin-top:2px; }
 
-    .semanas { display:flex; align-items:flex-end; gap:8px; height:100px; }
-    .semana-col { display:flex; flex-direction:column; align-items:center; flex:1; }
-    .semana-barra-wrap { flex:1; display:flex; align-items:flex-end; width:100%; justify-content:center; }
-    .semana-barra { width:22px; border-radius:4px 4px 0 0; min-height:3px; }
-    .semana-lbl { font-size:10px; color:var(--muted); margin-top:4px; }
-    .semana-pct { font-size:10px; font-weight:700; margin-bottom:2px; }
+    /* Barras horizontales (ancho en %) en vez de columnas verticales
+       (alto en %) -- un alto en % dentro de un contenedor cuya propia
+       altura sale de flex:1 no se resuelve bien en todos los navegadores
+       (por eso las barras no se veían); el ancho en % contra un wrap con
+       ancho real sí funciona, mismo patrón ya probado en Dashboard
+       (.canal-barra/.motivo-barra). */
+    .semana-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
+    .semana-row:last-child { margin-bottom:0; }
+    .semana-lbl { width:28px; flex-shrink:0; font-weight:600; color:var(--muted); }
+    .semana-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:10px; overflow:hidden; }
+    .semana-barra { height:100%; border-radius:6px; }
+    .semana-pct { width:38px; text-align:right; flex-shrink:0; font-weight:700; font-size:11.5px; }
 
     table { border-collapse:collapse; width:100%; font-size:12px; }
     th { text-align:left; padding:6px 8px; font-size:10px; text-transform:uppercase; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
@@ -75,6 +81,7 @@
     .insight-mini { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
     .insight-mini:last-child { border-bottom:none; }
     .insight-mini .icono { font-size:14px; }
+    .detalle-insight { font-size:11px; color:var(--muted); }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -85,7 +92,8 @@
 
       .panel { padding:14px !important; border-radius:12px; }
       dl.datos { grid-template-columns:auto 1fr; font-size:12.5px; }
-      .semana-barra { width:16px; }
+      .semana-lbl { width:24px; font-size:11px; }
+      .semana-pct { width:34px; font-size:11px; }
     }
   </style>
 </head>
@@ -157,16 +165,16 @@
     <div class="grid2">
       <div class="panel">
         <p class="panel-title">Cumplimiento semanal (últimas 6 semanas)</p>
-        <div class="semanas">
+        <div>
           {% for s in cumplimiento_semanal %}
           {% set pct = s.pct %}
           {% set color = 'var(--ok)' if pct is not none and pct >= 95 else ('var(--warn)' if pct is not none and pct >= 80 else 'var(--bad)') %}
-          <div class="semana-col">
-            <div class="semana-pct">{{ (pct|round(0)|int ~ '%') if pct is not none else '—' }}</div>
+          <div class="semana-row">
+            <span class="semana-lbl">{{ s.semana }}</span>
             <div class="semana-barra-wrap">
-              <div class="semana-barra" style="height:{{ (pct if pct is not none and pct <= 100 else 100) }}%; background:{{ color if pct is not none else 'var(--line)' }};"></div>
+              <div class="semana-barra" style="width:{{ (pct if pct is not none and pct <= 100 else 100) }}%; background:{{ color if pct is not none else 'var(--line)' }};"></div>
             </div>
-            <div class="semana-lbl">{{ s.semana }}</div>
+            <span class="semana-pct">{{ (pct|round(0)|int ~ '%') if pct is not none else '—' }}</span>
           </div>
           {% endfor %}
         </div>
@@ -219,7 +227,19 @@
       {% if not insights %}<p class="empty">Sin señales por ahora.</p>
       {% else %}
         {% for i in insights %}
-        <div class="insight-mini"><span class="icono">{{ i.icono }}</span><span>{{ i.mensaje }}</span></div>
+        <div class="insight-mini">
+          <span class="icono">{{ i.icono }}</span>
+          <span>
+            {{ i.mensaje }}
+            {% if i.detalle_fechas %}
+              <br><span class="detalle-insight">Fechas: {{ i.detalle_fechas|join(', ') }}</span>
+            {% elif i.detalle_semanas %}
+              <br><span class="detalle-insight">{% for d in i.detalle_semanas %}{{ d.semana }}: {{ d.pct }}%{{ ', ' if not loop.last }}{% endfor %}</span>
+            {% elif i.detalle_dias %}
+              <br><span class="detalle-insight">{% for d in i.detalle_dias %}{{ d.fecha }}: {{ d.horas_trabajadas }}/{{ d.horas_a_trabajar }}h{{ ', ' if not loop.last }}{% endfor %}</span>
+            {% endif %}
+          </span>
+        </div>
         {% endfor %}
       {% endif %}
     </div>

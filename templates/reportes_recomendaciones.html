@@ -46,6 +46,7 @@
     .insight .nombre a { color:inherit; text-decoration:none; }
     .insight .nombre a:hover { color:var(--brand); text-decoration:underline; }
     .insight .mensaje { font-size:13px; margin:2px 0 0; color:var(--ink); }
+    .insight .detalle { font-size:11.5px; color:var(--muted); margin:6px 0 0; }
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
 
@@ -106,6 +107,13 @@
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=i.dni) }}">{{ i.nombre|title }}</a></div>
           <p class="mensaje">{{ i.mensaje }}</p>
+          {% if i.detalle_fechas %}
+            <p class="detalle">Fechas: {{ i.detalle_fechas|join(', ') }}</p>
+          {% elif i.detalle_semanas %}
+            <p class="detalle">{% for d in i.detalle_semanas %}{{ d.semana }}: {{ d.pct }}%{{ ', ' if not loop.last }}{% endfor %}</p>
+          {% elif i.detalle_dias %}
+            <p class="detalle">{% for d in i.detalle_dias %}{{ d.fecha }}: {{ d.horas_trabajadas }}/{{ d.horas_a_trabajar }}h{{ ', ' if not loop.last }}{% endfor %}</p>
+          {% endif %}
         </div>
       </div>
       {% endfor %}

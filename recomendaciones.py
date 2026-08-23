@@ -61,40 +61,51 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
             actual_t, anteriores_t = serie_t[-1], serie_t[:-1]
             prom_ant = sum(anteriores_t) / len(anteriores_t) if anteriores_t else 0
             if actual_t >= 2 and actual_t > prom_ant:
+                fechas_t = sorted(
+                    detalle[(detalle["dni"] == dni) & (detalle["semana_iso"] == num_actual) & (detalle["estado_base"] == "TARDANZA")]["fecha"]
+                )
                 insights.append({
                     "dni": dni, "nombre": nombre, "tipo": "tardanza_creciente", "icono": "📈", "severidad": "media",
                     "mensaje": f"Patrón de tardanza creciente — {actual_t} esta semana vs {prom_ant:.1f} en promedio antes.",
+                    "detalle_fechas": [f.strftime("%d/%m") for f in fechas_t],
                 })
 
         # B) Cumplimiento de horas en baja -- compara el promedio de las 2
         # últimas semanas CERRADAS contra las 2 anteriores a esas (la semana
         # en curso no cuenta, todavía no terminó).
-        pcts_cerrados = [
-            resumenes_semana[s].loc[dni, "pct_cumplimiento_sin_faltas"]
+        semana_pct_cerradas = [
+            (s, resumenes_semana[s].loc[dni, "pct_cumplimiento_sin_faltas"])
             for s in semanas_cerradas if dni in resumenes_semana[s].index
         ]
-        pcts_cerrados = [p for p in pcts_cerrados if pd.notna(p)]
-        if len(pcts_cerrados) >= 4:
-            recientes, previas = pcts_cerrados[-2:], pcts_cerrados[-4:-2]
-            caida = (sum(previas) / len(previas)) - (sum(recientes) / len(recientes))
+        semana_pct_cerradas = [(s, p) for s, p in semana_pct_cerradas if pd.notna(p)]
+        if len(semana_pct_cerradas) >= 4:
+            recientes, previas = semana_pct_cerradas[-2:], semana_pct_cerradas[-4:-2]
+            prom_recientes = sum(p for _, p in recientes) / len(recientes)
+            prom_previas = sum(p for _, p in previas) / len(previas)
+            caida = prom_previas - prom_recientes
             if caida >= UMBRAL_CAIDA_PCT:
                 insights.append({
                     "dni": dni, "nombre": nombre, "tipo": "cumplimiento_bajando", "icono": "📉", "severidad": "media",
                     "mensaje": f"Cumplimiento de horas en baja — cayó {caida:.0f} puntos vs. 2 semanas atrás.",
+                    "detalle_semanas": [{"semana": f"S{s}", "pct": round(p, 1)} for s, p in (previas + recientes)],
                 })
 
         # C) A un paso de la alerta formal (ver alertas.py, UMBRAL=3) --
         # aviso preventivo antes de que se dispare la alerta de verdad.
         t_mes, f_mes = int(tardanzas_mes.get(dni, 0)), int(faltas_mes.get(dni, 0))
         if t_mes == UMBRAL - 1:
+            fechas_t_mes = sorted(detalle_mes[(detalle_mes["dni"] == dni) & (detalle_mes["estado_base"] == "TARDANZA")]["fecha"])
             insights.append({
                 "dni": dni, "nombre": nombre, "tipo": "cerca_alerta", "icono": "🔶", "severidad": "baja",
                 "mensaje": f"A una tardanza de activar la alerta formal de memorándum ({t_mes} este mes).",
+                "detalle_fechas": [f.strftime("%d/%m") for f in fechas_t_mes],
             })
         if f_mes == UMBRAL - 1:
+            fechas_f_mes = sorted(faltas_sin_sustento[faltas_sin_sustento["dni"] == dni]["fecha"])
             insights.append({
                 "dni": dni, "nombre": nombre, "tipo": "cerca_alerta", "icono": "🔶", "severidad": "baja",
                 "mensaje": f"A una falta de activar la alerta formal de observación ({f_mes} este mes).",
+                "detalle_fechas": [f.strftime("%d/%m") for f in fechas_f_mes],
             })
 
         # D) Riesgo de no llegar al objetivo de la semana en curso -- compara
@@ -107,9 +118,18 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
             if len(resumen_avance):
                 pct_avance = resumen_avance.iloc[0]["pct_cumplimiento_sin_faltas"]
                 if pd.notna(pct_avance) and pct_avance < UMBRAL_RIESGO_SEMANA_PCT:
+                    detalle_dias = [
+                        {
+                            "fecha": row["fecha"].strftime("%d/%m"),
+                            "horas_trabajadas": row["horas_trabajadas"] if pd.notna(row["horas_trabajadas"]) else 0,
+                            "horas_a_trabajar": row["horas_a_trabajar"],
+                        }
+                        for _, row in avance[avance["horas_a_trabajar"] > 0].sort_values("fecha").iterrows()
+                    ]
                     insights.append({
                         "dni": dni, "nombre": nombre, "tipo": "riesgo_semana", "icono": "⏳", "severidad": "media",
                         "mensaje": f"Va al {pct_avance:.0f}% de ritmo esta semana — en riesgo de no llegar al objetivo si sigue así.",
+                        "detalle_dias": detalle_dias,
                     })
 
     orden_severidad = {"alta": 0, "media": 1, "baja": 2}

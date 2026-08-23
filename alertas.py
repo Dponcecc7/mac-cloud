@@ -23,8 +23,13 @@ MOTIVOS_CON_SUSTENTO = ("descanso médico", "descanso medico", "licencia", "feri
 
 
 def _tiene_sustento(comentario):
-    texto = (comentario or "").lower()
-    return any(m in texto for m in MOTIVOS_CON_SUSTENTO)
+    # pd.isna(), no "not comentario" -- un comentario vacío puede llegar acá
+    # como NaN de pandas (no None) segun como se construyó el DataFrame, y
+    # "not nan" da False (nan es truthy), asi que se colaba hasta el
+    # .lower() y explotaba (float no tiene .lower()).
+    if pd.isna(comentario):
+        return False
+    return any(m in str(comentario).lower() for m in MOTIVOS_CON_SUSTENTO)
 
 
 def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
