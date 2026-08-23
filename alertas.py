@@ -14,6 +14,7 @@ from scoping import condicion_scope
 
 UMBRAL = 3
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que asistencia.py usa para resaltar "salida temprana" un día suelto
+FUENTE_CORREGIDO_MANUAL = "Corregido manualmente (Tabla 3)"  # mismo texto exacto que motor_clasificacion.py escribe en fuente_dato
 
 # Faltas "con sustento" (Davor, 2026-08-23) -- descanso médico, licencia y
 # feriado regional tienen respaldo/justificación, así que NO deben sumar
@@ -45,7 +46,8 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
             session.query(ClasificacionDiaria.dni, Persona.nombre_completo, ClasificacionDiaria.fecha,
                            ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor,
                            ClasificacionDiaria.trabajo_otro_canal, ClasificacionDiaria.salida_anticipada_min,
-                           ClasificacionDiaria.canal_esperado, ClasificacionDiaria.canales_marcados)
+                           ClasificacionDiaria.canal_esperado, ClasificacionDiaria.canales_marcados,
+                           ClasificacionDiaria.fuente_dato)
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
         )
@@ -64,13 +66,13 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     if filas:
         r = pd.DataFrame(filas, columns=[
             "dni", "nombre", "fecha", "estado", "comentario",
-            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
+            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados", "fuente_dato",
         ])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
     else:
         r = pd.DataFrame(columns=[
             "dni", "nombre", "fecha", "estado", "comentario", "estado_base",
-            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
+            "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados", "fuente_dato",
         ])
 
     for tipo, estado_objetivo, mensaje_base in (
@@ -132,6 +134,25 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "salida_temprana",
                 "cantidad": cantidad, "nivel": nivel,
                 "mensaje": f"Salida anticipada recurrente ({nivel}x -- {cantidad} días este periodo)",
+                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "motivos": [],
+            })
+
+    # Hora puesta a mano por un analista/supervisor (Entrada/Salida
+    # corregida en Reporte diario), en vez de marcación real del
+    # mercaderista -- para mapear a quién hay que estarle corrigiendo la
+    # hora seguido porque no está marcando por su cuenta (Davor, 2026-08-23).
+    grupo_manual = r[r["fuente_dato"] == FUENTE_CORREGIDO_MANUAL]
+    if len(grupo_manual):
+        for dni, grupo in grupo_manual.groupby("dni"):
+            cantidad = len(grupo)
+            if cantidad < UMBRAL:
+                continue
+            nivel = cantidad // UMBRAL
+            alertas.append({
+                "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "corregido_manual",
+                "cantidad": cantidad, "nivel": nivel,
+                "mensaje": f"No está marcando por su cuenta -- hora puesta a mano {cantidad} días este periodo",
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
                 "motivos": [],
             })
