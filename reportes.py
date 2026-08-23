@@ -14,6 +14,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Font
 
 from alertas import alertas_periodo
+from asistencia import _homologar_motivo
 from cobertura import matriz_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
@@ -25,6 +26,11 @@ from vacaciones import calcular_viajes_vacaciones
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
 
 DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+# Mismo texto corto que ya usa Asistencia diaria (asistencia.html) para el
+# badge de estado -- Davor pidió que la Ficha del trabajador "jale el mismo
+# formato" en vez de mostrar el estado crudo ("ASISTIÓ A TIEMPO", 2026-08-24).
+ESTADO_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA": "Falta", "VACANTE": "Vacante", "VACACIONES": "Vacaciones"}
 
 COLUMNAS_HORAS = [
     ("nombre", "Nombre"), ("supervisor", "Supervisor"), ("ciudad", "Ciudad"), ("region", "Región"),
@@ -297,11 +303,14 @@ def ficha(dni):
     detalle_dias = []
     if len(detalle_semana_vista):
         for _, row in detalle_semana_vista.sort_values("fecha").iterrows():
+            estado_base = row["estado"].split(" (")[0]
             detalle_dias.append({
                 "fecha": row["fecha"].strftime("%d/%m"),
                 "dia_semana": DIAS_ES[row["fecha"].weekday()],
                 "estado": row["estado"],
-                "estado_base": row["estado"].split(" (")[0],
+                "estado_base": estado_base,
+                "estado_corto": ESTADO_CORTO.get(estado_base, estado_base.title()),
+                "motivo": _homologar_motivo(row["comentario"]) if estado_base == "FALTA" else None,
                 "entrada_real": row["entrada_real"] or "—",
                 "entrada_esperada": row["entrada_esperada"] or "—",
                 "salida_real": row["salida_real"] or "—",
@@ -319,6 +328,7 @@ def ficha(dni):
             tardanzas_mes.append({
                 "fecha": row["fecha"].strftime("%d/%m"),
                 "estado": row["estado"],
+                "estado_corto": ESTADO_CORTO.get(row["estado"].split(" (")[0], "Tardanza"),
                 "entrada_real": row["entrada_real"] or "—",
                 "entrada_esperada": row["entrada_esperada"] or "—",
             })

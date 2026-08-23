@@ -58,9 +58,11 @@
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
-      nav.links { gap:8px 14px; font-size:12.5px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
       .nav-pages a { padding:5px 9px; }
-      .nav-user { padding-left:0; border-left:none; }
 
       nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
