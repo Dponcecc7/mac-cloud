@@ -26,6 +26,7 @@ from dimension_models import Feriado, Persona
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from scoping import condicion_scope
+from vacaciones import calcular_viajes_vacaciones
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
 
@@ -325,76 +326,7 @@ def create_app():
         # contar filas subestimaba la duración real (pedido explícito:
         # "si salio el 10.08 y regreso el 17.08 a marcar, salio de
         # vacaciones 7 dias", contando domingos de por medio).
-        vacaciones_rows = r[r["estado_base"] == "VACACIONES"][["dni", "nombre", "fecha"]].copy()
-        vacaciones_rows["fecha"] = vacaciones_rows["fecha"].dt.date
-
-        if len(vacaciones_rows):
-            feriados_set = {f for (f,) in dim_session.query(Feriado.fecha).all()}
-
-            def _no_habil(d):
-                return d.weekday() == 6 or d in feriados_set
-
-            viajes = []
-            for dni, grupo in vacaciones_rows.groupby("dni"):
-                nombre = grupo["nombre"].iloc[0]
-                fechas = sorted(grupo["fecha"].unique())
-                inicio = fin = fechas[0]
-                for f in fechas[1:]:
-                    # Si todos los días entre el último VACACIONES y este son
-                    # domingo/feriado (por eso no tienen fila propia), es el
-                    # mismo viaje -- si hay un día hábil de por medio sin fila
-                    # VACACIONES, es que volvió y salió de nuevo: viaje nuevo.
-                    d = fin + dt.timedelta(days=1)
-                    puente_no_habil = True
-                    while d < f:
-                        if not _no_habil(d):
-                            puente_no_habil = False
-                            break
-                        d += dt.timedelta(days=1)
-                    if puente_no_habil:
-                        fin = f
-                    else:
-                        viajes.append({"dni": dni, "nombre": nombre, "inicio": inicio, "fin": fin})
-                        inicio = fin = f
-                viajes.append({"dni": dni, "nombre": nombre, "inicio": inicio, "fin": fin})
-
-            # Fecha real de regreso (primer día con CUALQUIER clasificación
-            # después del último día de VACACIONES del viaje) -- se busca más
-            # allá de "hasta" también, porque si el periodo elegido corta en
-            # medio de las vacaciones, el regreso real puede caer después.
-            dnis_con_viaje = {v["dni"] for v in viajes}
-            fechas_por_dni = {}
-            for dni, fecha in r[r["dni"].isin(dnis_con_viaje)][["dni", "fecha"]].itertuples(index=False):
-                fechas_por_dni.setdefault(dni, set()).add(fecha.date())
-            filas_futuras = (
-                dim_session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha)
-                .filter(ClasificacionDiaria.dni.in_(dnis_con_viaje), ClasificacionDiaria.fecha > hasta)
-                .all()
-            )
-            for dni, fecha in filas_futuras:
-                fechas_por_dni.setdefault(dni, set()).add(fecha)
-
-            for v in viajes:
-                candidatas = sorted(f for f in fechas_por_dni.get(v["dni"], set()) if f > v["fin"])
-                if candidatas:
-                    v["dias"] = (candidatas[0] - v["inicio"]).days
-                    v["regreso_dt"] = candidatas[0]
-                else:
-                    v["dias"] = None
-                    v["regreso_dt"] = None
-                del v["fin"], v["dni"]
-
-            viajes.sort(key=lambda v: v["inicio"], reverse=True)
-            # Sin año en la fecha (%d/%m) -- la tabla tiene 4 columnas
-            # angostas, el año sale sobreentendido del periodo elegido
-            # arriba y así entran las 4 sin scroll horizontal.
-            for v in viajes:
-                v["inicio"] = v["inicio"].strftime("%d/%m")
-                v["regreso"] = v["regreso_dt"].strftime("%d/%m") if v["regreso_dt"] else None
-                del v["regreso_dt"]
-            vacaciones_detalle = viajes
-        else:
-            vacaciones_detalle = []
+        vacaciones_detalle = calcular_viajes_vacaciones(dim_session, r, hasta)
 
         # Dias marcados VACANTE dentro del periodo elegido -- antes solo
         # miraba Personas que HOY siguen con estado="Vacante" en el Maestro,
