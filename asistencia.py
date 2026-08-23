@@ -72,6 +72,13 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 # TEXTO_PENDIENTE_SALIDA en pipeline/aplicar_correcciones.py).
 MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
 
+# motor_clasificacion.py escribe este sufijo exacto en el Estado cuando el
+# dato viene del botón "Marcar asistencia" de acá (Asistió/Apoyo zona/Vacante
+# sin marcación real de GPS) -- mismo caso que MARCADOR_PENDIENTE pero para el
+# flujo nuevo: acá el aviso vive en el propio Estado, no en el comentario del
+# supervisor, asi que hay que buscarlo aparte.
+MARCADOR_SIN_APP = "según supervisor, sin marcación app"
+
 _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 
 
@@ -191,8 +198,14 @@ def _cargar_reporte(fecha, usuario_actual=None):
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
             "comentario_salida": (_homologar_motivo(ayer_c.comentario_supervisor) or "") if ayer_c else "",
-            "entrada_pendiente": MARCADOR_PENDIENTE in (c.comentario_supervisor or ""),
-            "salida_pendiente": MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else ""),
+            "entrada_pendiente": (
+                MARCADOR_PENDIENTE in (c.comentario_supervisor or "")
+                or MARCADOR_SIN_APP in (c.estado or "")
+            ),
+            "salida_pendiente": (
+                MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else "")
+                or MARCADOR_SIN_APP in ((ayer_c.estado or "") if ayer_c else "")
+            ),
             "marcado_web": c.dni in dnis_marcados_hoy,
         })
         if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):

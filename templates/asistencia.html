@@ -156,7 +156,7 @@
             {% set eb = (f.estado or '').split(' (')[0] %}
             {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
             {% set pendiente = f.entrada_pendiente or f.salida_pendiente %}
-            {% set estado_tags = eb_corto + (',Pendiente confirmar salida' if pendiente else '') %}
+            {% set estado_tags = eb_corto + (',Pendiente confirmar hora' if pendiente else '') %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
                 data-rol="{{ (f.rol or '')|title }}" data-estado="{{ estado_tags }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
