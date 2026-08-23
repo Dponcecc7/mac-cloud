@@ -96,6 +96,14 @@
       <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', semana=semana_str) }}">↓ Exportar Excel</a>
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="panel" style="margin-bottom:14px; padding:10px 16px; border-left:4px solid {{ 'var(--bad)' if category == 'error' else 'var(--ok)' }};">
+          <p style="margin:0; font-size:13px;">{{ message }}</p>
+        </div>
+      {% endfor %}
+    {% endwith %}
+
     <div class="panel">
       {% if not filas %}
         <p class="empty">No hay datos de clasificación para esa semana.</p>

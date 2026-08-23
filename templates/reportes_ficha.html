@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Ficha del trabajador</title>
+  <style>
+    :root {
+      --bg:#f4f1ea; --card:#ffffff; --ink:#221d17; --muted:#8a7f6e; --line:#eae3d6;
+      --brand:#b5602c; --ok:#2f6a45; --ok-bg:#e6f2ea; --warn:#96660a; --warn-bg:#fbedd3; --bad:#a3372e; --bad-bg:#fbe6e3;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e9dfc9; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#c9bfae; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e9dfc9; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#f2ead9; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    .volver { display:inline-block; font-size:12.5px; color:var(--muted); text-decoration:none; margin-bottom:8px; }
+    .volver:hover { color:var(--brand); }
+    h1.title { font-size:22px; margin:0 0 2px; }
+    .subtitulo { color:var(--muted); font-size:13px; margin:0 0 18px; }
+
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; margin-bottom:16px; }
+    @media (max-width: 760px) { .grid2 { grid-template-columns:1fr; } }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
+
+    dl.datos { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px; margin:0; }
+    dl.datos dt { color:var(--muted); font-weight:600; }
+    dl.datos dd { margin:0; }
+    .estado-pill { padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+    .estado-pill.activo { background:var(--ok-bg); color:var(--ok); }
+    .estado-pill.inactivo { background:var(--bad-bg); color:var(--bad); }
+    .estado-pill.vacante { background:var(--warn-bg); color:var(--warn); }
+
+    .kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; }
+    @media (max-width: 600px) { .kpis { grid-template-columns:1fr 1fr; } }
+    .kpi { background:var(--bg); border-radius:10px; padding:10px 12px; }
+    .kpi .num { font-size:19px; font-weight:800; }
+    .kpi .lbl { font-size:10px; color:var(--muted); font-weight:600; margin-top:2px; }
+
+    .semanas { display:flex; align-items:flex-end; gap:8px; height:100px; }
+    .semana-col { display:flex; flex-direction:column; align-items:center; flex:1; }
+    .semana-barra-wrap { flex:1; display:flex; align-items:flex-end; width:100%; justify-content:center; }
+    .semana-barra { width:22px; border-radius:4px 4px 0 0; min-height:3px; }
+    .semana-lbl { font-size:10px; color:var(--muted); margin-top:4px; }
+    .semana-pct { font-size:10px; font-weight:700; margin-bottom:2px; }
+
+    table { border-collapse:collapse; width:100%; font-size:12px; }
+    th { text-align:left; padding:6px 8px; font-size:10px; text-transform:uppercase; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
+    td { padding:6px 8px; border-bottom:1px solid var(--line); }
+    tr:last-child td { border-bottom:none; }
+    td.num, th.num { text-align:right; }
+    .badge-pct { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
+    .badge-pct.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge-pct.bad { background:var(--bad-bg); color:var(--bad); }
+
+    .alerta-mini { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+    .alerta-mini:last-child { border-bottom:none; }
+    .alerta-mini .tipo { font-size:15px; }
+    .empty { color:var(--muted); font-size:12.5px; padding:6px 0; }
+    .proximamente { color:var(--muted); font-size:12.5px; font-style:italic; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.horas') }}" class="active">Reportes</a>
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <span class="correo">{{ usuario.email }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <a class="volver" href="{{ url_for('reportes.horas') }}">← Volver a Reportes</a>
+    <h1 class="title">{{ persona.nombre_completo|title }}</h1>
+    <p class="subtitulo">{{ (persona.rol or '—')|title }} · {{ (persona.ciudad or '—')|title }} · DNI {{ persona.dni }}</p>
+
+    <div class="grid2">
+      <div class="panel">
+        <p class="panel-title">Datos generales</p>
+        <dl class="datos">
+          <dt>Estado</dt>
+          <dd>
+            {% if persona.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
+            {% elif persona.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>
+            {% else %}<span class="estado-pill inactivo">Inactivo</span>{% endif %}
+          </dd>
+          <dt>Rol</dt><dd>{{ (persona.rol or '—')|title }}</dd>
+          <dt>Canal</dt><dd>{{ (persona.canal or '—')|title }}</dd>
+          <dt>Región</dt><dd>{{ (persona.region or '—')|title }}</dd>
+          <dt>Ciudad</dt><dd>{{ (persona.ciudad or '—')|title }}</dd>
+          <dt>Zona</dt><dd>{{ (persona.zona or '—')|title }}</dd>
+          <dt>Supervisor</dt><dd>{{ (nombre_supervisor or '—')|title }}</dd>
+          <dt>Correo</dt><dd>{{ persona.correo or '—' }}</dd>
+          <dt>Fecha ingreso</dt><dd>{{ persona.fecha_ingreso.strftime('%d/%m/%Y') if persona.fecha_ingreso else '—' }}</dd>
+          {% if persona.fecha_baja %}<dt>Fecha de baja</dt><dd>{{ persona.fecha_baja.strftime('%d/%m/%Y') }}</dd>{% endif %}
+        </dl>
+      </div>
+
+      <div class="panel">
+        <p class="panel-title">Indicador del mes actual</p>
+        {% if indicador_mes %}
+        <div class="kpis">
+          <div class="kpi"><div class="num">{{ indicador_mes.horas_trabajadas }}</div><div class="lbl">Horas trabajadas</div></div>
+          <div class="kpi"><div class="num">{{ indicador_mes.horas_a_trabajar }}</div><div class="lbl">Horas a trabajar</div></div>
+          <div class="kpi">
+            <div class="num">{% if indicador_mes.pct_cumplimiento_sin_faltas is not none %}{{ indicador_mes.pct_cumplimiento_sin_faltas }}%{% else %}—{% endif %}</div>
+            <div class="lbl">% Cumplimiento</div>
+          </div>
+          <div class="kpi"><div class="num">{{ indicador_mes.dias_falta_vacante }}</div><div class="lbl">Días Falta/Vacante</div></div>
+        </div>
+        {% else %}<p class="empty">Sin datos de clasificación este mes.</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <p class="panel-title">Cumplimiento semanal (últimas 6 semanas)</p>
+        <div class="semanas">
+          {% for s in cumplimiento_semanal %}
+          {% set pct = s.pct %}
+          {% set color = 'var(--ok)' if pct is not none and pct >= 95 else ('var(--warn)' if pct is not none and pct >= 80 else 'var(--bad)') %}
+          <div class="semana-col">
+            <div class="semana-pct">{{ (pct|round(0)|int ~ '%') if pct is not none else '—' }}</div>
+            <div class="semana-barra-wrap">
+              <div class="semana-barra" style="height:{{ (pct if pct is not none and pct <= 100 else 100) }}%; background:{{ color if pct is not none else 'var(--line)' }};"></div>
+            </div>
+            <div class="semana-lbl">{{ s.semana }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="panel-title">Alertas del mes ({{ alertas_mes|length }})</p>
+        {% if not alertas_mes %}<p class="empty">Sin alertas este mes.</p>
+        {% else %}
+          {% for a in alertas_mes %}
+          <div class="alerta-mini">
+            <span class="tipo">{{ '⚠️' if a.tipo == 'tardanza' else '🛑' }}</span>
+            <span>{{ a.mensaje }}</span>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <p class="panel-title">Vacaciones (últimos 180 días)</p>
+        {% if not viajes_vacaciones %}<p class="empty">Sin vacaciones registradas en este periodo.</p>
+        {% else %}
+        <table>
+          <tr><th>Salida</th><th>Regreso</th><th class="num">Días</th></tr>
+          {% for v in viajes_vacaciones %}
+          <tr><td>{{ v.inicio }}</td><td>{{ v.regreso or '—' }}</td><td class="num">{{ v.dias if v.dias is not none else 'En curso' }}</td></tr>
+          {% endfor %}
+        </table>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <p class="panel-title">Descansos médicos (últimos 180 días)</p>
+        {% if not descansos %}<p class="empty">Sin descansos médicos registrados en este periodo.</p>
+        {% else %}
+        <table>
+          <tr><th>Fecha</th><th>Comentario</th></tr>
+          {% for fecha, comentario in descansos %}
+          <tr><td>{{ fecha.strftime('%d/%m/%Y') }}</td><td>{{ comentario }}</td></tr>
+          {% endfor %}
+        </table>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Recomendaciones e insights</p>
+      <p class="proximamente">Próximamente — se agrega junto con las alertas predictivas (siguiente fase).</p>
+    </div>
+  </div>
+</body>
+</html>

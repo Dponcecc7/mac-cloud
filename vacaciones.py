@@ -74,7 +74,7 @@ def calcular_viajes_vacaciones(session, r, hasta):
         else:
             v["dias"] = None
             v["regreso_dt"] = None
-        del v["fin"], v["dni"]
+        del v["fin"]
 
     viajes.sort(key=lambda v: v["inicio"], reverse=True)
     # Sin año en la fecha (%d/%m) -- la tabla del dashboard tiene 4 columnas

@@ -40,6 +40,8 @@
     .estado-pill.activo { background:var(--ok); }
     .estado-pill.inactivo { background:var(--line); color:var(--muted); }
     .estado-pill.vacante { background:var(--warn); }
+    a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
+    a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
   </style>
 </head>
 <body>
@@ -51,6 +53,7 @@
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
           <a href="{{ url_for('personal') }}" class="active">Personal</a>
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.horas') }}">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
@@ -76,7 +79,7 @@
         {% for p in personas %}
         <tr>
           <td>{{ p.dni }}</td>
-          <td>{{ p.nombre_completo|title }}</td>
+          <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
           <td>
             {% if p.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
             {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>

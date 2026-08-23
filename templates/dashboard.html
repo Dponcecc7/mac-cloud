@@ -107,6 +107,8 @@
     td { padding:6px 6px; border-bottom:1px solid var(--line); font-size:11.5px; }
     tr:last-child td { border-bottom:none; }
     td.num, th.num { text-align:right; }
+    a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
+    a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
     .badge-pct { display:inline-block; padding:2px 7px; border-radius:999px; font-size:10.5px; font-weight:700; background:var(--bad-bg); color:var(--bad); }
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
 
@@ -123,6 +125,7 @@
         <div class="nav-pages">
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
           <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('reportes.horas') }}">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
@@ -251,7 +254,7 @@
             <table>
               <tr><th>Nombre</th><th class="num">Días</th></tr>
               {% for p in data.top_tardanza %}
-              <tr><td>{{ p.nombre|title }}</td><td class="num"><span class="badge-pct warn">{{ p.tardanza }}</span></td></tr>
+              <tr><td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre|title }}</a></td><td class="num"><span class="badge-pct warn">{{ p.tardanza }}</span></td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin tardanzas.</p>{% endif %}
@@ -265,7 +268,7 @@
             <table>
               <tr><th>Nombre</th><th class="num">Días</th></tr>
               {% for p in data.top_falta %}
-              <tr><td>{{ p.nombre|title }}</td><td class="num"><span class="badge-pct">{{ p.falta }}</span></td></tr>
+              <tr><td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre|title }}</a></td><td class="num"><span class="badge-pct">{{ p.falta }}</span></td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin faltas.</p>{% endif %}
@@ -280,7 +283,7 @@
               <tr><th>Colaborador</th><th>Salida</th><th>Regreso</th><th class="num">Días</th></tr>
               {% for v in data.vacaciones_detalle %}
               <tr>
-                <td>{{ v.nombre|title }}</td><td>{{ v.inicio }}</td>
+                <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=v.dni) }}">{{ v.nombre|title }}</a></td><td>{{ v.inicio }}</td>
                 <td>{{ v.regreso or '—' }}</td>
                 <td class="num"><span class="badge-pct">{{ v.dias if v.dias is not none else 'En curso' }}</span></td>
               </tr>
@@ -297,7 +300,7 @@
             <table>
               <tr><th>Posición</th><th class="num">Días abierta</th></tr>
               {% for v in data.vacantes_detalle %}
-              <tr><td>{{ v.nombre|title }}</td><td class="num">{{ v.dias }}</td></tr>
+              <tr><td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=v.dni) }}">{{ v.nombre|title }}</a></td><td class="num">{{ v.dias }}</td></tr>
               {% endfor %}
             </table>
           {% else %}<p class="empty">Sin vacantes.</p>{% endif %}
