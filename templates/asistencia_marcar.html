@@ -128,9 +128,13 @@
   <div class="wrap">
     <h1 class="title">Asistencia diaria</h1>
     <nav class="tabs">
+      {% if usuario.rol != "supervisor" %}
       <a href="{{ url_for('asistencia.reporte', fecha=fecha_str) }}" class="{{ 'active' if activo=='reporte' else '' }}">Reporte diario</a>
+      {% endif %}
       <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_str) }}" class="{{ 'active' if activo=='marcar' else '' }}">Marcar asistencia</a>
+      {% if usuario.rol != "supervisor" %}
       <a href="{{ url_for('asistencia.cliente', fecha=fecha_str) }}" class="{{ 'active' if activo=='cliente' else '' }}">Enviar a cliente</a>
+      {% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>{% endif %}
     </nav>
 

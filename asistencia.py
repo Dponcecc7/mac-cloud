@@ -347,6 +347,11 @@ def marcar_vista():
 @bp.get("")
 @login_required
 def reporte():
+    # El supervisor solo debe poder marcar asistencia de su equipo -- ver/
+    # editar el detalle completo (horas corregidas, borrar comentarios) es
+    # una herramienta de analista.
+    if current_user.rol == "supervisor":
+        return redirect(url_for("asistencia.marcar_vista"))
     fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
     return _vista_reporte(fecha_str, "reporte")
 
@@ -354,6 +359,8 @@ def reporte():
 @bp.get("/cliente")
 @login_required
 def cliente():
+    if current_user.rol == "supervisor":
+        return redirect(url_for("asistencia.marcar_vista"))
     fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
     return _vista_reporte(fecha_str, "cliente")
 
@@ -393,6 +400,11 @@ def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, 
 @bp.post("/guardar")
 @login_required
 def guardar():
+    # Mismo criterio que reporte()/cliente(): editar horas/comentarios del
+    # detalle es cosa de analista, no del supervisor (que solo marca).
+    if current_user.rol == "supervisor":
+        flash("Esta sección es solo para analistas.", "error")
+        return redirect(url_for("asistencia.marcar_vista"))
     fecha_str = request.form["fecha"]
     vista = request.form.get("vista") or "reporte"
     fecha = dt.date.fromisoformat(fecha_str)
