@@ -21,7 +21,14 @@ def condicion_scope(persona_model, usuario_actual):
     if usuario_actual.rol == "admin":
         return None
     if usuario_actual.rol == "supervisor" and usuario_actual.dni_asociado:
-        return persona_model.supervisor_dni == usuario_actual.dni_asociado
+        # Persona.dni/supervisor_dni salen del ETL vía pd.to_numeric(...).astype(str)
+        # -- eso pierde cualquier cero a la izquierda ("09919446" -> "9919446").
+        # Si dni_asociado se cargó con el cero (tal como venía en el Excel/DNI
+        # real), la comparación exacta nunca matcheaba y el supervisor veía
+        # 0 personas en vez de un error visible. Se normaliza acá para que
+        # ambos lados comparen igual sin importar cómo se haya tipeado.
+        dni_normalizado = usuario_actual.dni_asociado.lstrip("0") or "0"
+        return persona_model.supervisor_dni == dni_normalizado
     if usuario_actual.cliente_id_athena:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()

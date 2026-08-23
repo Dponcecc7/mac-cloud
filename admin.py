@@ -33,6 +33,12 @@ def usuarios():
         password = request.form.get("password", "")
         rol = request.form.get("rol", "supervisor")
         dni_asociado = request.form.get("dni_asociado", "").strip() or None
+        # Persona.dni/supervisor_dni nunca tienen cero a la izquierda (vienen
+        # de pd.to_numeric(...).astype(str) en el ETL) -- si acá se guarda
+        # "09919446" tal cual viene del DNI real, la comparación en
+        # scoping.py nunca matchea y el supervisor ve 0 personas.
+        if dni_asociado:
+            dni_asociado = dni_asociado.lstrip("0") or "0"
         cliente_id_athena = request.form.get("cliente_id_athena", "").strip() or None
 
         if not email or not password:
