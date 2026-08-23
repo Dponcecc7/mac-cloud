@@ -32,24 +32,20 @@
     nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
-    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
-    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .note b { color:var(--ink); }
 
-    .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
-    .alerta.falta { border-left-color:var(--bad); }
-    .alerta.tardanza { border-left-color:var(--warn); }
-    .alerta .icono { font-size:20px; line-height:1; margin-top:2px; }
-    .alerta .cuerpo { flex:1; }
-    .alerta .nombre { font-weight:700; font-size:14px; }
-    .alerta .nombre a { color:inherit; text-decoration:none; }
-    .alerta .nombre a:hover { color:var(--brand); text-decoration:underline; }
-    .alerta .mensaje { font-size:13px; margin:2px 0 8px; }
-    .alerta.falta .mensaje { color:var(--bad); }
-    .alerta.tardanza .mensaje { color:var(--warn); }
-    .alerta .detalle { font-size:11.5px; color:var(--muted); }
-    .alerta .fechas { margin-top:4px; }
-    .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
+    .stat-pill { display:inline-block; padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); margin-bottom:16px; }
+
+    .insight { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
+    .insight.media { border-left-color:var(--warn); }
+    .insight.alta { border-left-color:var(--bad); }
+    .insight .icono { font-size:20px; line-height:1; margin-top:2px; }
+    .insight .cuerpo { flex:1; }
+    .insight .nombre { font-weight:700; font-size:14px; }
+    .insight .nombre a { color:inherit; text-decoration:none; }
+    .insight .nombre a:hover { color:var(--brand); text-decoration:underline; }
+    .insight .mensaje { font-size:13px; margin:2px 0 0; color:var(--ink); }
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
   </style>
@@ -80,32 +76,24 @@
     <h1 class="title">Reportes</h1>
     <nav class="tabs">
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
-      <a href="{{ url_for('reportes.alertas', mes=mes_str) }}" class="active">Alertas</a>
-      <a href="{{ url_for('reportes.recomendaciones') }}">Recomendaciones</a>
+      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
+      <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Recomendaciones</a>
     </nav>
 
-    <div class="top-actions">
-      <form method="get">
-        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
-      </form>
-      <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
-    </div>
+    <p class="note"><b>Importante:</b> esto NO es un modelo predictivo con IA — son reglas simples sobre los mismos datos de Horas semanales/Alertas (comparar esta semana contra el promedio, ver quién está a un paso de una alerta formal, etc.). Sirve para mirar antes de que algo escale, no como diagnóstico definitivo.</p>
 
-    {% if not alertas %}
-      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas o 3 faltas.</p>
+    <span class="stat-pill">{{ insights|length }} señal{{ 'es' if insights|length != 1 else '' }} esta semana</span>
+
+    {% if not insights %}
+      <p class="empty">Sin señales por ahora.</p>
     {% else %}
-      {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}">
-        <div class="icono">{{ '⚠️' if a.tipo == 'tardanza' else '🛑' }}</div>
+      {% for i in insights %}
+      <div class="insight {{ i.severidad }}">
+        <div class="icono">{{ i.icono }}</div>
         <div class="cuerpo">
-          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
-          <p class="mensaje">{{ a.mensaje }}</p>
-          <div class="detalle">
-            Fechas: {{ a.fechas|join(', ') }}
-            {% if a.motivos %}<div class="fechas">Motivos: {{ a.motivos|join(', ') }}</div>{% endif %}
-          </div>
+          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=i.dni) }}">{{ i.nombre|title }}</a></div>
+          <p class="mensaje">{{ i.mensaje }}</p>
         </div>
-        <span class="nivel">Nivel {{ a.nivel }}</span>
       </div>
       {% endfor %}
     {% endif %}

@@ -17,6 +17,7 @@ from alertas import alertas_periodo
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
+from recomendaciones import insights_equipo
 from scoping import condicion_scope
 from vacaciones import calcular_viajes_vacaciones
 
@@ -112,6 +113,16 @@ def alertas():
     )
 
 
+@bp.get("/recomendaciones")
+@login_required
+def recomendaciones():
+    lista = insights_equipo(current_user)
+    return render_template(
+        "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
+        insights=lista,
+    )
+
+
 @bp.get("/ficha/<dni>")
 @login_required
 def ficha(dni):
@@ -197,11 +208,12 @@ def ficha(dni):
         })
 
     alertas_mes = alertas_periodo(mes_desde, mes_hasta, None, dni_filtro=dni)
+    insights = insights_equipo(None, dni_filtro=dni, hoy=hoy)
 
     return render_template(
         "reportes_ficha.html", usuario=current_user, activo="ficha",
         persona=persona, nombre_supervisor=nombre_supervisor,
         indicador_mes=indicador_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal,
-        alertas_mes=alertas_mes,
+        alertas_mes=alertas_mes, insights=insights,
     )

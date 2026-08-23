@@ -72,7 +72,9 @@
     .alerta-mini:last-child { border-bottom:none; }
     .alerta-mini .tipo { font-size:15px; }
     .empty { color:var(--muted); font-size:12.5px; padding:6px 0; }
-    .proximamente { color:var(--muted); font-size:12.5px; font-style:italic; }
+    .insight-mini { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+    .insight-mini:last-child { border-bottom:none; }
+    .insight-mini .icono { font-size:14px; }
   </style>
 </head>
 <body>
@@ -202,7 +204,12 @@
 
     <div class="panel">
       <p class="panel-title">Recomendaciones e insights</p>
-      <p class="proximamente">Próximamente — se agrega junto con las alertas predictivas (siguiente fase).</p>
+      {% if not insights %}<p class="empty">Sin señales por ahora.</p>
+      {% else %}
+        {% for i in insights %}
+        <div class="insight-mini"><span class="icono">{{ i.icono }}</span><span>{{ i.mensaje }}</span></div>
+        {% endfor %}
+      {% endif %}
     </div>
   </div>
 </body>
