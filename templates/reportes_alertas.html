@@ -38,7 +38,8 @@
 
     .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
     .alerta.falta { border-left-color:var(--bad); }
-    .alerta.tardanza { border-left-color:var(--warn); }
+    .alerta.tardanza, .alerta.salida_temprana { border-left-color:var(--warn); }
+    .alerta.otro_canal { border-left-color:var(--brand); }
     .alerta .icono { font-size:20px; line-height:1; margin-top:2px; }
     .alerta .cuerpo { flex:1; }
     .alerta .nombre { font-weight:700; font-size:14px; }
@@ -46,7 +47,8 @@
     .alerta .nombre a:hover { color:var(--brand); text-decoration:underline; }
     .alerta .mensaje { font-size:13px; margin:2px 0 8px; }
     .alerta.falta .mensaje { color:var(--bad); }
-    .alerta.tardanza .mensaje { color:var(--warn); }
+    .alerta.tardanza .mensaje, .alerta.salida_temprana .mensaje { color:var(--warn); }
+    .alerta.otro_canal .mensaje { color:var(--brand); }
     .alerta .detalle { font-size:11.5px; color:var(--muted); }
     .alerta .fechas { margin-top:4px; }
     .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
@@ -109,11 +111,12 @@
     </div>
 
     {% if not alertas %}
-      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas o 3 faltas.</p>
+      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
     {% else %}
+      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪'} %}
       {% for a in alertas %}
       <div class="alerta {{ a.tipo }}">
-        <div class="icono">{{ '⚠️' if a.tipo == 'tardanza' else '🛑' }}</div>
+        <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
           <p class="mensaje">{{ a.mensaje }}</p>

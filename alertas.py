@@ -12,6 +12,7 @@ from fact_models import ClasificacionDiaria
 from scoping import condicion_scope
 
 UMBRAL = 3
+SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que asistencia.py usa para resaltar "salida temprana" un día suelto
 
 # Faltas "con sustento" (Davor, 2026-08-23) -- descanso médico, licencia y
 # feriado regional tienen respaldo/justificación, así que NO deben sumar
@@ -41,7 +42,9 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     try:
         query = (
             session.query(ClasificacionDiaria.dni, Persona.nombre_completo, ClasificacionDiaria.fecha,
-                           ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor)
+                           ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor,
+                           ClasificacionDiaria.trabajo_otro_canal, ClasificacionDiaria.salida_anticipada_min,
+                           ClasificacionDiaria.canal_esperado, ClasificacionDiaria.canales_marcados)
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
         )
@@ -58,7 +61,10 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     if not filas:
         return []
 
-    r = pd.DataFrame(filas, columns=["dni", "nombre", "fecha", "estado", "comentario"])
+    r = pd.DataFrame(filas, columns=[
+        "dni", "nombre", "fecha", "estado", "comentario",
+        "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados",
+    ])
     r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
 
     alertas = []
@@ -86,5 +92,44 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
                 "motivos": sorted({(c or "Sin motivo").strip() for c in grupo["comentario"]}) if tipo == "falta" else [],
             })
+
+    # Trabajó en canal distinto al asignado -- informativo, no disciplinario
+    # (a veces es una cobertura real pedida por el supervisor), pero vale la
+    # pena que el supervisor lo vea si se repite.
+    grupo_canal = r[r["trabajo_otro_canal"] == True]  # noqa: E712 -- comparación explícita, no "is True", por si viene como NaN/None
+    if len(grupo_canal):
+        for dni, grupo in grupo_canal.groupby("dni"):
+            cantidad = len(grupo)
+            if cantidad < UMBRAL:
+                continue
+            nivel = cantidad // UMBRAL
+            alertas.append({
+                "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "otro_canal",
+                "cantidad": cantidad, "nivel": nivel,
+                "mensaje": f"Trabajó en canal distinto al asignado ({nivel}x -- {cantidad} días este periodo)",
+                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "motivos": sorted({
+                    f"{(row.canal_esperado or '—')} → {(row.canales_marcados or '—')}"
+                    for row in grupo.itertuples()
+                }),
+            })
+
+    # Salida anticipada recurrente -- mismo umbral (10 min) que ya usa
+    # asistencia.py para resaltar un día suelto, ahora acumulado en el mes.
+    grupo_salida = r[r["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN]
+    if len(grupo_salida):
+        for dni, grupo in grupo_salida.groupby("dni"):
+            cantidad = len(grupo)
+            if cantidad < UMBRAL:
+                continue
+            nivel = cantidad // UMBRAL
+            alertas.append({
+                "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "salida_temprana",
+                "cantidad": cantidad, "nivel": nivel,
+                "mensaje": f"Salida anticipada recurrente ({nivel}x -- {cantidad} días este periodo)",
+                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "motivos": [],
+            })
+
     alertas.sort(key=lambda a: (-a["nivel"], -a["cantidad"], a["nombre"]))
     return alertas
