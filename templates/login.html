@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Iniciar sesión</title>
   <style>
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
-    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:32px; width:320px; box-shadow:0 8px 24px -12px rgba(33,28,22,.2); }
+    * { box-sizing:border-box; }
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f6f3ee; color:#211c16; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:16px; }
+    .card { background:#fff; border:1px solid #ddd4c6; border-radius:10px; padding:32px; width:100%; max-width:340px; box-shadow:0 8px 24px -12px rgba(33,28,22,.2); }
     h1 { font-size:18px; margin:0 0 20px; }
-    label { display:block; font-size:12.5px; font-weight:600; color:#6b6154; margin-bottom:4px; }
-    input { width:100%; padding:8px 10px; margin-bottom:14px; border:1px solid #ddd4c6; border-radius:6px; font:inherit; box-sizing:border-box; }
-    button { width:100%; padding:10px; background:#b5602c; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+    label { display:block; font-size:13px; font-weight:600; color:#6b6154; margin-bottom:5px; }
+    /* font-size:16px en los inputs evita que iOS Safari haga zoom automatico
+       al enfocarlos (pasa si el tamano de letra es menor a 16px) -- min-height
+       44px es el target tactil minimo recomendado para dedo en celular. */
+    input { width:100%; padding:11px 12px; margin-bottom:16px; border:1px solid #ddd4c6; border-radius:8px; font:inherit; font-size:16px; min-height:44px; }
+    button { width:100%; padding:13px; min-height:46px; background:#b5602c; color:#fff; border:none; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; }
     .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; }
     .flash.error { background:#f8e0dc; color:#a33b2c; }
     .flash.ok { background:#e4f0e6; color:#2f6a45; }

@@ -55,6 +55,44 @@
     .badge { padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
     .badge.ok { background:var(--ok-bg); color:var(--ok); }
     .badge.warn { background:var(--warn-bg); color:var(--warn); }
+
+    /* Celular: los supervisores marcan asistencia desde el navegador del
+       telefono en el campo (reemplaza a Power Apps para esta pantalla) --
+       botones grandes para el dedo (min 44px, guia de Apple/Android) y todo
+       apilado en una sola columna en vez de filas apretadas pensadas para
+       mouse. */
+    @media (max-width: 640px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { gap:12px 16px; font-size:12.5px; }
+      nav.links a, nav.links button { padding:4px 0; }
+
+      nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
+      nav.tabs a { padding:8px 12px; white-space:nowrap; }
+
+      .top-actions { gap:8px; }
+      .top-actions input[type=date] { flex:1 1 auto; min-height:44px; font-size:15px; }
+      .top-actions form { width:100%; }
+      .top-actions .btn.ghost[type=submit] { width:100%; min-height:44px; }
+      .stat-pill { font-size:12px; }
+
+      .panel { padding:14px !important; border-radius:12px; }
+
+      /* La fila pasa de "todo en una linea" a tarjeta apilada: nombre
+         arriba, botones grandes abajo en grilla de 2 columnas -- mucho mas
+         facil de tocar bien en un telefono que botones de 24px pegados. */
+      .pendiente-row { flex-direction:column; align-items:stretch; padding:12px 4px; gap:10px; }
+      .pendiente-row .quien { font-size:14px; }
+      .pendiente-row form { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+      .pendiente-row .btn.sm { font-size:13.5px; padding:11px 8px; min-height:44px; width:100%; }
+      .pendiente-row .ipt-filtro.sm { grid-column:1 / -1; font-size:14px; min-height:44px; width:100% !important; padding:9px 10px; }
+      .pendiente-row a.btn.sm { display:flex; align-items:center; justify-content:center; }
+
+      .marcaron-row { flex-wrap:wrap; font-size:13.5px; padding:9px 4px; }
+      .marcaron-row .quien { flex:1 1 100%; order:2; }
+      .marcaron-row .hora { order:1; }
+      .marcaron-row .badge { order:3; }
+    }
   </style>
 </head>
 <body>
