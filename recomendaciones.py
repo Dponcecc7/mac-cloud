@@ -45,9 +45,14 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
     # Mismo criterio que alertas.py: descanso médico/licencia/feriado
     # regional tienen sustento, no cuentan para "a un paso de la alerta
     # formal" (esa regla espeja directamente el umbral de alertas.py).
-    faltas_sin_sustento = detalle_mes[
-        (detalle_mes["estado_base"] == "FALTA") & ~detalle_mes["comentario"].apply(_tiene_sustento)
-    ]
+    # Ojo: .apply() sobre una columna de 0 filas puede devolver un resultado
+    # con el índice roto (mismo bug ya encontrado en alertas.py) -- solo se
+    # filtra si hay algo que filtrar.
+    faltas_solo = detalle_mes[detalle_mes["estado_base"] == "FALTA"]
+    if len(faltas_solo):
+        faltas_sin_sustento = faltas_solo[~faltas_solo["comentario"].apply(_tiene_sustento)]
+    else:
+        faltas_sin_sustento = faltas_solo
     faltas_mes = faltas_sin_sustento.groupby("dni").size()
 
     insights = []

@@ -67,7 +67,12 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
         ("falta", "FALTA", "Observación para la renovación"),
     ):
         grupo_tipo = r[r["estado_base"] == estado_objetivo]
-        if tipo == "falta":
+        # len(grupo_tipo) > 0 antes de filtrar -- Series.apply() sobre una
+        # columna de 0 filas a veces devuelve un resultado con el índice
+        # roto (pandas no tiene datos para inferir la forma), y el
+        # boolean-indexing con eso deja un DataFrame de 0 columnas (ni
+        # "dni"), reventando el groupby de abajo con KeyError.
+        if tipo == "falta" and len(grupo_tipo):
             grupo_tipo = grupo_tipo[~grupo_tipo["comentario"].apply(_tiene_sustento)]
         for dni, grupo in grupo_tipo.groupby("dni"):
             cantidad = len(grupo)
