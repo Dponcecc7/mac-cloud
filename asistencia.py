@@ -276,6 +276,17 @@ def _pendientes_de_marcar(filas):
     ]
 
 
+def _ya_marcaron(filas):
+    """Personas del equipo que sí tienen una hora de entrada real hoy --
+    igual al panel de asistencia de la Power App, ordenadas por hora de su
+    primera marcación (entrada_real ya es esa primera marcación, ver
+    motor_clasificacion.py::clasificar_dia() -- min() de las visitas del día)."""
+    return sorted(
+        (f for f in filas if f["entrada_real"]),
+        key=lambda f: f["entrada_real"],
+    )
+
+
 def _fecha_mas_reciente_con_datos():
     session = get_session()
     try:
@@ -323,11 +334,12 @@ def marcar_vista():
 
     resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user)
     pendientes = _pendientes_de_marcar(filas) if filas else []
+    marcaron = _ya_marcaron(filas) if filas else []
     fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
     return render_template(
         "asistencia_marcar.html", usuario=current_user, activo="marcar",
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
-        pendientes=pendientes, motivos=_motivos_falta() if pendientes else None,
+        pendientes=pendientes, marcaron=marcaron, motivos=_motivos_falta() if pendientes else None,
         marcado=request.args.get("marcado"),
     )
 
