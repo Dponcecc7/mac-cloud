@@ -166,14 +166,24 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None):
     # Faltas "con sustento" (descanso médico/licencia/feriado regional,
     # Davor 2026-08-23) se tratan como Vacante para las horas: no le "debe"
     # esas horas a nadie, tiene justificación real -- se descuentan de la
-    # base "Horas a trabajar", no solo de la variante "sin faltas". Por eso
-    # salen de la bolsa de _horas_falta_dia (que ahora es SOLO falta
-    # injustificada) hacia su propia bolsa.
+    # base "Horas a trabajar", no solo de la variante "sin faltas".
     es_con_sustento = (r["motivo_falta"] == "Falta") & r["comentario"].apply(_tiene_sustento)
     r["_horas_vacante_dia"] = r["horas_a_trabajar"].where(r["motivo_falta"] == "Vacante", 0.0)
     r["_horas_sustento_dia"] = r["horas_a_trabajar"].where(es_con_sustento, 0.0)
-    r["_horas_falta_dia"] = r["horas_a_trabajar"].where((r["motivo_falta"] == "Falta") & ~es_con_sustento, 0.0)
-    r["_horas_vacaciones_dia"] = r["horas_a_trabajar"].where(r["motivo_falta"] == "Vacaciones", 0.0)
+
+    # "Horas a trabajar sin faltas" (Davor, 2026-08-23): SOLO cuenta los días
+    # que la persona realmente vino -- con marcación real (entrada Y salida),
+    # sin importar el motivo por el que un día no tiene marcación. Esto
+    # incluye Falta/Vacaciones normales, pero también un caso que la
+    # clasificación por motivo no cubría: "Asistió (según supervisor, sin
+    # marcación app)" -- alguien que el supervisor marcó presente desde
+    # "Marcar asistencia" pero todavía nadie cargó la hora real (ver
+    # asistencia.py, el aviso "⚠ Confirmar") quedaba contando su jornada
+    # completa como si hubiese trabajado, sin ninguna marcación real detrás.
+    # Los días ya excluidos de la base (Vacante/con sustento) no se
+    # descuentan de nuevo acá -- ya salieron antes.
+    ya_excluido_de_base = (r["motivo_falta"] == "Vacante") | es_con_sustento
+    r["_horas_sin_marcacion_dia"] = r["horas_a_trabajar"].where(~ya_excluido_de_base & ~con_marcacion, 0.0)
 
     return r
 
@@ -193,8 +203,7 @@ def resumen_por_persona(detalle_semana):
         horas_a_trabajar=("horas_a_trabajar", "sum"),
         _horas_vacante=("_horas_vacante_dia", "sum"),
         _horas_sustento=("_horas_sustento_dia", "sum"),
-        _horas_falta=("_horas_falta_dia", "sum"),
-        _horas_vacaciones=("_horas_vacaciones_dia", "sum"),
+        _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
     ).reset_index()
 
     g["dias_falta_vacante"] = (
@@ -205,11 +214,10 @@ def resumen_por_persona(detalle_semana):
     # regional) se descuentan de la base -- a nadie se le puede "deber"
     # horas que tienen justificación real o que nadie estaba para trabajar.
     g["horas_a_trabajar"] = (g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"]).round(1)
-    # "sin faltas" descuenta además la falta SIN sustento (injustificada) y
-    # Vacaciones -- compara solo contra los días que sí vino.
-    g["horas_a_trabajar_sin_faltas"] = (
-        g["horas_a_trabajar"] - g["_horas_falta"] - g["_horas_vacaciones"]
-    ).round(1)
+    # "sin faltas" descuenta además cualquier día sin marcación real
+    # (Falta/Vacaciones normales, o un "Asistió" todavía sin hora cargada) --
+    # compara solo contra los días que sí tienen una jornada real registrada.
+    g["horas_a_trabajar_sin_faltas"] = (g["horas_a_trabajar"] - g["_horas_sin_marcacion"]).round(1)
     g["diferencia_h"] = (g["horas_trabajadas"] - g["horas_a_trabajar_sin_faltas"]).round(1)
 
     # Division por cero (ej. toda la semana Vacante) -- deja el % en blanco
@@ -219,7 +227,7 @@ def resumen_por_persona(detalle_semana):
         g["horas_trabajadas"] / g["horas_a_trabajar_sin_faltas"].replace(0, np.nan) * 100
     ).round(1)
 
-    g = g.drop(columns=["_dias_falta", "_dias_vacante", "_horas_vacante", "_horas_sustento", "_horas_falta", "_horas_vacaciones"])
+    g = g.drop(columns=["_dias_falta", "_dias_vacante", "_horas_vacante", "_horas_sustento", "_horas_sin_marcacion"])
     g = g[[
         "dni", "nombre", "supervisor", "ciudad", "region", "dias_falta_vacante",
         "horas_trabajadas", "horas_a_trabajar", "horas_a_trabajar_sin_faltas",
