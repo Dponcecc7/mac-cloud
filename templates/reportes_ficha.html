@@ -75,6 +75,18 @@
     .insight-mini { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
     .insight-mini:last-child { border-bottom:none; }
     .insight-mini .icono { font-size:14px; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { gap:8px 14px; font-size:12.5px; }
+      .nav-pages a { padding:5px 9px; }
+      .nav-user { padding-left:0; border-left:none; }
+
+      .panel { padding:14px !important; border-radius:12px; }
+      dl.datos { grid-template-columns:auto 1fr; font-size:12.5px; }
+      .semana-barra { width:16px; }
+    }
   </style>
 </head>
 <body>

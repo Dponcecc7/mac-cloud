@@ -48,6 +48,19 @@
     .insight .mensaje { font-size:13px; margin:2px 0 0; color:var(--ink); }
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { gap:8px 14px; font-size:12.5px; }
+      .nav-pages a { padding:5px 9px; }
+      .nav-user { padding-left:0; border-left:none; }
+
+      nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
+      nav.tabs a { padding:8px 12px; white-space:nowrap; }
+
+      .insight { padding:12px 14px; gap:10px; }
+    }
   </style>
 </head>
 <body>

@@ -57,6 +57,40 @@
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
     .badge-pct.bad { background:var(--bad-bg); color:var(--bad); }
     .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+
+    /* Celular: la tabla de 11 columnas no entra en ningun telefono ni con
+       scroll horizontal comodo -- cada fila pasa a ser una tarjeta apilada
+       (tecnica data-label: el th se reconstruye como etiqueta con ::before,
+       sin duplicar el HTML de la tabla ni tocar el JS de orden). */
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { gap:8px 14px; font-size:12.5px; }
+      .nav-pages a { padding:5px 9px; }
+      .nav-user { padding-left:0; border-left:none; }
+
+      nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
+      nav.tabs a { padding:8px 12px; white-space:nowrap; }
+
+      .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
+      .top-actions form, .top-actions input[type=week] { width:100%; }
+      .top-actions input[type=week] { min-height:44px; font-size:15px; }
+      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
+
+      .panel { padding:14px !important; border-radius:12px; }
+
+      table, thead, tbody, th, td, tr { display:block; width:100%; }
+      thead { display:none; }
+      tbody tr {
+        border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; background:var(--card);
+      }
+      td { border:none; padding:5px 0; white-space:normal; display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; }
+      td::before { content:attr(data-label); font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; flex-shrink:0; }
+      td.num { text-align:right; }
+      td:first-child { padding-top:0; }
+      td:first-child::before { display:none; }
+      td:first-child { font-size:15px; padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+    }
   </style>
 </head>
 <body>
@@ -131,17 +165,17 @@
             {% set pct = f.pct_cumplimiento_sin_faltas %}
             {% set clase_pct = 'ok' if pct is not none and pct >= 95 else ('warn' if pct is not none and pct >= 80 else 'bad') %}
             <tr>
-              <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ f.nombre|title }}</a></td>
-              <td>{{ (f.supervisor or '—')|title }}</td>
-              <td>{{ (f.ciudad or '—')|title }}</td>
-              <td>{{ (f.region or '—')|title }}</td>
-              <td>{{ f.dias_falta_vacante }}</td>
-              <td class="num">{{ f.horas_trabajadas }}</td>
-              <td class="num">{{ f.horas_a_trabajar }}</td>
-              <td class="num">{{ f.horas_a_trabajar_sin_faltas }}</td>
-              <td class="num">{{ f.diferencia_h }}</td>
-              <td class="num">{% if f.pct_cumplimiento is not none %}<span class="badge-pct {{ clase_pct }}">{{ f.pct_cumplimiento }}%</span>{% else %}—{% endif %}</td>
-              <td class="num">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
+              <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ f.nombre|title }}</a></td>
+              <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
+              <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
+              <td data-label="Región">{{ (f.region or '—')|title }}</td>
+              <td data-label="Días Falta/Vacante">{{ f.dias_falta_vacante }}</td>
+              <td class="num" data-label="Horas trabajadas">{{ f.horas_trabajadas }}</td>
+              <td class="num" data-label="Horas a trabajar">{{ f.horas_a_trabajar }}</td>
+              <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
+              <td class="num" data-label="Diferencia (h)">{{ f.diferencia_h }}</td>
+              <td class="num" data-label="% Cumplimiento">{% if f.pct_cumplimiento is not none %}<span class="badge-pct {{ clase_pct }}">{{ f.pct_cumplimiento }}%</span>{% else %}—{% endif %}</td>
+              <td class="num" data-label="% Cumpl. sin faltas">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
