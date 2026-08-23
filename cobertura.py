@@ -46,7 +46,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None):
         query = (
             session.query(
                 Visita.dni, Persona.nombre_completo, Persona.ciudad, Persona.supervisor_dni,
-                Visita.punto_venta_id, Visita.punto_venta, Visita.fecha_inicio,
+                Visita.punto_venta_id, Visita.punto_venta, Visita.tipo_negocio, Visita.fecha_inicio,
                 Visita.hora_inicio, Visita.hora_fin, Visita.distancia_metros_inicio,
             )
             .join(Persona, Persona.dni == Visita.dni)
@@ -72,7 +72,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None):
         session.close()
 
     v = pd.DataFrame(filas, columns=[
-        "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta",
+        "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta", "tipo_negocio",
         "fecha_inicio", "hora_inicio", "hora_fin", "distancia_metros_inicio",
     ])
     v["supervisor"] = v["supervisor_dni"].map(nombre_sup)
@@ -88,16 +88,24 @@ def matriz_cobertura(desde, hasta, usuario_actual):
     """PDVs distintos visitados por persona y día -- Punto Censo se cuenta
     aparte (cada relevo es 1, no tiene ubicación real que colapsar), mismo
     criterio que analisis_visitas_planning.py. Devuelve
-    (personas, fechas, celdas) -- celdas: {(dni, fecha_iso): cantidad}."""
+    (personas, fechas, celdas, categorias) -- celdas: {(dni, fecha): cantidad},
+    categorias: {(dni, fecha): ["au"|"farma"|"censo", ...]} para marcar en qué
+    canal(es) trabajó ese día (Davor, 2026-08-23: "resaltar cuando son PDVs
+    de AU, de Farma, o día de Punto Censo" -- Tradicional queda sin marca por
+    ser el canal base/esperado de la mayoría)."""
     v = _cargar_visitas(desde, hasta, usuario_actual)
     if not len(v):
-        return [], [], {}
+        return [], [], {}, {}
 
     v_normal = v[v["geofence_ok"] & ~v["es_censo"]]
     normal = v_normal.groupby(["dni", "fecha_inicio"])["punto_venta_id"].nunique()
     v_censo = v[v["es_censo"]]
     censo = v_censo.groupby(["dni", "fecha_inicio"]).size()
     total = normal.add(censo, fill_value=0)
+
+    dias_au = set(v_normal[v_normal["tipo_negocio"] == "AUTOSERVICIOS"].groupby(["dni", "fecha_inicio"]).groups.keys())
+    dias_farma = set(v_normal[v_normal["tipo_negocio"] == "FARMACIA"].groupby(["dni", "fecha_inicio"]).groups.keys())
+    dias_censo = set(censo.index)
 
     info_persona = v.drop_duplicates("dni").set_index("dni")[["nombre", "ciudad", "supervisor"]]
     personas = [
@@ -106,7 +114,19 @@ def matriz_cobertura(desde, hasta, usuario_actual):
     ]
     fechas = sorted(v["fecha_inicio"].dt.date.unique())
     celdas = {(dni, fecha.date()): int(cant) for (dni, fecha), cant in total.items()}
-    return personas, fechas, celdas
+    categorias = {}
+    for (dni, fecha) in total.index:
+        clave = (dni, fecha)
+        tags = []
+        if clave in dias_au:
+            tags.append("au")
+        if clave in dias_farma:
+            tags.append("farma")
+        if clave in dias_censo:
+            tags.append("censo")
+        if tags:
+            categorias[(dni, fecha.date())] = tags
+    return personas, fechas, celdas, categorias
 
 
 def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None):

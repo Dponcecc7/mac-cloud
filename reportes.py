@@ -147,7 +147,7 @@ def _rango_desde_query(dias_por_defecto=21):
 @login_required
 def cobertura():
     desde, hasta = _rango_desde_query()
-    personas, fechas, celdas = matriz_cobertura(desde, hasta, current_user)
+    personas, fechas, celdas, categorias = matriz_cobertura(desde, hasta, current_user)
 
     # Resaltado simple: celda por debajo de la mitad del promedio de ESA
     # persona en el periodo elegido -- mismo criterio "umbral simple" del
@@ -159,7 +159,8 @@ def cobertura():
 
     return render_template(
         "reportes_cobertura.html", usuario=current_user, activo="cobertura",
-        desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas, promedios=promedios,
+        desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
+        categorias=categorias, promedios=promedios,
     )
 
 
@@ -167,7 +168,7 @@ def cobertura():
 @login_required
 def cobertura_exportar():
     desde, hasta = _rango_desde_query()
-    personas, fechas, celdas = matriz_cobertura(desde, hasta, current_user)
+    personas, fechas, celdas, _categorias = matriz_cobertura(desde, hasta, current_user)
 
     wb = openpyxl.Workbook()
     ws = wb.active
