@@ -263,9 +263,16 @@ def create_app():
             .sort_values(["tardanza", "falta"], ascending=False).head(8).to_dict("records")
         )
 
-        faltas_por_motivo = (
-            r[r["estado_base"] == "FALTA"]["comentario"].apply(_motivo_limpio).value_counts().head(8)
-        )
+        # "Tiene reemplazo - {motivo cese}" no es un motivo de falta -- es el
+        # reporte de baja/reemplazo que un supervisor manda desde la app
+        # móvil (ver reporte_diario_9am.py::comentarios_supervisor_dia()),
+        # que queda como comentario en los días que la persona sale Falta
+        # hasta que se procesa el reemplazo. No cuenta como "motivo".
+        faltas_sin_reemplazo = r[
+            (r["estado_base"] == "FALTA")
+            & ~r["comentario"].astype(str).str.strip().str.lower().str.startswith("tiene reemplazo")
+        ]
+        faltas_por_motivo = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio).value_counts().head(8)
 
         # Agrupa los días VACACIONES sueltos en "viajes" contiguos por
         # persona y calcula la duración en días CALENDARIO (salida -> regreso
