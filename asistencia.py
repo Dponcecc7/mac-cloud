@@ -79,6 +79,19 @@ MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
 # supervisor, asi que hay que buscarlo aparte.
 MARCADOR_SIN_APP = "según supervisor, sin marcación app"
 
+# Tabla 3 es append-only -- el motor arma cada (DNI, Fecha) fusionando todas
+# sus filas y quedandose con el ultimo valor NO VACÍO de cada columna (ver
+# motor_clasificacion.py::main(), el groupby de "sup"). Por eso no existe
+# forma de "vaciar" un comentario escribiendo un texto vacío -- una celda
+# vacía simplemente se ignora en esa fusión y el comentario viejo (equivocado)
+# sigue ganando. La solución es escribir ESTE texto puntual: no vacío (así sí
+# gana la fusión) pero tampoco empieza con "FALTA" ni contiene
+# "VACANTE"/"VACACIONES" ni llena "Estado reportado" -- el motor no lo
+# reconoce como ninguna de sus palabras clave, así que no fuerza ningún
+# estado y la persona vuelve a clasificarse solo por su marcación real (o
+# "Falta (sin marcación)" si de verdad no hay ninguna).
+MARCADOR_BORRADO = "(comentario borrado desde mac_cloud)"
+
 # Solo Asistió/Apoyo zona implican una hora real pendiente de escribir --
 # Vacante/Falta no tienen entrada/salida que confirmar, asi que no deben
 # mostrar el aviso aunque tambien vengan de "Marcar asistencia".
@@ -109,6 +122,9 @@ def _homologar_motivo(texto):
         if resto == texto:
             break
         texto = resto
+    # Recorta cualquier paréntesis final -- de paso, esto es lo que hace que
+    # MARCADOR_BORRADO (que es 100% un paréntesis) se muestre vacío en el
+    # reporte sin necesitar un caso especial acá.
     texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
     if not texto:
         return None
@@ -378,6 +394,13 @@ def guardar():
         comentario_salida = request.form.get(f"comentario_salida_{dni}", "").strip()
         entrada_corr = request.form.get(f"entrada_corr_{dni}", "").strip() if vista == "reporte" else ""
         salida_corr = request.form.get(f"salida_corr_{dni}", "").strip() if vista == "reporte" else ""
+        # "Borrar" gana sobre lo que haya quedado tipeado en el cuadro de
+        # texto -- el usuario tildó el check porque quiere deshacer el
+        # comentario, no reemplazarlo por otra cosa a medio escribir.
+        if request.form.get(f"borrar_entrada_{dni}"):
+            comentario_entrada = MARCADOR_BORRADO
+        if request.form.get(f"borrar_salida_{dni}"):
+            comentario_salida = MARCADOR_BORRADO
         if comentario_entrada or comentario_salida or entrada_corr or salida_corr:
             ediciones.append({
                 "dni": dni, "comentario_entrada": comentario_entrada, "comentario_salida": comentario_salida,

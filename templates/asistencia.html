@@ -61,6 +61,8 @@
     tr.oculta { display:none; }
     .ipt { font:inherit; font-size:10.5px; padding:3px 5px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; box-sizing:border-box; }
     .ipt-hora { text-align:center; }
+    .chk-borrar { display:flex; align-items:center; gap:3px; font-size:9.5px; color:var(--muted); margin-top:2px; cursor:pointer; white-space:nowrap; }
+    .chk-borrar input { width:auto; margin:0; }
     .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; color:#fff; }
     .badge.ok { background:var(--ok); }
     .badge.warn { background:var(--warn); }
@@ -171,11 +173,25 @@
                 <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
                 {% if pendiente %}<span class="badge warn" style="margin-left:4px;" title="Falta confirmar la hora real -- escribila en Entrada/Salida corregida">⚠ Confirmar</span>{% endif %}
               </td>
-              <td><input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}"></td>
+              <td>
+                <input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}">
+                {% if f.comentario_entrada %}
+                <label class="chk-borrar" title="Borra este comentario y deja que se reclasifique de nuevo (según la marcación real, si la hay)">
+                  <input type="checkbox" name="borrar_entrada_{{ f.dni }}"> Borrar
+                </label>
+                {% endif %}
+              </td>
               <td>{{ f.salida_prog or '' }}</td>
               <td class="{{ 'corregida' if f.salida_corregida else ('temprana' if f.salida_temprana else '') }}">{{ f.salida_real or '' }}</td>
               {% if vista == 'reporte' %}<td>{{ f.canal_ayer|title }}</td>{% endif %}
-              <td><input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}"></td>
+              <td>
+                <input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}">
+                {% if f.comentario_salida %}
+                <label class="chk-borrar" title="Borra este comentario y deja que se reclasifique de nuevo (según la marcación real, si la hay)">
+                  <input type="checkbox" name="borrar_salida_{{ f.dni }}"> Borrar
+                </label>
+                {% endif %}
+              </td>
               {% if vista == 'reporte' %}
               <td><input class="ipt ipt-hora" name="entrada_corr_{{ f.dni }}" title="Formato HH:MM"></td>
               <td><input class="ipt ipt-hora" name="salida_corr_{{ f.dni }}" title="Formato HH:MM"></td>
