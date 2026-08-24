@@ -98,8 +98,12 @@ def main():
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    m["DNI"] = m["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+    # vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+    # dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     dnis_vacante = set(m.loc[m["Estado"].astype(str).str.strip() == "Vacante", "DNI"])
 
     nombre_archivo = f"Reporte_Asistencia_{hoy.date()}.xlsx"
@@ -119,11 +123,23 @@ def main():
     fila_libre = ws_t3.max_row + 1
 
     filas_t3_existentes = set()
+    # Dedup de correcciones de SOLO hora (sin comentario) -- el guard de
+    # arriba (filas_t3_existentes, por texto de comentario) no cubre este
+    # caso. Si subir_in_place(T3) sale bien pero la subida del reporte
+    # falla justo después, la próxima corrida no se entera de que la hora
+    # ya se aplicó (el reporte sigue con la celda sin limpiar) y la
+    # reagrega duplicada a T3.
+    filas_t3_horas_ent = set()
+    filas_t3_horas_sal = set()
     for row in ws_t3.iter_rows(min_row=2, values_only=True):
         if row[0] is None:
             continue
         row_dni = str(int(row[0])) if isinstance(row[0], (int, float)) else str(row[0]).strip()
         filas_t3_existentes.add((row_dni, str(row[1]), row[3]))
+        if len(row) > 6 and row[6]:
+            filas_t3_horas_ent.add((row_dni, str(row[1]), str(row[6])))
+        if len(row) > 7 and row[7]:
+            filas_t3_horas_sal.add((row_dni, str(row[1]), str(row[7])))
 
     n_aplicadas = 0
     for r in range(FILA_HEADER_REPORTE + 1, ws_rep.max_row + 1):
@@ -169,10 +185,15 @@ def main():
                 motivo_vac_vacac = "Vacaciones"
 
         if hora_ent_corr or comentario_ent:
-            texto = comentario_ent or "Corrección desde reporte diario 9am (entrada)"
-            _agregar_fila_t3(ws_t3, fila_libre, dni, hoy.date(), texto, hora_ent=hora_ent_corr)
-            fila_libre += 1
-            n_aplicadas += 1
+            ya_en_t3 = (
+                hora_ent_corr and not comentario_ent
+                and (dni_str, str(hoy.date()), str(hora_ent_corr)) in filas_t3_horas_ent
+            )
+            if not ya_en_t3:
+                texto = comentario_ent or "Corrección desde reporte diario 9am (entrada)"
+                _agregar_fila_t3(ws_t3, fila_libre, dni, hoy.date(), texto, hora_ent=hora_ent_corr)
+                fila_libre += 1
+                n_aplicadas += 1
             ws_rep.cell(row=r, column=idx["Hora entrada corregida"]).value = None
             ws_rep.cell(row=r, column=idx["Comentario Entrada"]).value = None
         elif motivo_vac_vacac and (dni_str, str(hoy.date()), motivo_vac_vacac) not in filas_t3_existentes:
@@ -181,10 +202,15 @@ def main():
             n_aplicadas += 1
 
         if hora_sal_corr or comentario_sal:
-            texto = comentario_sal or "Corrección desde reporte diario 9am (salida día anterior)"
-            _agregar_fila_t3(ws_t3, fila_libre, dni, anterior.date(), texto, hora_sal=hora_sal_corr)
-            fila_libre += 1
-            n_aplicadas += 1
+            ya_en_t3_sal = (
+                hora_sal_corr and not comentario_sal
+                and (dni_str, str(anterior.date()), str(hora_sal_corr)) in filas_t3_horas_sal
+            )
+            if not ya_en_t3_sal:
+                texto = comentario_sal or "Corrección desde reporte diario 9am (salida día anterior)"
+                _agregar_fila_t3(ws_t3, fila_libre, dni, anterior.date(), texto, hora_sal=hora_sal_corr)
+                fila_libre += 1
+                n_aplicadas += 1
             ws_rep.cell(row=r, column=idx["Hora salida corregida"]).value = None
             ws_rep.cell(row=r, column=idx["Comentario salida"]).value = None
 

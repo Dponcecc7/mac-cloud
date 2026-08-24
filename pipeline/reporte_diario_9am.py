@@ -93,8 +93,12 @@ def cargar_maestro(fecha=None):
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    m["DNI"] = m["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+    # vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+    # dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     estado = m["Estado"].astype(str).str.strip()
     incluir = estado.isin(["Activo", "Vacante"])
     if fecha is not None:
@@ -175,8 +179,10 @@ def correcciones_tabla3(hoy, anterior):
     t3 = leer_excel("ASISTENCIA/MAC/3_Registro_Diario_Supervisor.xlsx", sheet_name="Registro diario supervisor", header=3).dropna(how="all")
     t3.columns = [str(c).strip() for c in t3.columns]
     t3 = t3.rename(columns={t3.columns[0]: "DNI"})
-    t3 = t3[pd.to_numeric(t3["DNI"], errors="coerce").notna()].copy()
-    t3["DNI"] = t3["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- ver comentario en cargar_maestro().
+    dni_num = pd.to_numeric(t3["DNI"], errors="coerce")
+    t3 = t3[dni_num.notna()].copy()
+    t3["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     t3["Fecha_dt"] = pd.to_datetime(t3["Fecha"], errors="coerce").dt.date
 
     ent_hoy = t3[(t3["Fecha_dt"] == hoy.date()) & t3["Hora entrada corregida"].notna()]
@@ -191,8 +197,10 @@ def dnis_alguna_vez_en_maestro():
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    return set(m["DNI"].astype(str).str.strip())
+    # Mismo gotcha que parseo_headcount.py -- ver comentario en cargar_maestro().
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    return set(dni_num[dni_num.notna()].astype("int64").astype(str))
 
 
 def _leer_registro_supervisor():
@@ -250,6 +258,12 @@ def comentarios_supervisor_dia(fecha):
         return {}
     r_dia = r_dia.copy()
     r_dia["DNI"] = r_dia["DNI"].astype(float).astype(int).astype(str)
+    # Si un supervisor manda 2 filas para el mismo DNI+día (corrección
+    # tardía), sin ordenar por fecha de registro ganaba lo último que
+    # devolviera la API -- no necesariamente lo último enviado. Se ordena
+    # ascendente y el dict se queda con el último (el más reciente).
+    r_dia["_FechaRegistro_dt"] = pd.to_datetime(r_dia["FechaRegistro"], utc=True, errors="coerce")
+    r_dia = r_dia.sort_values("_FechaRegistro_dt", na_position="first")
 
     comentarios = {}
     for _, row in r_dia.iterrows():
@@ -373,6 +387,13 @@ def main():
             valor_efectivo(idx_historial, dni, "Hora entrada programada", hoy, pat_hoy[col_ent])
         ))
         entrada_real = entrada_real_por_dni.get(dni)
+        # Si TODAS las visitas del día tienen hora_inicio sin formato válido,
+        # el .min() de un grupo todo-NaT da NaT, no None -- y "NaT is None"
+        # es False, así que los chequeos de abajo se saltaban y terminaba
+        # cayendo en el cálculo normal con un diff NaN, que reportaba
+        # "Asistió" en vez de "Falta"/"por confirmar".
+        if pd.isna(entrada_real):
+            entrada_real = None
         if entrada_real is None and dni in entrada_real_clasif:
             entrada_real = pd.to_timedelta(str(entrada_real_clasif[dni]))
         entrada_desde_correccion = dni in correcciones_entrada

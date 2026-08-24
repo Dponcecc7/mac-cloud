@@ -77,8 +77,13 @@ def construir_correo_map():
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    m["DNI"] = m["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+    # vacía, pandas sube toda la columna a float64 y sobrevive al filtro de
+    # abajo, dejando "18074336.0" en vez de "18074336" para todos los DNIs
+    # válidos (rompe el match contra ClasificacionDiaria.dni más abajo).
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     sup = m[m["Rol"] == "SUPERVISORES"]
     correo_por_nombre_corto = {}
     for _, row in sup.iterrows():
@@ -153,6 +158,14 @@ def generar_clasificacion_diaria():
     })
 
     vacantes = m[m["Estado"].astype(str).str.strip() == "Vacante"].copy()
+    # Si un DNI ya tiene una fila real de ClasificacionDiaria hoy (ej.
+    # trabajó antes de quedar Vacante recién hoy en el Maestro), no se
+    # agrega también la fila sintética "VACANTE SIN CUBRIR" -- 2 filas con
+    # el mismo DNI el mismo día hacían que reemplazar_todos_los_items()
+    # (indexa por DNI en la Lista de SharePoint que lee Power Apps) se
+    # quedara solo con una de las 2 en silencio.
+    dnis_ya_en_out = set(out["DNI"].astype(str))
+    vacantes = vacantes[~vacantes["DNI"].astype(str).isin(dnis_ya_en_out)]
     if len(vacantes):
         filas_vacante = pd.DataFrame({
             "DNI": vacantes["DNI"],

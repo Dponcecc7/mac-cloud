@@ -40,7 +40,23 @@ def cargar_historial():
     for h in filas:
         if h.fecha_desde is None:
             continue
-        dia_semana = DIA_SEMANA_MAP.get(h.dia_semana.strip().lower()) if h.dia_semana else pd.NA
+        if h.dia_semana:
+            dia_semana_norm = h.dia_semana.strip().lower()
+            if dia_semana_norm in DIA_SEMANA_MAP:
+                dia_semana = DIA_SEMANA_MAP[dia_semana_norm]
+            else:
+                # Antes esto quedaba en None -- pd.isna(None) es True, así
+                # que valor_efectivo() lo trataba igual que "sin día
+                # específico" y la corrección quedaba vigente TODOS los
+                # días en vez de ninguno. -1 nunca matchea fecha.weekday()
+                # (0-6), así que ahora falla cerrado (nunca vigente) en vez
+                # de abierto (siempre vigente), y queda visible en el log.
+                print(f"ADVERTENCIA historial_cambios: día de la semana no reconocido "
+                      f"'{h.dia_semana}' para DNI {h.dni}, campo '{h.campo}' -- se ignora "
+                      f"esta fila en vez de aplicarla todos los días.")
+                dia_semana = -1
+        else:
+            dia_semana = pd.NA
         key = (str(h.dni).strip(), h.campo.strip().lower())
         idx.setdefault(key, []).append((h.fecha_desde, h.fecha_hasta, h.valor_nuevo, dia_semana))
     return idx

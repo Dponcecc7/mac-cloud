@@ -43,8 +43,12 @@ r["Fecha"] = pd.to_datetime(r["Fecha"])
 m_reg = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
 m_reg.columns = [str(c).strip() for c in m_reg.columns]
 m_reg = m_reg.rename(columns={m_reg.columns[0]: "DNI"})
-m_reg = m_reg[pd.to_numeric(m_reg["DNI"], errors="coerce").notna()].copy()
-m_reg["DNI"] = m_reg["DNI"].astype(str).str.strip()
+# Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+# vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+# dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+dni_num = pd.to_numeric(m_reg["DNI"], errors="coerce")
+m_reg = m_reg[dni_num.notna()].copy()
+m_reg["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
 region_map = m_reg.set_index("DNI")["Región"].to_dict()
 r["Región"] = r["DNI"].map(region_map).fillna("Sin región")
 

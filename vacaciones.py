@@ -59,11 +59,18 @@ def calcular_viajes_vacaciones(session, r, hasta):
     for dni, fecha in r[r["dni"].isin(dnis_con_viaje)][["dni", "fecha"]].itertuples(index=False):
         fechas_por_dni.setdefault(dni, set()).add(fecha.date())
     filas_futuras = (
-        session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha)
+        session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha, ClasificacionDiaria.estado)
         .filter(ClasificacionDiaria.dni.in_(dnis_con_viaje), ClasificacionDiaria.fecha > hasta)
         .all()
     )
-    for dni, fecha in filas_futuras:
+    for dni, fecha, estado in filas_futuras:
+        # Si el viaje sigue de VACACIONES más allá de `hasta` (el periodo
+        # elegido corta en medio de un viaje que todavía no terminó), ese
+        # día NO es el regreso -- sin este filtro, la primera fila
+        # VACACIONES fuera del periodo se tomaba como fecha de regreso,
+        # mostrando un viaje truncado en vez de "sigue en curso".
+        if (estado or "").split(" (")[0] == "VACACIONES":
+            continue
         fechas_por_dni.setdefault(dni, set()).add(fecha)
 
     for v in viajes:

@@ -69,8 +69,12 @@ r["Estado_base"] = r["Estado"].apply(lambda s: s.split(" (")[0])
 _m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
 _m.columns = [str(c).strip() for c in _m.columns]
 _m = _m.rename(columns={_m.columns[0]: "DNI"})
-_m = _m[pd.to_numeric(_m["DNI"], errors="coerce").notna()].copy()
-_m["DNI"] = _m["DNI"].astype(str).str.strip()
+# Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+# vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+# dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+_dni_num = pd.to_numeric(_m["DNI"], errors="coerce")
+_m = _m[_dni_num.notna()].copy()
+_m["DNI"] = _dni_num[_dni_num.notna()].astype("int64").astype(str)
 _dnis_mercaderistas = set(_m[_m["Rol"] == "MERCADERISTAS"]["DNI"])
 r = r[r["DNI"].isin(_dnis_mercaderistas)].copy()
 print(f"Filtrado a Rol=MERCADERISTAS: {r['DNI'].nunique()} personas")
@@ -161,7 +165,14 @@ else:
 indicador_rows = []
 for dni, grp in r.groupby("DNI"):
     total_dias = len(grp)
-    faltas = (grp["Estado_base"].str.startswith("FALTA")).sum()
+    # Un "Estado reportado" de supervisor en texto libre (ej. "Suspendido",
+    # "Permiso") que motor_clasificacion.py no reconoce como Falta/Vacante/
+    # Vacaciones queda como "PERMISO (según supervisor, sin marcación app)"
+    # -- no empieza con "FALTA", y al no tener horas reales tampoco genera
+    # una fila de compensación, así que antes ese día sumaba a total_dias
+    # sin restar de dias_ok, inflando el indicador.
+    sin_marcacion_app = grp["Estado_base"].str.contains("sin marcación app", regex=False)
+    faltas = (grp["Estado_base"].str.startswith("FALTA") | sin_marcacion_app).sum()
     tardanzas_no_comp = no_compensados_por_persona.get(dni, 0)
     dias_negativos = faltas + tardanzas_no_comp
     dias_ok = total_dias - dias_negativos

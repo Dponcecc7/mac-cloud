@@ -16,6 +16,13 @@ CAMPOS_HEREDADOS = ["rol", "canal", "region", "ciudad", "zona", "supervisor_dni"
 
 def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_run=False, motivo_baja=None):
     dni_vacante, dni_nuevo = str(dni_vacante).strip(), str(dni_nuevo).strip()
+    if dni_nuevo == dni_vacante:
+        # Sin este guard, session.get(Persona, dni_nuevo) devuelve el MISMO
+        # objeto que persona_vacante (identity map de SQLAlchemy por PK) --
+        # los 2 ".estado = ..." de abajo pisan la misma fila, y como
+        # "Inactivo" corre después, la persona queda inactiva en vez de
+        # reactivada.
+        raise ValueError(f"El DNI nuevo ({dni_nuevo}) no puede ser igual al DNI de la vacante que se está cubriendo.")
     log = []
 
     session = get_session()

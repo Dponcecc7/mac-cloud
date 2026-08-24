@@ -58,7 +58,19 @@ def listar_items(nombre_lista):
 def _con_reintentos(hacer_request, max_reintentos=3):
     error = None
     for intento in range(max_reintentos):
-        r = hacer_request()
+        # Cortes de conexión (timeout, DNS, SSL) no son un status HTTP --
+        # sin este try/except, hacer_request() los tiraba directo afuera de
+        # esta función, sin reintentar y sin devolver el (ok, r, error)
+        # estructurado que esperan agregar_items/reemplazar_todos_los_items/
+        # borrar_todos_los_items, dejando el sync a medio hacer.
+        try:
+            r = hacer_request()
+        except requests.exceptions.RequestException as e:
+            error = f"Error de conexión: {e}"
+            if intento == max_reintentos - 1:
+                return False, None, error
+            time.sleep(2 ** intento)
+            continue
         if r.ok:
             return True, r, None
         error = f"{r.status_code} {r.text[:300]}"

@@ -14,6 +14,9 @@ sincronización de OneDrive que motivó escribir por Graph en vez de solo local.
 Uso: python exportar_dimensiones.py
 (usa DATABASE_URL, TENANT_ID, CLIENT_ID, CLIENT_SECRET del entorno)
 """
+import os
+import sys
+
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -24,6 +27,12 @@ from dimension_models import (
     CatalogoMotivo, Feriado, HistorialCambio, Persona, PatronRecurrente, get_session,
 )
 from graph_client import subir_in_place
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "pipeline"))
+from db_lock import adquirir_lock, liberar_lock  # noqa: E402
+
+NOMBRE_LOCK = "exportar_dimensiones"
+LOCK_MAX_MINUTOS = 10
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 
@@ -198,4 +207,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Corre cada 15 min via GitHub Actions -- sin candado, una corrida lenta
+    # (latencia de Graph en los 6 uploads) puede superponerse con la
+    # siguiente y dejar los 6 Excel reflejando 2 estados distintos de
+    # Postgres entre sí (mismo patrón que pipeline_completo.py, ver
+    # pipeline/db_lock.py).
+    ok, motivo = adquirir_lock(NOMBRE_LOCK, "github-actions", max_minutos=LOCK_MAX_MINUTOS)
+    if not ok:
+        print(f"exportar_dimensiones no iniciado: {motivo}")
+        sys.exit(0)
+    try:
+        main()
+    finally:
+        liberar_lock(NOMBRE_LOCK)

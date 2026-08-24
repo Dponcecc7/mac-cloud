@@ -447,32 +447,43 @@ def guardar():
         ws = wb["Registro diario supervisor"]
         fila_libre = ws.max_row + 1
 
+        # Se arma todo en memoria y se sube a SharePoint (T3, la fuente
+        # real que lee el motor) ANTES de comitear a Postgres -- igual que
+        # marcar() y el cierre de Falta por reemplazo. Al revés (comitear
+        # primero) era el único lugar que lo hacía así: si subir_in_place
+        # fallaba después del commit, la fila CorreccionWeb ya existía y
+        # sacaba a la persona de "Pendientes de marcar" aunque la
+        # corrección nunca hubiera llegado a T3 -- se perdía en silencio.
+        correcciones_web = []
+        for e in ediciones:
+            if e["comentario_entrada"] or e["entrada_corr"]:
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, e["comentario_entrada"], hora_ent=e["entrada_corr"])
+                fila_libre += 1
+                correcciones_web.append(CorreccionWeb(
+                    dni=e["dni"], fecha=fecha,
+                    comentario_entrada=e["comentario_entrada"] or None,
+                    hora_entrada_corregida=e["entrada_corr"] or None,
+                    registrado_por=current_user.email,
+                ))
+            if e["comentario_salida"] or e["salida_corr"]:
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer, e["comentario_salida"], hora_sal=e["salida_corr"])
+                fila_libre += 1
+                correcciones_web.append(CorreccionWeb(
+                    dni=e["dni"], fecha=ayer,
+                    comentario_salida=e["comentario_salida"] or None,
+                    hora_salida_corregida=e["salida_corr"] or None,
+                    registrado_por=current_user.email,
+                ))
+
+        subir_in_place(TABLA3_RUTA_GRAPH, wb)
+
         session = get_session()
         try:
-            for e in ediciones:
-                if e["comentario_entrada"] or e["entrada_corr"]:
-                    _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, e["comentario_entrada"], hora_ent=e["entrada_corr"])
-                    fila_libre += 1
-                    session.add(CorreccionWeb(
-                        dni=e["dni"], fecha=fecha,
-                        comentario_entrada=e["comentario_entrada"] or None,
-                        hora_entrada_corregida=e["entrada_corr"] or None,
-                        registrado_por=current_user.email,
-                    ))
-                if e["comentario_salida"] or e["salida_corr"]:
-                    _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer, e["comentario_salida"], hora_sal=e["salida_corr"])
-                    fila_libre += 1
-                    session.add(CorreccionWeb(
-                        dni=e["dni"], fecha=ayer,
-                        comentario_salida=e["comentario_salida"] or None,
-                        hora_salida_corregida=e["salida_corr"] or None,
-                        registrado_por=current_user.email,
-                    ))
+            for c in correcciones_web:
+                session.add(c)
             session.commit()
         finally:
             session.close()
-
-        subir_in_place(TABLA3_RUTA_GRAPH, wb)
     finally:
         liberar_lock("tabla3_web")
 

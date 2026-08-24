@@ -61,8 +61,12 @@ p_idx = p.set_index(["DNI", "weekday"])
 m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
 m.columns = [str(c).strip() for c in m.columns]
 m = m.rename(columns={m.columns[0]: "DNI"})
-m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-m["DNI"] = m["DNI"].astype(str).str.strip()
+# Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+# vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+# dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+m = m[dni_num.notna()].copy()
+m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
 nombre_map = m.set_index("DNI")["Nombre completo"].to_dict()
 
 dnis_mercaderistas = set(m[m["Rol"] == "MERCADERISTAS"]["DNI"])

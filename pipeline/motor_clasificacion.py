@@ -341,8 +341,12 @@ def main():
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    m["DNI"] = m["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
+    # vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
+    # dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     activos = m[m["Estado"].astype(str).str.strip() == "Activo"].copy()
 
     p = leer_excel("ASISTENCIA/MAC/2A_Patron_Recurrente.xlsx", sheet_name="Patrón recurrente", header=3).dropna(how="all")
@@ -363,8 +367,10 @@ def main():
     sup = leer_excel("ASISTENCIA/MAC/3_Registro_Diario_Supervisor.xlsx", sheet_name="Registro diario supervisor", header=3).dropna(how="all")
     sup.columns = [str(c).strip() for c in sup.columns]
     sup = sup.rename(columns={sup.columns[0]: "DNI"})
-    sup = sup[pd.to_numeric(sup["DNI"], errors="coerce").notna()].copy()
-    sup["DNI"] = sup["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parseo_headcount.py -- ver comentario más arriba.
+    dni_num_sup = pd.to_numeric(sup["DNI"], errors="coerce")
+    sup = sup[dni_num_sup.notna()].copy()
+    sup["DNI"] = dni_num_sup[dni_num_sup.notna()].astype("int64").astype(str)
     sup["Fecha_dt"] = pd.to_datetime(sup["Fecha"], errors="coerce").dt.date
     sup_idx = {}
     for (dni_sup, fecha_sup), grupo in sup.groupby(["DNI", "Fecha_dt"]):
