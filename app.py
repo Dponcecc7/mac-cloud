@@ -139,9 +139,9 @@ def create_app():
         except ValueError:
             hasta = hoy_peru
         try:
-            desde = dt.date.fromisoformat(request.args.get("desde", "")) if request.args.get("desde") else hasta - dt.timedelta(days=29)
+            desde = dt.date.fromisoformat(request.args.get("desde", "")) if request.args.get("desde") else hoy_peru.replace(day=1)
         except ValueError:
-            desde = hasta - dt.timedelta(days=29)
+            desde = hoy_peru.replace(day=1)
         if desde > hasta:
             desde, hasta = hasta, desde
 
@@ -178,7 +178,7 @@ def create_app():
             query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
-                                   ClasificacionDiaria.canal_esperado, ClasificacionDiaria.entrada_real,
+                                   ClasificacionDiaria.entrada_real,
                                    ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
@@ -235,7 +235,7 @@ def create_app():
             )
 
         r = pd.DataFrame(filas, columns=[
-            "dni", "nombre", "region", "fecha", "estado", "canal", "entrada_real", "salida_real", "comentario",
+            "dni", "nombre", "region", "fecha", "estado", "entrada_real", "salida_real", "comentario",
         ])
         r["fecha"] = pd.to_datetime(r["fecha"])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
@@ -279,22 +279,23 @@ def create_app():
         else:
             jornada_promedio = "—"
 
+        # Tendencia diaria = % de efectividad (asistió a tiempo + tardanza,
+        # sobre el total evaluado ese día), no el conteo crudo de falta/
+        # tardanza -- pedido explícito de Davor (2026-08-24), la misma
+        # métrica que ya muestra el aro de arriba pero día a día.
         tendencia = r.groupby(r["fecha"].dt.date)["estado_base"].value_counts().unstack(fill_value=0)
-        for col in ["ASISTIÓ A TIEMPO", "TARDANZA", "FALTA"]:
+        for col in ["ASISTIÓ A TIEMPO", "TARDANZA"]:
             if col not in tendencia.columns:
                 tendencia[col] = 0
         tendencia = tendencia.sort_index()
-        max_tendencia = max(1, int(tendencia[["FALTA", "TARDANZA"]].to_numpy().max())) if len(tendencia) else 1
+        tendencia["total_dia"] = tendencia.sum(axis=1)
+        tendencia["pct_dia"] = (
+            (tendencia["ASISTIÓ A TIEMPO"] + tendencia["TARDANZA"]) / tendencia["total_dia"] * 100
+        ).round(1)
         serie_tendencia = [
-            {"dia": d.strftime("%d/%m"), "falta": int(fila["FALTA"]), "tardanza": int(fila["TARDANZA"])}
+            {"dia": d.strftime("%d/%m"), "pct": float(fila["pct_dia"])}
             for d, fila in tendencia.iterrows()
         ]
-
-        por_canal = (
-            r.groupby("canal")["estado_base"]
-            .apply(lambda s: round((s.isin(["ASISTIÓ A TIEMPO", "TARDANZA"])).sum() / len(s) * 100, 1))
-            .sort_values(ascending=False)
-        )
 
         resumen_persona = r.groupby(["dni", "nombre"]).agg(
             dias=("estado_base", "size"),
@@ -352,8 +353,6 @@ def create_app():
                 "incidencias": n_incidencias, "jornada_promedio": jornada_promedio,
             },
             "tendencia": serie_tendencia,
-            "max_tendencia": max_tendencia,
-            "efectividad_por_canal": list(por_canal.items()),
             "faltas_por_motivo": list(faltas_por_motivo.items()),
             "top_falta": top_falta,
             "top_tardanza": top_tardanza,

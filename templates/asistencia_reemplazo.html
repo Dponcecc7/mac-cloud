@@ -61,7 +61,7 @@
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
-          <span class="correo">{{ usuario.email }}</span>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
         </div>

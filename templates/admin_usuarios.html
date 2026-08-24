@@ -11,9 +11,9 @@
     }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
-    .wrap { max-width:900px; margin:0 auto; padding:0 24px 60px; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
     header.top { background:linear-gradient(135deg, #241f18 0%, #3a2f22 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
-    header.top .inner { max-width:900px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
     /* Nav agrupada en 2 bloques (paginas | usuario) en vez de todo en una
@@ -62,7 +62,7 @@
           <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
         </div>
         <div class="nav-user">
-          <span class="correo">{{ usuario.email }}</span>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
         </div>

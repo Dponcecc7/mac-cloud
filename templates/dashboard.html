@@ -78,7 +78,7 @@
 
     .panel { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .grid2 { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; align-items:start; }
-    .grid4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; align-items:start; }
+    .grid4 { display:grid; grid-template-columns:0.85fr 0.85fr 1.3fr 1fr; gap:14px; align-items:start; }
     @media (max-width: 860px) { .grid2, .grid4 { grid-template-columns:1fr; } .wrap { padding:0 16px 40px; } }
 
     .chart { display:flex; align-items:flex-end; gap:4px; height:110px; margin-top:4px; overflow-x:auto;
@@ -86,21 +86,19 @@
     .chart-col { display:flex; flex-direction:column; align-items:center; min-width:14px; flex-shrink:0; }
     .chart-bars { display:flex; align-items:flex-end; gap:2px; height:92px; }
     .chart-bar { width:7px; border-radius:3px 3px 0 0; min-height:2px; transition:opacity .15s; }
-    .chart-bar.falta { background:linear-gradient(180deg, #c85f52, var(--bad)); }
-    .chart-bar.tardanza { background:linear-gradient(180deg, #e6b463, var(--warn)); }
+    .chart-bar.efectividad { background:linear-gradient(180deg, #dba26c, var(--brand)); width:16px; }
     .chart-col:hover .chart-bar { opacity:.75; }
     .chart-day { font-size:8px; color:var(--muted); margin-top:5px; white-space:nowrap; }
     .legend { display:flex; gap:16px; font-size:11px; color:var(--muted); margin-top:8px; font-weight:600; }
     .legend span { display:inline-flex; align-items:center; gap:5px; }
     .swatch { width:9px; height:9px; border-radius:3px; display:inline-block; }
 
-    .canal-row, .motivo-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
-    .canal-row:last-child, .motivo-row:last-child { margin-bottom:0; }
-    .canal-nombre, .motivo-nombre { width:auto; min-width:88px; max-width:150px; flex-shrink:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .canal-barra-wrap, .motivo-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:8px; overflow:hidden; }
-    .canal-barra { background:linear-gradient(90deg, var(--brand-dark), var(--brand)); height:100%; border-radius:6px; }
+    .motivo-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
+    .motivo-row:last-child { margin-bottom:0; }
+    .motivo-nombre { width:auto; min-width:88px; max-width:150px; flex-shrink:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .motivo-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:8px; overflow:hidden; }
     .motivo-barra { background:linear-gradient(90deg, #c85f52, var(--bad)); height:100%; border-radius:6px; }
-    .canal-pct, .motivo-n { width:34px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:11.5px; }
+    .motivo-n { width:34px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:11.5px; }
 
     table { border-collapse:collapse; width:100%; }
     th { text-align:left; padding:0 6px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
@@ -123,14 +121,15 @@
       <div class="brand"><span class="dot"></span> Proyecto MAC</div>
       <nav class="links">
         <div class="nav-pages">
-          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('dashboard') }}" class="active">Dashboard</a>
           <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
           <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
-          <span class="correo">{{ usuario.email }}</span>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
         </div>
@@ -142,9 +141,9 @@
     <div class="top-row">
       <h1 class="title">Asistencia</h1>
       <form class="periodo-form" method="get">
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">7 días</a>
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">30 días</a>
-        <a class="preset" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">Este mes</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['7d'].desde and periodo_args.hasta == presets['7d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">7 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['30d'].desde and periodo_args.hasta == presets['30d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">30 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['mes'].desde and periodo_args.hasta == presets['mes'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">Este mes</a>
         <input type="date" name="desde" value="{{ periodo_args.desde }}">
         <span style="color:var(--muted);">→</span>
         <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
@@ -194,16 +193,14 @@
               {% for d in data.tendencia %}
               <div class="chart-col">
                 <div class="chart-bars">
-                  <div class="chart-bar falta" style="height: {{ (d.falta / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="{{ d.dia }} · Falta: {{ d.falta }}"></div>
-                  <div class="chart-bar tardanza" style="height: {{ (d.tardanza / data.max_tendencia * 100)|round(0, 'floor') }}px;" title="{{ d.dia }} · Tardanza: {{ d.tardanza }}"></div>
+                  <div class="chart-bar efectividad" style="height: {{ d.pct|round(0, 'floor') }}px;" title="{{ d.dia }} · {{ d.pct }}% efectividad"></div>
                 </div>
                 <div class="chart-day">{{ d.dia }}</div>
               </div>
               {% endfor %}
             </div>
             <div class="legend">
-              <span><span class="swatch" style="background:var(--bad);"></span> Falta</span>
-              <span><span class="swatch" style="background:var(--warn);"></span> Tardanza</span>
+              <span><span class="swatch" style="background:var(--brand);"></span> % Efectividad (asistió a tiempo + tardanza)</span>
             </div>
             {% else %}
             <p class="empty">Sin datos en este periodo.</p>
@@ -212,37 +209,22 @@
         </div>
 
         <div>
-          <h2 class="section">Efectividad por canal</h2>
+          <h2 class="section">Faltas por motivo</h2>
           <div class="panel">
-            {% if data.efectividad_por_canal %}
-              {% for canal, pct in data.efectividad_por_canal %}
-              <div class="canal-row">
-                <div class="canal-nombre">{{ canal or "Sin canal" }}</div>
-                <div class="canal-barra-wrap"><div class="canal-barra" style="width: {{ pct }}%;"></div></div>
-                <div class="canal-pct">{{ pct }}%</div>
+            {% if data.faltas_por_motivo %}
+              {% set max_motivo = data.faltas_por_motivo[0][1] %}
+              {% for motivo, n in data.faltas_por_motivo %}
+              <div class="motivo-row">
+                <div class="motivo-nombre" title="{{ motivo }}">{{ motivo }}</div>
+                <div class="motivo-barra-wrap"><div class="motivo-barra" style="width: {{ (n / max_motivo * 100)|round(0,'floor') }}%;"></div></div>
+                <div class="motivo-n">{{ n }}</div>
               </div>
               {% endfor %}
             {% else %}
-              <p class="empty">Sin datos en este periodo.</p>
+              <p class="empty">Sin faltas en este periodo.</p>
             {% endif %}
           </div>
         </div>
-      </div>
-
-      <h2 class="section">Faltas por motivo</h2>
-      <div class="panel">
-        {% if data.faltas_por_motivo %}
-          {% set max_motivo = data.faltas_por_motivo[0][1] %}
-          {% for motivo, n in data.faltas_por_motivo %}
-          <div class="motivo-row">
-            <div class="motivo-nombre" title="{{ motivo }}">{{ motivo }}</div>
-            <div class="motivo-barra-wrap"><div class="motivo-barra" style="width: {{ (n / max_motivo * 100)|round(0,'floor') }}%;"></div></div>
-            <div class="motivo-n">{{ n }}</div>
-          </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">Sin faltas en este periodo.</p>
-        {% endif %}
       </div>
 
       <h2 class="section">Detalle del periodo</h2>
@@ -280,11 +262,11 @@
           <div class="tabla-wrap">
           {% if data.vacaciones_detalle %}
             <table>
-              <tr><th>Colaborador</th><th>Salida</th><th>Regreso</th><th class="num">Días</th></tr>
+              <tr><th>Colaborador</th><th>Período</th><th class="num">Días</th></tr>
               {% for v in data.vacaciones_detalle %}
               <tr>
-                <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=v.dni) }}">{{ v.nombre|title }}</a></td><td>{{ v.inicio }}</td>
-                <td>{{ v.regreso or '—' }}</td>
+                <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=v.dni) }}">{{ v.nombre|title }}</a></td>
+                <td>{{ v.inicio }} → {{ v.regreso or 'En curso' }}</td>
                 <td class="num"><span class="badge-pct">{{ v.dias if v.dias is not none else 'En curso' }}</span></td>
               </tr>
               {% endfor %}
