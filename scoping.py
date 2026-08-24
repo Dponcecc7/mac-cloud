@@ -28,7 +28,12 @@ def condicion_scope(persona_model, usuario_actual):
         # 0 personas en vez de un error visible. Se normaliza acá para que
         # ambos lados comparen igual sin importar cómo se haya tipeado.
         dni_normalizado = usuario_actual.dni_asociado.lstrip("0") or "0"
-        return persona_model.supervisor_dni == dni_normalizado
+        # Excluir al propio supervisor de su equipo -- en el Maestro
+        # Headcount algunos supervisores quedaron con su propio DNI como
+        # supervisor_dni (auto-referenciado), y sin este filtro se veían a
+        # sí mismos en su propia lista de mercaderistas (Davor, 2026-08-24:
+        # "no tendria sentido").
+        return (persona_model.supervisor_dni == dni_normalizado) & (persona_model.dni != dni_normalizado)
     if usuario_actual.cliente_id_athena:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
