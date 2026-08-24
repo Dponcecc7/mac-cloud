@@ -46,6 +46,22 @@
     .estado-pill.si { background:var(--ok-bg); color:var(--ok); }
     .estado-pill.no { background:var(--bad-bg); color:var(--bad); }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 14px; }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+
+      .panel { padding:14px !important; border-radius:12px; }
+      table { font-size:12px; }
+      th, td { padding:7px 8px; white-space:nowrap; }
+      .btn-crear { width:100%; min-height:44px; }
+    }
   </style>
 </head>
 <body>
@@ -81,6 +97,7 @@
 
     <div class="panel">
       <p class="panel-title">Cuentas</p>
+      <div class="table-wrap">
       <table>
         <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>DNI asociado</th><th>Activo</th><th>Último login</th><th></th></tr>
         {% for u in usuarios %}
@@ -106,6 +123,7 @@
         </tr>
         {% endfor %}
       </table>
+      </div>
     </div>
 
     <div class="panel" style="max-width:420px;">
@@ -125,7 +143,7 @@
         <input type="text" name="cliente_id_athena" placeholder="295">
         <label>DNI asociado (opcional)</label>
         <input type="text" name="dni_asociado">
-        <button type="submit">Crear</button>
+        <button type="submit" class="btn-crear">Crear</button>
       </form>
     </div>
   </div>

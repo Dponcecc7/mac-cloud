@@ -55,6 +55,21 @@
     .campo-pill.obl { background:var(--ok-bg); color:var(--ok); }
     .campo-pill.sit { background:var(--warn-bg); color:var(--warn); }
     code { font-family: ui-monospace, Consolas, monospace; background:var(--bg); padding:1px 5px; border-radius:4px; font-size:11.5px; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+
+      .panel { padding:14px !important; border-radius:12px; }
+      table { font-size:11.5px; }
+      .wrap button[type=submit] { width:100%; min-height:44px; }
+      input[type=file] { font-size:12px; }
+    }
   </style>
 </head>
 <body>
