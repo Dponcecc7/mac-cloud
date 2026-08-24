@@ -334,6 +334,20 @@ def ficha(dni):
                 "entrada_esperada": row["entrada_esperada"] or "—",
             })
 
+    # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,
+    # 2026-08-24: "tiene una falta pero no me sale en el detalle del
+    # perfil" -- el indicador de arriba ya contaba la falta, pero "Detalle
+    # día a día" solo muestra la semana seleccionada, y esta era la única
+    # sección que le faltaba su propia lista explícita). Cuenta TODAS las
+    # faltas del mes (con o sin sustento), igual que indicador_mes.dias_falta_vacante.
+    faltas_mes = []
+    if len(detalle_mes):
+        for _, row in detalle_mes[detalle_mes["estado"].str.startswith("FALTA")].sort_values("fecha", ascending=False).iterrows():
+            faltas_mes.append({
+                "fecha": row["fecha"].strftime("%d/%m"),
+                "motivo": _homologar_motivo(row["comentario"]) or "Sin motivo",
+            })
+
     alertas_mes = alertas_periodo(mes_desde, mes_hasta, None, dni_filtro=dni)
     insights = insights_equipo(None, dni_filtro=dni, hoy=hoy)
 
@@ -343,6 +357,6 @@ def ficha(dni):
         indicador_mes=indicador_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
-        desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes,
+        desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
     )

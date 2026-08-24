@@ -230,23 +230,40 @@
       {% endif %}
     </div>
 
-    <div class="panel">
-      <p class="panel-title">Tardanzas del mes ({{ tardanzas_mes|length }})</p>
-      {% if not tardanzas_mes %}<p class="empty">Sin tardanzas este mes.</p>
-      {% else %}
-      <div class="table-wrap">
-        <table>
-          <tr><th>Fecha</th><th>Estado</th><th>Entrada real</th><th>Entrada programada</th></tr>
-          {% for t in tardanzas_mes %}
-          <tr>
-            <td>{{ t.fecha }}</td>
-            <td><span class="badge-pct warn">{{ t.estado_corto }}</span></td>
-            <td>{{ t.entrada_real }}</td><td>{{ t.entrada_esperada }}</td>
-          </tr>
-          {% endfor %}
-        </table>
+    <div class="grid2">
+      <div class="panel">
+        <p class="panel-title">Tardanzas del mes ({{ tardanzas_mes|length }})</p>
+        {% if not tardanzas_mes %}<p class="empty">Sin tardanzas este mes.</p>
+        {% else %}
+        <div class="table-wrap">
+          <table>
+            <tr><th>Fecha</th><th>Estado</th><th>Entrada real</th><th>Entrada programada</th></tr>
+            {% for t in tardanzas_mes %}
+            <tr>
+              <td>{{ t.fecha }}</td>
+              <td><span class="badge-pct warn">{{ t.estado_corto }}</span></td>
+              <td>{{ t.entrada_real }}</td><td>{{ t.entrada_esperada }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+        {% endif %}
       </div>
-      {% endif %}
+
+      <div class="panel">
+        <p class="panel-title">Faltas del mes ({{ faltas_mes|length }})</p>
+        {% if not faltas_mes %}<p class="empty">Sin faltas este mes.</p>
+        {% else %}
+        <div class="table-wrap">
+          <table>
+            <tr><th>Fecha</th><th>Motivo</th></tr>
+            {% for f in faltas_mes %}
+            <tr><td>{{ f.fecha }}</td><td>{{ f.motivo }}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+        {% endif %}
+      </div>
     </div>
 
     <div class="grid2">
