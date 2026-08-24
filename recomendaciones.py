@@ -9,11 +9,21 @@ import datetime as dt
 
 import pandas as pd
 
-from alertas import UMBRAL, _tiene_sustento
+from alertas import SALIDA_ANTICIPADA_MIN, UMBRAL, _tiene_sustento
+from dimension_models import Persona, get_session
+from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
+from scoping import condicion_scope
 
 UMBRAL_CAIDA_PCT = 15  # puntos porcentuales de caída en % Cumplimiento sin faltas (B)
 UMBRAL_RIESGO_SEMANA_PCT = 80  # (D) -- mismo umbral "amarillo" que ya usa reporte_semanal.py
+
+# Resumen de perfil / puntaje del mes (Davor, 2026-08-24) -- 4 métricas del
+# mes en curso, cada una normalizada a 0-100 (más alto = mejor) con 25% de
+# peso cada una. Bandas de la carita final sobre el promedio de las 4.
+PESO_COMPONENTE = 0.25
+BANDA_EXCELENTE = 95
+BANDA_SEGUIMIENTO = 85
 
 
 def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
@@ -101,14 +111,14 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
         if t_mes == UMBRAL - 1:
             fechas_t_mes = sorted(detalle_mes[(detalle_mes["dni"] == dni) & (detalle_mes["estado_base"] == "TARDANZA")]["fecha"])
             insights.append({
-                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta", "icono": "🔶", "severidad": "baja",
+                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta_tardanza", "icono": "⚠️", "severidad": "baja",
                 "mensaje": f"A una tardanza de activar la alerta formal de memorándum ({t_mes} este mes).",
                 "detalle_fechas": [f.strftime("%d/%m") for f in fechas_t_mes],
             })
         if f_mes == UMBRAL - 1:
             fechas_f_mes = sorted(faltas_sin_sustento[faltas_sin_sustento["dni"] == dni]["fecha"])
             insights.append({
-                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta", "icono": "🔶", "severidad": "baja",
+                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta_falta", "icono": "🛑", "severidad": "baja",
                 "mensaje": f"A una falta de activar la alerta formal de observación ({f_mes} este mes).",
                 "detalle_fechas": [f.strftime("%d/%m") for f in fechas_f_mes],
             })
@@ -140,3 +150,94 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
     orden_severidad = {"alta": 0, "media": 1, "baja": 2}
     insights.sort(key=lambda i: (orden_severidad.get(i["severidad"], 9), i["nombre"]))
     return insights
+
+
+def _clip(x):
+    return max(0.0, min(100.0, x))
+
+
+def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None):
+    """Resumen de perfil del mes en curso -- 4 métricas normalizadas a 0-100
+    (más alto = mejor), 25% de peso cada una: Cumplimiento de horas (mismo
+    % sin faltas ya validado en Horas semanales), Tardanzas, Faltas SIN
+    sustento (mismo criterio que alertas.py) y Salidas anticipadas (mismo
+    umbral de 10 min que ya usa alertas.py), todas sobre los días hábiles ya
+    transcurridos del mes. Para TODO el equipo visible de `usuario_actual`
+    (o un solo `dni_filtro`), no solo quienes ya tienen una señal arriba."""
+    hoy = hoy or dt.date.today()
+    mes_desde = hoy.replace(day=1)
+
+    detalle_mes = calcular_detalle_semana(mes_desde, hoy, usuario_actual, dni_filtro=dni_filtro)
+    if not len(detalle_mes):
+        return []
+
+    resumen_mes = resumen_por_persona(detalle_mes).set_index("dni")
+    dias_habiles = detalle_mes[detalle_mes["horas_a_trabajar"] > 0].groupby("dni").size()
+    tardanzas = detalle_mes[detalle_mes["estado_base"] == "TARDANZA"].groupby("dni").size()
+
+    faltas_solo = detalle_mes[detalle_mes["estado_base"] == "FALTA"]
+    faltas_sin_sustento = faltas_solo[~faltas_solo["comentario"].apply(_tiene_sustento)] if len(faltas_solo) else faltas_solo
+    faltas = faltas_sin_sustento.groupby("dni").size()
+
+    # Salidas anticipadas -- calcular_detalle_semana() no trae
+    # salida_anticipada_min, se consulta aparte (mismo umbral/columna que ya
+    # usa alertas.py para su propia alerta "salida_temprana").
+    session = get_session()
+    try:
+        q = (
+            session.query(ClasificacionDiaria.dni, ClasificacionDiaria.salida_anticipada_min)
+            .join(Persona, Persona.dni == ClasificacionDiaria.dni)
+            .filter(ClasificacionDiaria.fecha >= mes_desde, ClasificacionDiaria.fecha <= hoy)
+        )
+        if dni_filtro:
+            q = q.filter(ClasificacionDiaria.dni == dni_filtro)
+        else:
+            cond_scope = condicion_scope(Persona, usuario_actual)
+            if cond_scope is not None:
+                q = q.filter(cond_scope)
+        filas_salida = q.all()
+    finally:
+        session.close()
+    salidas = pd.DataFrame(filas_salida, columns=["dni", "salida_anticipada_min"])
+    if len(salidas):
+        salidas_tempranas = salidas[salidas["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN].groupby("dni").size()
+    else:
+        salidas_tempranas = pd.Series(dtype=int)
+
+    resumen = []
+    for dni in detalle_mes["dni"].unique():
+        dh = int(dias_habiles.get(dni, 0))
+        if dh == 0:
+            continue
+        nombre = detalle_mes[detalle_mes["dni"] == dni]["nombre"].iloc[0]
+
+        pct_cumpl = resumen_mes.loc[dni, "pct_cumplimiento_sin_faltas"] if dni in resumen_mes.index else None
+        comp_cumplimiento = _clip(float(pct_cumpl)) if pct_cumpl is not None and pd.notna(pct_cumpl) else None
+        tardanza_pct = round(int(tardanzas.get(dni, 0)) / dh * 100, 1)
+        falta_pct = round(int(faltas.get(dni, 0)) / dh * 100, 1)
+        salida_pct = round(int(salidas_tempranas.get(dni, 0)) / dh * 100, 1)
+        comp_tardanza = _clip(100.0 - tardanza_pct)
+        comp_falta = _clip(100.0 - falta_pct)
+        comp_salida = _clip(100.0 - salida_pct)
+
+        componentes = [c for c in (comp_cumplimiento, comp_tardanza, comp_falta, comp_salida) if c is not None]
+        if not componentes:
+            continue
+        puntaje = sum(componentes) / len(componentes)
+
+        if puntaje >= BANDA_EXCELENTE:
+            carita, etiqueta = "😊", "Excelente"
+        elif puntaje >= BANDA_SEGUIMIENTO:
+            carita, etiqueta = "😐", "Seguimiento"
+        else:
+            carita, etiqueta = "😟", "Evaluar"
+
+        resumen.append({
+            "dni": dni, "nombre": nombre,
+            "cumplimiento": round(comp_cumplimiento, 1) if comp_cumplimiento is not None else None,
+            "tardanza_pct": tardanza_pct, "falta_pct": falta_pct, "salida_pct": salida_pct,
+            "puntaje": round(puntaje, 1), "carita": carita, "etiqueta": etiqueta,
+        })
+
+    resumen.sort(key=lambda r: r["puntaje"])
+    return resumen

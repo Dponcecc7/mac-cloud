@@ -56,7 +56,7 @@
         <div class="nav-pages">
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
           <a href="{{ url_for('personal') }}">Personal</a>
-          <a href="{{ url_for('reportes.horas') }}">Reportes</a>
+          <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>

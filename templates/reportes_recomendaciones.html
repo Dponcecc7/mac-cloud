@@ -50,6 +50,22 @@
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
 
+    .subtitle { font-size:15px; font-weight:800; margin:26px 0 12px; }
+    .perfil-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+    .perfil-card { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); border-left:4px solid var(--line); }
+    .perfil-card.excelente { border-left-color:var(--ok); }
+    .perfil-card.seguimiento { border-left-color:var(--warn); }
+    .perfil-card.evaluar { border-left-color:var(--bad); }
+    .perfil-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+    .perfil-top .nombre { font-weight:700; font-size:13.5px; color:inherit; text-decoration:none; }
+    .perfil-top .nombre:hover { color:var(--brand); text-decoration:underline; }
+    .perfil-puntaje { display:flex; align-items:center; gap:5px; font-size:13px; font-weight:800; white-space:nowrap; }
+    .perfil-puntaje .carita { font-size:16px; }
+    .perfil-etiqueta { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:999px; background:var(--bg); color:var(--muted); }
+    .perfil-metricas { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; font-size:11.5px; }
+    .perfil-metricas .metrica { display:flex; justify-content:space-between; gap:6px; color:var(--muted); }
+    .perfil-metricas .metrica .val { font-weight:700; color:var(--ink); }
+
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -63,6 +79,7 @@
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
 
       .insight { padding:12px 14px; gap:10px; }
+      .perfil-grid { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -75,7 +92,7 @@
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
           <a href="{{ url_for('personal') }}">Personal</a>
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-          <a href="{{ url_for('reportes.horas') }}" class="active">Reportes</a>
+          <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
@@ -91,9 +108,9 @@
   <div class="wrap">
     <h1 class="title">Reportes</h1>
     <nav class="tabs">
+      <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Desempeño</a>
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
       <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
-      <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Recomendaciones</a>
       <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
     </nav>
 
@@ -120,6 +137,29 @@
         </div>
       </div>
       {% endfor %}
+    {% endif %}
+
+    <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} este mes</h2>
+    <p class="note">Puntaje = promedio de 4 métricas del mes en curso (25% cada una): Cumplimiento de horas, Tardanzas, Faltas (sin descanso médico/licencia/feriado regional) y Salidas antes de hora, todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
+    {% if not perfiles %}
+      <p class="empty">Sin datos de clasificación este mes todavía.</p>
+    {% else %}
+    <div class="perfil-grid">
+      {% for p in perfiles %}
+      <div class="perfil-card {{ p.etiqueta|lower }}">
+        <div class="perfil-top">
+          <a class="nombre" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre|title }}</a>
+          <span class="perfil-puntaje"><span class="carita">{{ p.carita }}</span> {{ p.puntaje }} <span class="perfil-etiqueta">{{ p.etiqueta }}</span></span>
+        </div>
+        <div class="perfil-metricas">
+          <div class="metrica"><span>Cumplimiento</span><span class="val">{{ p.cumplimiento if p.cumplimiento is not none else '—' }}{{ '%' if p.cumplimiento is not none }}</span></div>
+          <div class="metrica"><span>Tardanzas</span><span class="val">{{ p.tardanza_pct }}%</span></div>
+          <div class="metrica"><span>Faltas</span><span class="val">{{ p.falta_pct }}%</span></div>
+          <div class="metrica"><span>Salidas antes de hora</span><span class="val">{{ p.salida_pct }}%</span></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
     {% endif %}
   </div>
 </body>

@@ -19,7 +19,7 @@ from cobertura import matriz_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
-from recomendaciones import insights_equipo
+from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import condicion_scope
 from vacaciones import calcular_viajes_vacaciones
 
@@ -126,9 +126,10 @@ def alertas():
 @login_required
 def recomendaciones():
     lista = insights_equipo(current_user)
+    perfiles = resumen_perfil_equipo(current_user)
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
-        insights=lista,
+        insights=lista, perfiles=perfiles,
     )
 
 

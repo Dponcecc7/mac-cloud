@@ -114,7 +114,7 @@
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
           <a href="{{ url_for('personal') }}">Personal</a>
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-          <a href="{{ url_for('reportes.horas') }}" class="active">Reportes</a>
+          <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
@@ -128,7 +128,7 @@
   </header>
 
   <div class="wrap">
-    <a class="volver" href="{{ url_for('reportes.horas') }}">← Volver a Reportes</a>
+    <a class="volver" href="{{ url_for('reportes.recomendaciones') }}">← Volver a Reportes</a>
     <h1 class="title">{{ persona.nombre_completo|title }}</h1>
     <p class="subtitulo">{{ (persona.rol or '—')|title }} · {{ (persona.ciudad or '—')|title }} · DNI {{ persona.dni }}</p>
 
