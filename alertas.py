@@ -97,7 +97,10 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
                 "cantidad": cantidad, "nivel": nivel,
                 "mensaje": f"{mensaje_base} ({nivel}x -- {cantidad} {tipo}s este periodo)",
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
-                "motivos": sorted({(c or "Sin motivo").strip() for c in grupo["comentario"]}) if tipo == "falta" else [],
+                # pd.isna(), no "c or ..." -- un comentario vacío puede llegar
+                # como NaN de pandas (float), y "NaN or x" da NaN (NaN es
+                # truthy), así que se colaba hasta el .strip() y explotaba.
+                "motivos": sorted({("Sin motivo" if pd.isna(c) else str(c).strip()) for c in grupo["comentario"]}) if tipo == "falta" else [],
             })
 
     # Trabajó en canal distinto al asignado -- informativo, no disciplinario

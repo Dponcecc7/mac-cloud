@@ -169,10 +169,17 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
                 entrada_real = pd.to_timedelta(str(hora_ent_corr))
             if pd.notna(hora_sal_corr):
                 salida_real = pd.to_timedelta(str(hora_sal_corr))
-            diff_entrada_min = (entrada_real - entrada_esp_td).total_seconds() / 60
-            diff_salida_min = (salida_esp_td - salida_real).total_seconds() / 60
-            estado_base = f"TARDANZA ({diff_entrada_min:.0f} min)" if diff_entrada_min > TOLERANCIA_MIN else "ASISTIÓ A TIEMPO"
-            salida_anticipada = round(diff_salida_min) if diff_salida_min > 0 else None
+            # Corrección parcial (solo entrada O solo salida, día sin
+            # marcación real de la app -- entrada_real/salida_real arrancan
+            # en None): cada diff se calcula solo si ese lado tiene un valor
+            # real, si no "salida_esp_td - None" tira TypeError y aborta
+            # toda la corrida del motor para ese día.
+            if pd.notna(entrada_real):
+                diff_entrada_min = (entrada_real - entrada_esp_td).total_seconds() / 60
+                estado_base = f"TARDANZA ({diff_entrada_min:.0f} min)" if diff_entrada_min > TOLERANCIA_MIN else "ASISTIÓ A TIEMPO"
+            if pd.notna(salida_real):
+                diff_salida_min = (salida_esp_td - salida_real).total_seconds() / 60
+                salida_anticipada = round(diff_salida_min) if diff_salida_min > 0 else None
             sin_marcacion_valida = False
             fuente = "Corregido manualmente (Tabla 3)"
             if comentario_sup_norm.startswith((

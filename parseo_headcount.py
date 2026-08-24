@@ -16,8 +16,15 @@ def parsear_maestro(fuente):
     m = pd.read_excel(fuente, sheet_name="Maestro Headcount", header=3).dropna(how="all")
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
-    m = m[pd.to_numeric(m["DNI"], errors="coerce").notna()].copy()
-    m["DNI"] = m["DNI"].astype(str).str.strip()
+    # Ojo: si ALGUNA fila de la columna DNI viene vacía (fila suelta, nota,
+    # plantilla sin borrar), pandas sube toda la columna a float64 -- y eso
+    # sobrevive al filtro de abajo (filtrar filas no cambia el dtype), así
+    # que ".astype(str)" sobre la columna ORIGINAL deja "18074336.0" en vez
+    # de "18074336" para TODOS los DNIs válidos. Se convierte a int64 antes
+    # de castear a texto para que eso no pase.
+    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
+    m = m[dni_num.notna()].copy()
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     return m
 
 
@@ -25,8 +32,10 @@ def parsear_patron(fuente):
     p = pd.read_excel(fuente, sheet_name="Patrón recurrente", header=3).dropna(how="all")
     p.columns = [str(c).strip() for c in p.columns]
     p = p.rename(columns={p.columns[0]: "DNI"})
-    p = p[pd.to_numeric(p["DNI"], errors="coerce").notna()].copy()
-    p["DNI"] = p["DNI"].astype(str).str.strip()
+    # Mismo gotcha que parsear_maestro() -- ver comentario ahí.
+    dni_num = pd.to_numeric(p["DNI"], errors="coerce")
+    p = p[dni_num.notna()].copy()
+    p["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
     return p
 
 

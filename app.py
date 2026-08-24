@@ -64,7 +64,19 @@ def _motivo_limpio(comentario):
 
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-no-usar-en-produccion")
+    _secret_key = os.environ.get("SECRET_KEY")
+    if not _secret_key:
+        # El repo es público -- este valor de respaldo queda visible en el
+        # código fuente, así que si SECRET_KEY llegara a faltar en Render
+        # (env var borrada, redeploy mal configurado) cualquiera podría
+        # firmar una cookie de sesión válida. No se aborta el arranque
+        # (rompería `python app.py` local sin nada configurado) pero se
+        # avisa fuerte en los logs para que se note enseguida.
+        print("ADVERTENCIA: SECRET_KEY no está seteada -- usando un valor de "
+              "respaldo público (visible en el repo). Configurar SECRET_KEY "
+              "en las variables de entorno de Render.")
+        _secret_key = "dev-only-no-usar-en-produccion"
+    app.config["SECRET_KEY"] = _secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # Cookie de sesion solo por HTTPS -- Render sirve todo por HTTPS, asi
@@ -101,7 +113,13 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(Usuario, int(user_id))
+        # Flask-Login espera None (no una excepción) para "no autenticado" --
+        # una cookie de sesión vieja/corrupta con un user_id no numérico
+        # tiraba 500 en TODA request, incluso al intentar entrar a /login.
+        try:
+            return db.session.get(Usuario, int(user_id))
+        except (TypeError, ValueError):
+            return None
 
     from auth import bp as auth_bp
     from admin import bp as admin_bp

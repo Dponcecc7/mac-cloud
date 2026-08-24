@@ -167,6 +167,8 @@
             {% for f in filas %}
             {% set pct = f.pct_cumplimiento_sin_faltas %}
             {% set clase_pct = 'ok' if pct is not none and pct >= 95 else ('warn' if pct is not none and pct >= 80 else 'bad') %}
+            {% set pct_full = f.pct_cumplimiento %}
+            {% set clase_pct_full = 'ok' if pct_full is not none and pct_full >= 95 else ('warn' if pct_full is not none and pct_full >= 80 else 'bad') %}
             <tr>
               <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ f.nombre|title }}</a></td>
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
@@ -177,7 +179,7 @@
               <td class="num" data-label="Horas a trabajar">{{ f.horas_a_trabajar }}</td>
               <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
               <td class="num" data-label="Diferencia (h)">{{ f.diferencia_h }}</td>
-              <td class="num" data-label="% Cumplimiento">{% if f.pct_cumplimiento is not none %}<span class="badge-pct {{ clase_pct }}">{{ f.pct_cumplimiento }}%</span>{% else %}—{% endif %}</td>
+              <td class="num" data-label="% Cumplimiento">{% if pct_full is not none %}<span class="badge-pct {{ clase_pct_full }}">{{ pct_full }}%</span>{% else %}—{% endif %}</td>
               <td class="num" data-label="% Cumpl. sin faltas">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}

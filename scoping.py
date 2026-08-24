@@ -34,7 +34,7 @@ def condicion_scope(persona_model, usuario_actual):
         # sí mismos en su propia lista de mercaderistas (Davor, 2026-08-24:
         # "no tendria sentido").
         return (persona_model.supervisor_dni == dni_normalizado) & (persona_model.dni != dni_normalizado)
-    if usuario_actual.cliente_id_athena:
+    if usuario_actual.cliente_id_athena is not None:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
         ]
