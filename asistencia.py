@@ -590,6 +590,20 @@ def actualizar():
     )
 
 
+@bp.get("/actualizar")
+@login_required
+def actualizar_get():
+    # A diferencia de /guardar y /marcar (que redirigen tras el POST), esta
+    # vista renderiza el resultado directo en la URL del POST -- si el
+    # navegador vuelve a pedir esa misma URL más tarde (recuperar pestaña
+    # tras cerrar Chrome, refrescar, etc.) lo hace por GET, sin el body del
+    # formulario, y Flask tira "Método no permitido" (Davor, 2026-08-24: se
+    # quedó viendo esa pantalla en blanco). No dispara el workflow de nuevo
+    # (eso sería un GET con efecto secundario real) -- solo manda de vuelta
+    # al reporte del día.
+    return redirect(url_for("asistencia.reporte"))
+
+
 @bp.get("/estado_workflow")
 @login_required
 def estado_workflow():
