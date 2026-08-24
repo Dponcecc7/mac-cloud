@@ -278,13 +278,19 @@ def _pendientes_de_marcar(filas):
 
 
 def _ya_marcaron(filas):
-    """Personas del equipo que sí tienen una hora de entrada real hoy --
-    igual al panel de asistencia de la Power App, ordenadas por hora de su
-    primera marcación (entrada_real ya es esa primera marcación, ver
-    motor_clasificacion.py::clasificar_dia() -- min() de las visitas del día)."""
+    """Personas del equipo que tienen al menos una visita REAL del
+    aplicativo hoy. Usa `canal_hoy` (canales_marcados), no `entrada_real`
+    -- una corrección manual de hora en Tabla 3 pisa `entrada_real` igual
+    aunque no haya ninguna visita real ese día (ver docstring de
+    _marcado_manual_sin_sincronizar), mientras que `canales_marcados` solo
+    se llena a partir de visitas reales y el bloque de corrección de
+    motor_clasificacion.py nunca lo toca -- es la señal confiable de "esto
+    es una marcación real, no una que le puso el supervisor" (Davor,
+    2026-08-24: reportó ver a alguien en "Ya marcaron" que en realidad
+    todavía no había marcado, solo tenía la hora que él le puso a mano)."""
     return sorted(
-        (f for f in filas if f["entrada_real"]),
-        key=lambda f: f["entrada_real"],
+        (f for f in filas if f["canal_hoy"]),
+        key=lambda f: f["entrada_real"] or "",
     )
 
 
@@ -300,16 +306,22 @@ def _faltas_vacaciones_vacantes(filas):
 
 
 def _marcado_manual_sin_sincronizar(filas):
-    """Gente a la que se le puso "Asistió"/"Apoyo zona" a mano (reporte
-    madrugador, antes de que el aplicativo sincronice) y que a esta hora
-    TODAVÍA no tiene ninguna marcación real -- reusa "entrada_pendiente"
-    (mismo campo que ya usa el aviso ⚠️ en Reporte diario/Enviar a cliente,
-    MARCADOR_SIN_APP en el Estado) en vez de mirar el historial de
-    correcciones_web, que puede tener una entrada vieja de "Asistió" ya
-    superada por una corrección de hora posterior (Davor, 2026-08-24:
-    "debería ver si a alguien se le puso Asistió manualmente... aún sigue
-    sin marcar")."""
-    return [f for f in filas if f["entrada_pendiente"]]
+    """Gente confirmada a mano hoy -- con el botón rápido "Asistió"/"Apoyo
+    zona" (`entrada_pendiente`, MARCADOR_SIN_APP en el Estado) O con una
+    hora tipeada directamente (`entrada_corregida`, ej. para poder mandar
+    el reporte temprano con captura) -- que a esta hora TODAVÍA no tiene
+    ninguna visita real del aplicativo (`canal_hoy` vacío). Antes esto
+    miraba solo `entrada_pendiente`, que no cubría el caso de una hora
+    tipeada (`entrada_corregida`) -- ese caso queda con `entrada_real`
+    poblado igual (por la hora que se tipeó), así que sin este chequeo
+    aparte una persona así ni salía acá ni se distinguía de una marcación
+    real en "Ya marcaron" (Davor, 2026-08-24: "hoy le puse 08:00 María
+    Calderón... pero aún no marca... confirmé porque necesité mandar mi
+    asistencia con las capturas")."""
+    return [
+        f for f in filas
+        if not f["canal_hoy"] and (f["entrada_corregida"] or f["entrada_pendiente"])
+    ]
 
 
 def _reemplazos_hoy(fecha, usuario_actual):

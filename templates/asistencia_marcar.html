@@ -228,14 +228,14 @@
 
     {% if sin_sincronizar %}
     <div class="panel" style="padding:14px 16px; border-left:4px solid var(--warn);">
-      <p class="panel-title" style="margin-bottom:6px;">Marcado "Asistió" a mano, todavía sin sincronizar ({{ sin_sincronizar|length }})</p>
-      <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les puso Asistió/Apoyo manualmente (para que el reporte salga temprano) pero a esta hora el aplicativo todavía no registró ninguna marcación real -- revisar si de verdad vinieron.</p>
+      <p class="panel-title" style="margin-bottom:6px;">Confirmados a mano, pendiente marcación ({{ sin_sincronizar|length }})</p>
+      <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les confirmó asistencia manualmente (botón rápido u hora tipeada, ej. para mandar el reporte temprano) pero el aplicativo todavía no registró ninguna visita real -- realizar seguimiento durante el día.</p>
       <div>
         {% for p in sin_sincronizar %}
         <div class="marcaron-row">
           <span class="hora">—</span>
           <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
-          <span class="badge warn">Sin marcación real</span>
+          <span class="badge warn">Pendiente marcación</span>
         </div>
         {% endfor %}
       </div>
