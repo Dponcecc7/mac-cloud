@@ -35,6 +35,7 @@ from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
 from scoping import condicion_scope
+from sqlalchemy.orm import aliased
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -287,6 +288,59 @@ def _ya_marcaron(filas):
     )
 
 
+def _faltas_vacaciones_vacantes(filas):
+    """Faltas/Vacaciones/Vacantes registradas hoy, resueltas o no -- para
+    revisar al cierre del día qué quedó cargado en total, no solo lo
+    todavía pendiente (a diferencia de _pendientes_de_marcar) (Davor,
+    2026-08-24)."""
+    return sorted(
+        (f for f in filas if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES")),
+        key=lambda f: (_estado_base(f["estado"]), f["mercaderista"]),
+    )
+
+
+def _marcado_manual_sin_sincronizar(filas):
+    """Gente a la que se le puso "Asistió"/"Apoyo zona" a mano (reporte
+    madrugador, antes de que el aplicativo sincronice) y que a esta hora
+    TODAVÍA no tiene ninguna marcación real -- reusa "entrada_pendiente"
+    (mismo campo que ya usa el aviso ⚠️ en Reporte diario/Enviar a cliente,
+    MARCADOR_SIN_APP en el Estado) en vez de mirar el historial de
+    correcciones_web, que puede tener una entrada vieja de "Asistió" ya
+    superada por una corrección de hora posterior (Davor, 2026-08-24:
+    "debería ver si a alguien se le puso Asistió manualmente... aún sigue
+    sin marcar")."""
+    return [f for f in filas if f["entrada_pendiente"]]
+
+
+def _reemplazos_hoy(fecha, usuario_actual):
+    """Personas dadas de alta HOY como reemplazo de una vacante (ver
+    reemplazos.py::procesar_reemplazo(), que estampa fecha_registro=hoy y
+    reemplaza_a_dni) -- para que el supervisor vea en la misma pantalla que
+    se procesó un reemplazo, no solo que una vacante desapareció."""
+    session = get_session()
+    try:
+        Reemplazada = aliased(Persona)
+        query = (
+            session.query(Persona, Reemplazada.nombre_completo)
+            .outerjoin(Reemplazada, Reemplazada.dni == Persona.reemplaza_a_dni)
+            .filter(Persona.fecha_registro == fecha, Persona.reemplaza_a_dni.isnot(None))
+        )
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas_reemplazo = query.all()
+    finally:
+        session.close()
+    return [
+        {
+            "nombre_nuevo": p.nombre_completo, "dni_nuevo": p.dni,
+            "nombre_reemplazado": nombre_reemplazada or p.reemplaza_a_dni,
+            "fecha_ingreso": p.fecha_ingreso,
+        }
+        for p, nombre_reemplazada in filas_reemplazo
+    ]
+
+
 def _fecha_mas_reciente_con_datos():
     session = get_session()
     try:
@@ -335,12 +389,16 @@ def marcar_vista():
     resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user)
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
+    faltas_vacaciones_vacantes = _faltas_vacaciones_vacantes(filas) if filas else []
+    sin_sincronizar = _marcado_manual_sin_sincronizar(filas) if filas else []
+    reemplazos = _reemplazos_hoy(fecha, current_user)
     fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
     return render_template(
         "asistencia_marcar.html", usuario=current_user, activo="marcar",
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
         pendientes=pendientes, marcaron=marcaron, motivos=_motivos_falta() if pendientes else None,
-        marcado=request.args.get("marcado"),
+        faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, sin_sincronizar=sin_sincronizar,
+        reemplazos=reemplazos, marcado=request.args.get("marcado"),
     )
 
 

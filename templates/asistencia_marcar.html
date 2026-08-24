@@ -226,6 +226,22 @@
     </div>
     {% endif %}
 
+    {% if sin_sincronizar %}
+    <div class="panel" style="padding:14px 16px; border-left:4px solid var(--warn);">
+      <p class="panel-title" style="margin-bottom:6px;">Marcado "Asistió" a mano, todavía sin sincronizar ({{ sin_sincronizar|length }})</p>
+      <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les puso Asistió/Apoyo manualmente (para que el reporte salga temprano) pero a esta hora el aplicativo todavía no registró ninguna marcación real -- revisar si de verdad vinieron.</p>
+      <div>
+        {% for p in sin_sincronizar %}
+        <div class="marcaron-row">
+          <span class="hora">—</span>
+          <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
+          <span class="badge warn">Sin marcación real</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     {% if marcaron %}
     <div class="panel" style="padding:14px 16px;">
       <p class="panel-title" style="margin-bottom:6px;">Ya marcaron ({{ marcaron|length }})</p>
@@ -236,6 +252,36 @@
           <span class="hora">{{ p.entrada_real[:5] }}</span>
           <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
           <span class="badge {{ 'warn' if eb == 'TARDANZA' else 'ok' }}">{{ 'Tardanza' if eb == 'TARDANZA' else 'Asistió' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if faltas_vacaciones_vacantes %}
+    <div class="panel" style="padding:14px 16px;">
+      <p class="panel-title" style="margin-bottom:6px;">Faltas / Vacaciones / Vacantes de hoy ({{ faltas_vacaciones_vacantes|length }})</p>
+      <div>
+        {% for p in faltas_vacaciones_vacantes %}
+        {% set eb = (p.estado or '').split(' (')[0] %}
+        {% set clase = {'FALTA':'warn', 'VACANTE':'warn'}.get(eb, 'ok') %}
+        <div class="marcaron-row">
+          <span class="badge {{ clase }}">{{ eb|title }}</span>
+          <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}{% if p.comentario_entrada %} · {{ p.comentario_entrada }}{% endif %}</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if reemplazos %}
+    <div class="panel" style="padding:14px 16px;">
+      <p class="panel-title" style="margin-bottom:6px;">Reemplazos procesados hoy ({{ reemplazos|length }})</p>
+      <div>
+        {% for r in reemplazos %}
+        <div class="marcaron-row">
+          <span class="badge ok">Reemplazo</span>
+          <div class="quien"><b>{{ r.nombre_nuevo|title }}</b> <span>reemplaza a {{ (r.nombre_reemplazado or '—')|title }} · desde {{ r.fecha_ingreso.strftime('%d/%m/%Y') if r.fecha_ingreso else '—' }}</span></div>
         </div>
         {% endfor %}
       </div>
