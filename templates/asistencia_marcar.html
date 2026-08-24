@@ -94,10 +94,20 @@
          arriba, botones grandes abajo en grilla de 2 columnas -- mucho mas
          facil de tocar bien en un telefono que botones de 24px pegados. */
       .pendiente-row { flex-direction:column; align-items:stretch; padding:12px 4px; gap:10px; }
-      .pendiente-row .quien { font-size:14px; }
+      /* .quien trae "flex:1 1 220px" del layout de escritorio (fila) --
+         220px ahí es un ANCHO. Al pasar .pendiente-row a columna, ese mismo
+         basis se reinterpreta como ALTO, y el nombre (2 líneas) quedaba con
+         ~170px de espacio vacío debajo antes de los botones. */
+      .pendiente-row .quien { flex:none; font-size:14px; }
       .pendiente-row form { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
       .pendiente-row .btn.sm { font-size:13.5px; padding:11px 8px; min-height:44px; width:100%; }
       .pendiente-row .ipt-filtro.sm { grid-column:1 / -1; font-size:14px; min-height:44px; width:100% !important; padding:9px 10px; }
+      /* "Vacante" no tiene pareja (a diferencia de Asistió+Apoyo y
+         Falta+Reemplazo) -- sin esto, el auto-placement de la grilla dejaba
+         una celda vacía al lado (el selector de Motivo, que sí ocupa el
+         ancho completo, empujaba a Vacante a quedar solo igual pero con un
+         hueco invisible de por medio). */
+      .pendiente-row form button[name="accion"][value="Vacante"] { grid-column:1 / -1; }
       .pendiente-row a.btn.sm { display:flex; align-items:center; justify-content:center; }
 
       .marcaron-row { flex-wrap:wrap; font-size:13.5px; padding:9px 4px; }
