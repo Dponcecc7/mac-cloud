@@ -297,6 +297,30 @@ def create_app():
             for d, fila in tendencia.iterrows()
         ]
 
+        # Puntos del gráfico de líneas, en % (0-100 en x e y) -- los puntos
+        # se dibujan como <div> posicionados por porcentaje (no <circle> de
+        # SVG) para que no salgan ovalados: el SVG usa preserveAspectRatio
+        # "none" para llenar todo el ancho del panel, así que un <circle>
+        # ahí adentro se estira de forma no uniforme y deja de ser redondo.
+        # El rango vertical usa el min/max real de los datos (con margen) en
+        # vez de 0-100 fijo, que aplastaba la línea contra el techo (el % de
+        # efectividad real casi siempre anda entre 75-100%).
+        if serie_tendencia:
+            pcts_dia = [d["pct"] for d in serie_tendencia]
+            min_pct, max_pct = min(pcts_dia), max(pcts_dia)
+            if max_pct == min_pct:
+                min_pct, max_pct = max(0.0, min_pct - 5), min(100.0, max_pct + 5)
+            else:
+                margen = (max_pct - min_pct) * 0.15
+                min_pct, max_pct = max(0.0, min_pct - margen), min(100.0, max_pct + margen)
+            n = len(serie_tendencia)
+            for i, d in enumerate(serie_tendencia):
+                d["x"] = round(i / (n - 1) * 100, 2) if n > 1 else 50.0
+                d["y"] = round(100 - (d["pct"] - min_pct) / (max_pct - min_pct) * 100, 1)
+            tendencia_puntos = " ".join(f"{d['x']},{d['y']}" for d in serie_tendencia)
+        else:
+            tendencia_puntos = ""
+
         resumen_persona = r.groupby(["dni", "nombre"]).agg(
             dias=("estado_base", "size"),
             falta=("estado_base", lambda s: int((s == "FALTA").sum())),
@@ -353,6 +377,7 @@ def create_app():
                 "incidencias": n_incidencias, "jornada_promedio": jornada_promedio,
             },
             "tendencia": serie_tendencia,
+            "tendencia_puntos": tendencia_puntos,
             "faltas_por_motivo": list(faltas_por_motivo.items()),
             "top_falta": top_falta,
             "top_tardanza": top_tardanza,

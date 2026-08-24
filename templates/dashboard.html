@@ -78,17 +78,20 @@
 
     .panel { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .grid2 { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; align-items:start; }
-    .grid4 { display:grid; grid-template-columns:0.85fr 0.85fr 1.3fr 1fr; gap:14px; align-items:start; }
+    .grid4 { display:grid; grid-template-columns:0.85fr 0.85fr 1.3fr 1fr; gap:14px; align-items:stretch; }
+    .grid4 .panel { display:flex; flex-direction:column; }
     @media (max-width: 860px) { .grid2, .grid4 { grid-template-columns:1fr; } .wrap { padding:0 16px 40px; } }
 
-    .chart { display:flex; align-items:flex-end; gap:4px; height:110px; margin-top:4px; overflow-x:auto;
-              padding-bottom:2px; border-bottom:1px solid var(--line); }
-    .chart-col { display:flex; flex-direction:column; align-items:center; min-width:14px; flex-shrink:0; }
-    .chart-bars { display:flex; align-items:flex-end; gap:2px; height:92px; }
-    .chart-bar { width:7px; border-radius:3px 3px 0 0; min-height:2px; transition:opacity .15s; }
-    .chart-bar.efectividad { background:linear-gradient(180deg, #dba26c, var(--brand)); width:16px; }
-    .chart-col:hover .chart-bar { opacity:.75; }
-    .chart-day { font-size:8px; color:var(--muted); margin-top:5px; white-space:nowrap; }
+    .chart-line-wrap { position:relative; height:92px; margin-top:4px; padding-bottom:2px; border-bottom:1px solid var(--line); }
+    .chart-line-svg { width:100%; height:100%; display:block; }
+    .chart-line-path { fill:none; stroke:var(--brand); stroke-width:2; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
+    .chart-line-dot {
+      position:absolute; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%;
+      background:var(--card); border:1.6px solid var(--brand); cursor:default;
+    }
+    .chart-line-dot:hover { background:var(--brand); }
+    .chart-days-line { display:flex; justify-content:space-between; margin-top:5px; }
+    .chart-day { font-size:8px; color:var(--muted); white-space:nowrap; }
     .legend { display:flex; gap:16px; font-size:11px; color:var(--muted); margin-top:8px; font-weight:600; }
     .legend span { display:inline-flex; align-items:center; gap:5px; }
     .swatch { width:9px; height:9px; border-radius:3px; display:inline-block; }
@@ -112,7 +115,7 @@
 
     .panel + .panel { margin-top:14px; }
     .empty { color:var(--muted); font-size:12px; padding:6px 0; }
-    .tabla-wrap { max-height:220px; overflow-y:auto; overflow-x:auto; }
+    .tabla-wrap { max-height:220px; overflow-y:auto; overflow-x:auto; flex:1; }
   </style>
 </head>
 <body>
@@ -189,15 +192,16 @@
           <h2 class="section">Tendencia diaria</h2>
           <div class="panel">
             {% if data.tendencia %}
-            <div class="chart">
+            <div class="chart-line-wrap">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="chart-line-svg">
+                <polyline points="{{ data.tendencia_puntos }}" class="chart-line-path"></polyline>
+              </svg>
               {% for d in data.tendencia %}
-              <div class="chart-col">
-                <div class="chart-bars">
-                  <div class="chart-bar efectividad" style="height: {{ d.pct|round(0, 'floor') }}px;" title="{{ d.dia }} · {{ d.pct }}% efectividad"></div>
-                </div>
-                <div class="chart-day">{{ d.dia }}</div>
-              </div>
+              <div class="chart-line-dot" style="left:{{ d.x }}%; top:{{ d.y }}%;" title="{{ d.dia }} · {{ d.pct }}% efectividad"></div>
               {% endfor %}
+            </div>
+            <div class="chart-days-line">
+              {% for d in data.tendencia %}<span class="chart-day">{{ d.dia }}</span>{% endfor %}
             </div>
             <div class="legend">
               <span><span class="swatch" style="background:var(--brand);"></span> % Efectividad (asistió a tiempo + tardanza)</span>
