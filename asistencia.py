@@ -148,16 +148,17 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
     `usuario_actual`: si se pasa, acota a las Personas visibles para ese
     usuario (ver scoping.py) -- sin esto, un analista de otro cliente veía
     nombres/DNI de todos los clientes, y un supervisor veía todo el equipo
-    en vez de solo el suyo. `rol_filtro`/`region_filtro`/`supervisor_filtro`:
-    filtros adicionales de Marcar asistencia (solo admin/analista, ver
-    _filtros_marcar()), encima del scope de acceso, no en vez de."""
+    en vez de solo el suyo. `rol_filtro`/`region_filtro`/`supervisor_filtro`/
+    `ciudad_filtro`: filtros adicionales de Marcar asistencia (solo
+    admin/analista, ver _filtros_marcar()), encima del scope de acceso, no
+    en vez de."""
     feriados = _cargar_feriados()
     ayer = _dia_habil_anterior(fecha, feriados)
 
@@ -167,7 +168,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
         if cond_scope is not None:
             query_personas = query_personas.filter(cond_scope)
-        query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro)
+        query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
         personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
 
@@ -367,18 +368,21 @@ def _fecha_mas_reciente_con_datos():
 
 
 def _filtros_marcar():
-    """Filtros de Supervisor/Región/Rol en Marcar asistencia -- Davor,
-    2026-08-25: "poner filtro supervisor, region, rol, solo para el admin y
-    analista, para supervisor no deberia aparecer filtros". A diferencia de
-    reportes.py::_filtros_admin() (admin únicamente), acá también alcanza a
-    analista -- un analista ya está acotado a su propio cliente por
-    condicion_scope(), así que los desplegables igual solo muestran lo suyo."""
+    """Filtros de Supervisor/Región/Rol/Ciudad en Marcar asistencia --
+    Davor, 2026-08-25: "poner filtro supervisor, region, rol, solo para el
+    admin y analista, para supervisor no deberia aparecer filtros" +
+    "agrega tambien filtros de ciudad". Acá también alcanza a analista (a
+    diferencia de la versión anterior de reportes.py::_filtros_admin(), que
+    era solo-admin y se unificó a este mismo criterio) -- un analista ya
+    está acotado a su propio cliente por condicion_scope(), así que los
+    desplegables igual solo muestran lo suyo."""
     if current_user.rol == "supervisor":
-        return {"rol": "", "region": "", "supervisor": ""}, [], [], []
+        return {"rol": "", "region": "", "supervisor": "", "ciudad": ""}, [], [], [], []
     filtro_args = {
         "rol": request.args.get("rol") or "",
         "region": request.args.get("region") or "",
         "supervisor": request.args.get("supervisor") or "",
+        "ciudad": request.args.get("ciudad") or "",
     }
     session = get_session()
     try:
@@ -392,6 +396,7 @@ def _filtros_marcar():
 
         roles_disponibles = _valores(Persona.rol)
         regiones_disponibles = _valores(Persona.region)
+        ciudades_disponibles = _valores(Persona.ciudad)
 
         SupervisorPersona = aliased(Persona)
         q_sup = (
@@ -404,7 +409,7 @@ def _filtros_marcar():
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
-    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles
+    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles
 
 
 def _vista_reporte(fecha_str, vista):
@@ -442,10 +447,11 @@ def marcar_vista():
         fecha = dt.date.today()
         fecha_str = fecha.isoformat()
 
-    filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles = _filtros_marcar()
+    filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles = _filtros_marcar()
     resumen, filas, frescura = _cargar_reporte(
         fecha, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"],
     )
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
@@ -461,6 +467,7 @@ def marcar_vista():
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
         regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
+        ciudades_disponibles=ciudades_disponibles,
     )
 
 

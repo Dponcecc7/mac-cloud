@@ -42,17 +42,18 @@ def condicion_scope(persona_model, usuario_actual):
     return None
 
 
-def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None):
-    """Filtros de Rol/Región/Supervisor de Reportes (Davor, 2026-08-24) --
-    encima del scope de acceso (condicion_scope), no en vez de. Reportes.py
-    solo le pasa valores acá si el usuario es admin ("solo debe haber
-    filtros para el perfil admin, para los supervisores no debe haber
-    filtros"); para cualquier otro rol estos 3 argumentos quedan en None y
-    esta función no hace nada."""
+def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+    """Filtros de Rol/Región/Supervisor/Ciudad de Reportes y Marcar
+    asistencia (Davor, 2026-08-24/25) -- encima del scope de acceso
+    (condicion_scope), no en vez de. Solo admin/analista le pasan valores
+    acá ("para supervisor no debería aparecer filtros"); para supervisor
+    estos argumentos quedan en None y esta función no hace nada."""
     if rol_filtro:
         query = query.filter(persona_model.rol == rol_filtro)
     if region_filtro:
         query = query.filter(persona_model.region == region_filtro)
     if supervisor_filtro:
         query = query.filter(persona_model.supervisor_dni == supervisor_filtro)
+    if ciudad_filtro:
+        query = query.filter(persona_model.ciudad == ciudad_filtro)
     return query

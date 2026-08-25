@@ -31,12 +31,12 @@ BANDA_SEGUIMIENTO = 85
 
 
 def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
-                     rol_filtro=None, region_filtro=None, supervisor_filtro=None):
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Devuelve la lista de insights/alertas predictivas para el equipo
     visible de `usuario_actual` -- o para un solo `dni_filtro` (ficha
     individual, el acceso ya se valida aparte). `rol_filtro`/`region_filtro`/
-    `supervisor_filtro`: filtros extra de Reportes (solo admin, ver
-    scoping.aplicar_filtros_extra)."""
+    `supervisor_filtro`/`ciudad_filtro`: filtros extra de Reportes (solo
+    admin/analista, ver scoping.aplicar_filtros_extra)."""
     hoy = hoy or dt.date.today()
     anio_actual, num_actual, _ = hoy.isocalendar()
     inicio_actual, _ = semana_iso(anio_actual, num_actual)
@@ -45,6 +45,7 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
     detalle = calcular_detalle_semana(
         desde, hoy, usuario_actual, dni_filtro=dni_filtro,
         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+        ciudad_filtro=ciudad_filtro,
     )
     if not len(detalle):
         return []
@@ -167,7 +168,7 @@ def _clip(x):
 
 
 def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
-                           rol_filtro=None, region_filtro=None, supervisor_filtro=None):
+                           rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Resumen de perfil del mes en curso -- 4 métricas normalizadas a 0-100
     (más alto = mejor), combinadas con PESO_CUMPLIMIENTO/PESO_FALTA/
     PESO_TARDANZA/PESO_SALIDA: Cumplimiento de horas (mismo % sin faltas ya
@@ -176,14 +177,15 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
     que ya usa alertas.py), todas sobre los días hábiles ya transcurridos
     del mes. Para TODO el equipo visible de `usuario_actual` (o un solo
     `dni_filtro`), no solo quienes ya tienen una señal arriba.
-    `rol_filtro`/`region_filtro`/`supervisor_filtro`: filtros extra de
-    Reportes (solo admin, ver scoping.aplicar_filtros_extra)."""
+    `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`: filtros
+    extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra)."""
     hoy = hoy or dt.date.today()
     mes_desde = hoy.replace(day=1)
 
     detalle_mes = calcular_detalle_semana(
         mes_desde, hoy, usuario_actual, dni_filtro=dni_filtro,
         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+        ciudad_filtro=ciudad_filtro,
     )
     if not len(detalle_mes):
         return []
@@ -212,7 +214,7 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 q = q.filter(cond_scope)
-            q = aplicar_filtros_extra(q, Persona, rol_filtro, region_filtro, supervisor_filtro)
+            q = aplicar_filtros_extra(q, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
         filas_salida = q.all()
     finally:
         session.close()

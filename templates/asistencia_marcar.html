@@ -226,6 +226,10 @@
           <option value="">Rol: todos</option>
           {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
         </select>
+        <select name="ciudad">
+          <option value="">Ciudad: todas</option>
+          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
         <button class="btn primary" type="submit">Aplicar filtros</button>
       </form>
     </div>
