@@ -302,11 +302,39 @@
       <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les confirmó asistencia manualmente (botón rápido u hora tipeada, ej. para mandar el reporte temprano) pero el aplicativo todavía no registró ninguna visita real -- realizar seguimiento durante el día.</p>
       <div>
         {% for p in sin_sincronizar %}
+        {% if usuario.rol == "supervisor" %}
         <div class="marcaron-row">
           <span class="hora">—</span>
           <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
           <span class="badge warn">Pendiente marcación</span>
         </div>
+        {% else %}
+        <details class="marcaron-item">
+          <summary>
+            <div class="marcaron-row">
+              <span class="hora">—</span>
+              <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
+              <span class="badge warn">Pendiente marcación</span>
+              <span class="editar-txt">Editar</span>
+            </div>
+          </summary>
+          <form method="post" action="{{ url_for('asistencia.guardar') }}" class="marcaron-editar">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <input type="hidden" name="vista" value="marcar">
+            <input type="hidden" name="dni" value="{{ p.dni }}">
+            <label class="campo-mini">Corregir hora de entrada<input type="time" name="entrada_corr_{{ p.dni }}"></label>
+            <label class="campo-mini">Colocar hora de salida (hoy, sin esperar a mañana)<input type="time" name="salida_corr_hoy_{{ p.dni }}"></label>
+            <span class="campo-mini-lbl">o convertir a Falta (nunca llegó)</span>
+            <select name="motivo_falta_{{ p.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+              <option value="">No convertir</option>
+              {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <input type="text" name="detalle_falta_{{ p.dni }}" class="comentario-falta" placeholder="Detalle adicional (opcional)" style="display:none;">
+            <button class="btn sm info" type="submit">Guardar</button>
+          </form>
+        </details>
+        {% endif %}
         {% endfor %}
       </div>
     </div>
@@ -362,10 +390,36 @@
         {% for p in faltas_vacaciones_vacantes %}
         {% set eb = (p.estado or '').split(' (')[0] %}
         {% set clase = {'FALTA':'warn', 'VACANTE':'warn'}.get(eb, 'ok') %}
+        {% if usuario.rol == "supervisor" %}
         <div class="marcaron-row">
           <span class="badge {{ clase }}">{{ eb|title }}</span>
           <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}{% if p.comentario_entrada %} · {{ p.comentario_entrada }}{% endif %}</span></div>
         </div>
+        {% else %}
+        <details class="marcaron-item">
+          <summary>
+            <div class="marcaron-row">
+              <span class="badge {{ clase }}">{{ eb|title }}</span>
+              <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}{% if p.comentario_entrada %} · {{ p.comentario_entrada }}{% endif %}</span></div>
+              <span class="editar-txt">Editar</span>
+            </div>
+          </summary>
+          <form method="post" action="{{ url_for('asistencia.marcar') }}" class="marcaron-editar">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="dni" value="{{ p.dni }}">
+            <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
+            <button class="btn sm info" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo</button>
+            <button class="btn sm warn" type="submit" name="accion" value="Vacante">Vacante</button>
+            <select name="motivo" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+              <option value="">Cambiar motivo...</option>
+              {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <input type="text" name="comentario" class="comentario-falta" placeholder="Detalle adicional (opcional)" style="display:none;">
+            <button class="btn sm bad" type="submit" name="accion" value="Falta">✕ Falta</button>
+          </form>
+        </details>
+        {% endif %}
         {% endfor %}
       </div>
     </div>

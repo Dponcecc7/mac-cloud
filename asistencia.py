@@ -462,7 +462,8 @@ def marcar_vista():
     return render_template(
         "asistencia_marcar.html", usuario=current_user, activo="marcar",
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
-        pendientes=pendientes, marcaron=marcaron, motivos=_motivos_falta() if (pendientes or marcaron) else None,
+        pendientes=pendientes, marcaron=marcaron,
+        motivos=_motivos_falta() if (pendientes or marcaron or sin_sincronizar or faltas_vacaciones_vacantes) else None,
         faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, sin_sincronizar=sin_sincronizar,
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
@@ -545,6 +546,13 @@ def guardar():
         comentario_salida = request.form.get(f"comentario_salida_{dni}", "").strip()
         entrada_corr = request.form.get(f"entrada_corr_{dni}", "").strip() if vista in ("reporte", "marcar") else ""
         salida_corr = request.form.get(f"salida_corr_{dni}", "").strip() if vista == "reporte" else ""
+        # "Confirmados a mano, pendiente marcación" (Marcar asistencia) --
+        # gente sin equipo/app, el supervisor pone la hora de salida de HOY
+        # directo a fin de día en vez de esperar a corregirla mañana desde
+        # "Reporte diario" (que siempre corrige la salida de AYER, ver
+        # salida_corr arriba). Campo separado a propósito, para no pisar el
+        # significado de salida_corr_{dni} en el resto de las vistas.
+        salida_corr_hoy = request.form.get(f"salida_corr_hoy_{dni}", "").strip() if vista == "marcar" else ""
 
         # "Ya marcaron" (Marcar asistencia) arma el comentario desde un
         # Motivo + Detalle separados en vez de un solo cuadro de texto libre
@@ -576,10 +584,10 @@ def guardar():
         if comentario_entrada.upper().startswith("FALTA") and entrada_corr:
             entrada_corr = ""
 
-        if comentario_entrada or comentario_salida or entrada_corr or salida_corr:
+        if comentario_entrada or comentario_salida or entrada_corr or salida_corr or salida_corr_hoy:
             ediciones.append({
                 "dni": dni, "comentario_entrada": comentario_entrada, "comentario_salida": comentario_salida,
-                "entrada_corr": entrada_corr, "salida_corr": salida_corr,
+                "entrada_corr": entrada_corr, "salida_corr": salida_corr, "salida_corr_hoy": salida_corr_hoy,
             })
 
     endpoint_vista = {"cliente": "asistencia.cliente", "marcar": "asistencia.marcar_vista"}.get(vista, "asistencia.reporte")
@@ -625,6 +633,14 @@ def guardar():
                     dni=e["dni"], fecha=ayer,
                     comentario_salida=e["comentario_salida"] or None,
                     hora_salida_corregida=e["salida_corr"] or None,
+                    registrado_por=current_user.email,
+                ))
+            if e.get("salida_corr_hoy"):
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, hora_sal=e["salida_corr_hoy"])
+                fila_libre += 1
+                correcciones_web.append(CorreccionWeb(
+                    dni=e["dni"], fecha=fecha,
+                    hora_salida_corregida=e["salida_corr_hoy"],
                     registrado_por=current_user.email,
                 ))
 
