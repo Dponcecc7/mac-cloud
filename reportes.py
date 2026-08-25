@@ -17,8 +17,9 @@ from sqlalchemy.orm import aliased
 from alertas import alertas_periodo
 from asistencia import _homologar_motivo
 from cobertura import matriz_cobertura
-from dimension_models import Persona, get_session
+from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
+from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import condicion_scope
@@ -355,6 +356,16 @@ def ficha(dni):
             .order_by(ClasificacionDiaria.fecha.desc())
             .all()
         )
+
+        # Historial de cambios (overrides de horario/canal/supervisor/zona/
+        # refrigerio) vigentes para esta persona -- ya se validó el scope de
+        # `persona` arriba, no hace falta repetirlo acá.
+        historial_persona = (
+            session.query(HistorialCambio)
+            .filter(HistorialCambio.dni == dni)
+            .order_by(HistorialCambio.fecha_desde.desc())
+            .all()
+        )
     finally:
         session.close()
 
@@ -448,4 +459,5 @@ def ficha(dni):
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
+        historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
     )

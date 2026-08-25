@@ -94,6 +94,7 @@
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
           <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">

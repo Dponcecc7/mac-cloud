@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Historial de cambios</title>
+  <style>
+    :root {
+      --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef;
+      --brand:#2f6fb0; --ok:#16a34a; --ok-bg:#dcfce7; --bad:#dc2626; --bad-bg:#fee2e2;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1200px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1200px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e0ecf8; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#a8c3dc; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e0ecf8; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:12.5px; margin:0 0 18px; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:20px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 14px; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
+    th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+    td.comentario { white-space:normal; min-width:160px; color:var(--muted); }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
+    a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
+    .dni { color:var(--muted); font-size:11px; }
+
+    .filtros { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros label { display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+    .filtros input, .filtros select { padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:12.5px; background:var(--bg); color:var(--ink); }
+
+    form.crear label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+    form.crear input, form.crear select, form.crear textarea {
+      width:100%; padding:8px 10px; margin-bottom:12px; border:1px solid var(--line);
+      border-radius:8px; box-sizing:border-box; font:inherit; font-size:13px; background:var(--bg); color:var(--ink);
+    }
+    form.crear .fila2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    form.inline { display:inline; }
+    button { padding:9px 16px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:12.5px; }
+    button.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+    button.borrar { background:var(--bad-bg); color:var(--bad); }
+    .acciones { display:flex; gap:6px; }
+
+    .ayuda { font-size:11.5px; color:var(--muted); background:var(--bg); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; line-height:1.6; }
+    .ayuda b { color:var(--ink); }
+
+    .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
+    .empty { color:var(--muted); font-size:13px; padding:14px 0; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+      .panel { padding:14px !important; border-radius:12px; }
+      .filtros { flex-direction:column; align-items:stretch; }
+      .filtros input, .filtros select, .filtros button { width:100%; min-height:44px; }
+      form.crear .fila2 { grid-template-columns:1fr; }
+      table { font-size:11.5px; }
+      th, td { padding:7px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          <a href="{{ url_for('historial.listar') }}" class="active">Historial de cambios</a>
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Historial de cambios</h1>
+    <p class="sub">Overrides puntuales sobre el Maestro/Patrón (horario, canal, supervisor, zona, refrigerio) para un DNI en un rango de fechas -- reemplaza al 8_Historial_Cambios.xlsx.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="panel">
+      <p class="panel-title">Cambios registrados</p>
+      <form class="filtros" method="get">
+        <div>
+          <label>Buscar</label>
+          <input type="text" name="buscar" value="{{ buscar }}" placeholder="DNI o nombre">
+        </div>
+        <div>
+          <label>Campo</label>
+          <select name="campo">
+            <option value="">Todos</option>
+            {% for c in campos %}<option value="{{ c }}" {{ 'selected' if campo_filtro == c else '' }}>{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="ghost">Filtrar</button>
+      </form>
+
+      <div class="table-wrap">
+      {% if cambios %}
+        <table>
+          <tr>
+            <th>Persona</th><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th>
+            <th>Día</th><th class="comentario">Comentario</th><th></th>
+          </tr>
+          {% for item in cambios %}
+          {% set c = item.c %}
+          <tr>
+            <td>
+              <a class="nombre-link" href="{{ url_for('reportes.ficha', dni=c.dni) }}">{{ (item.nombre or c.dni)|title }}</a><br>
+              <span class="dni">{{ c.dni }}</span>
+            </td>
+            <td>{{ c.campo }}</td>
+            <td>{{ c.valor_nuevo }}</td>
+            <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
+            <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
+            <td>{{ c.dia_semana or "Todos" }}</td>
+            <td class="comentario">{{ c.comentario or "—" }}</td>
+            <td>
+              <div class="acciones">
+                <a class="ghost" style="text-decoration:none; padding:6px 10px; border-radius:8px; border:1px solid var(--line); font-size:11.5px; font-weight:700;" href="{{ url_for('historial.editar', cambio_id=c.id) }}">Editar</a>
+                <form class="inline" method="post" action="{{ url_for('historial.eliminar', cambio_id=c.id) }}" onsubmit="return confirm('¿Borrar este cambio? No se puede deshacer.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="volver" value="{{ request.full_path }}">
+                  <button class="borrar" type="submit">Borrar</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <p class="empty">No hay cambios registrados{{ ' para esa búsqueda' if buscar or campo_filtro else '' }}.</p>
+      {% endif %}
+      </div>
+    </div>
+
+    <div class="panel" style="max-width:520px;">
+      <p class="panel-title">Registrar cambio nuevo</p>
+      <p class="ayuda">
+        <b>Hora entrada/salida programada:</b> formato HH:MM (ej. 09:00).<br>
+        <b>Refrigerio:</b> "Con refrigerio", "Medio refrigerio" o "Sin refrigerio".<br>
+        <b>Canal / Canal del día:</b> el texto exacto del canal (ej. Tradicional, Farmacia, Autoservicio).<br>
+        <b>Supervisor:</b> el nombre completo tal como figura en el Maestro.<br>
+        <b>Zona:</b> el texto de zona/ruta tal como figura en el Maestro.
+      </p>
+      <form class="crear" method="post" action="{{ url_for('historial.crear') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="volver" value="{{ url_for('historial.listar') }}">
+        <label>DNI</label>
+        <input type="text" name="dni" required>
+        <label>Campo</label>
+        <select name="campo" required>
+          <option value="">Elegí un campo</option>
+          {% for c in campos %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        <label>Valor nuevo</label>
+        <input type="text" name="valor_nuevo" required>
+        <div class="fila2">
+          <div>
+            <label>Fecha desde</label>
+            <input type="date" name="fecha_desde" required>
+          </div>
+          <div>
+            <label>Fecha hasta (opcional)</label>
+            <input type="date" name="fecha_hasta">
+          </div>
+        </div>
+        <label>Día de la semana (opcional -- si no se elige, aplica todos los días del rango)</label>
+        <select name="dia_semana">
+          <option value="">Todos los días</option>
+          {% for d in dias_semana %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+        <label>Comentario (opcional)</label>
+        <textarea name="comentario" rows="2"></textarea>
+        <button type="submit">Registrar</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

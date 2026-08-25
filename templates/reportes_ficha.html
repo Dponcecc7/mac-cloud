@@ -89,6 +89,19 @@
     .insight-mini .icono { font-size:14px; }
     .detalle-insight { font-size:11px; color:var(--muted); }
 
+    form.historial-form { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+    form.historial-form label { display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+    form.historial-form input, form.historial-form select {
+      width:100%; padding:7px 9px; margin-bottom:10px; border:1px solid var(--line);
+      border-radius:8px; box-sizing:border-box; font:inherit; font-size:12.5px; background:var(--bg); color:var(--ink);
+    }
+    form.historial-form .fila3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    @media (max-width: 700px) { form.historial-form .fila3 { grid-template-columns:1fr; } }
+    form.inline { display:inline; }
+    button.chico { padding:5px 9px; font-size:11.5px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+    button.chico.borrar { border-color:var(--bad-bg); color:var(--bad); }
+    button.enviar { padding:9px 16px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:12.5px; }
+
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -116,6 +129,7 @@
           <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
           <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>
           {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
@@ -313,6 +327,81 @@
           </span>
         </div>
         {% endfor %}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Historial de cambios</p>
+      {% if not historial_persona %}<p class="empty">Sin cambios registrados para esta persona.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th><th>Día</th><th>Comentario</th><th></th></tr>
+          {% for c in historial_persona %}
+          <tr>
+            <td>{{ c.campo }}</td>
+            <td>{{ c.valor_nuevo }}</td>
+            <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
+            <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
+            <td>{{ c.dia_semana or "Todos" }}</td>
+            <td>{{ c.comentario or "—" }}</td>
+            <td>
+              {% if usuario.rol in ("analista", "admin") %}
+              <a class="chico" style="text-decoration:none; display:inline-block;" href="{{ url_for('historial.editar', cambio_id=c.id) }}">Editar</a>
+              <form class="inline" method="post" action="{{ url_for('historial.eliminar', cambio_id=c.id) }}" onsubmit="return confirm('¿Borrar este cambio? No se puede deshacer.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="volver" value="{{ url_for('reportes.ficha', dni=persona.dni) }}">
+                <button class="chico borrar" type="submit">Borrar</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+
+      {% if usuario.rol in ("analista", "admin") %}
+      <form class="historial-form" method="post" action="{{ url_for('historial.crear') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="dni" value="{{ persona.dni }}">
+        <input type="hidden" name="volver" value="{{ url_for('reportes.ficha', dni=persona.dni) }}">
+        <div class="fila3">
+          <div>
+            <label>Campo</label>
+            <select name="campo" required>
+              <option value="">Elegí un campo</option>
+              {% for c in campos_historial %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>Valor nuevo</label>
+            <input type="text" name="valor_nuevo" required>
+          </div>
+          <div>
+            <label>Día de la semana (opcional)</label>
+            <select name="dia_semana">
+              <option value="">Todos los días</option>
+              {% for d in dias_semana_historial %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="fila3">
+          <div>
+            <label>Fecha desde</label>
+            <input type="date" name="fecha_desde" required>
+          </div>
+          <div>
+            <label>Fecha hasta (opcional)</label>
+            <input type="date" name="fecha_hasta">
+          </div>
+          <div>
+            <label>Comentario (opcional)</label>
+            <input type="text" name="comentario">
+          </div>
+        </div>
+        <button class="enviar" type="submit">Registrar cambio</button>
+      </form>
       {% endif %}
     </div>
   </div>
