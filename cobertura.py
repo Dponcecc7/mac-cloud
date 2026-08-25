@@ -13,7 +13,7 @@ import sys
 import pandas as pd
 
 from dimension_models import Persona, PatronRecurrente, Visita, get_session
-from scoping import condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -37,7 +37,8 @@ def _sin_acentos(s):
     )
 
 
-def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None):
+def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Visitas [desde, hasta] con nombre/región/ciudad ya unidos, acotadas al
     scope de `usuario_actual` (o a un solo `dni_filtro`). Devuelve un
     DataFrame vacío (sin columnas) si no hay nada."""
@@ -58,6 +59,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None):
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
+            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro)
         filas = query.all()
         if not filas:
             return pd.DataFrame()
@@ -84,7 +86,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None):
     return v
 
 
-def matriz_cobertura(desde, hasta, usuario_actual):
+def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """PDVs distintos visitados por persona y día -- Punto Censo se cuenta
     aparte (cada relevo es 1, no tiene ubicación real que colapsar), mismo
     criterio que analisis_visitas_planning.py. Devuelve
@@ -93,7 +95,8 @@ def matriz_cobertura(desde, hasta, usuario_actual):
     canal(es) trabajó ese día (Davor, 2026-08-23: "resaltar cuando son PDVs
     de AU, de Farma, o día de Punto Censo" -- Tradicional queda sin marca por
     ser el canal base/esperado de la mayoría)."""
-    v = _cargar_visitas(desde, hasta, usuario_actual)
+    v = _cargar_visitas(desde, hasta, usuario_actual,
+                        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro)
     if not len(v):
         return [], [], {}, {}
 
@@ -129,13 +132,15 @@ def matriz_cobertura(desde, hasta, usuario_actual):
     return personas, fechas, celdas, categorias
 
 
-def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None):
+def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
+                       rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Visita larga (última visita del día > 60 min y antes de la hora de
     salida programada) + abuso de Punto Censo -- mismo cálculo que ya hacía
     (y descartaba) pipeline/alerta_visita_larga.py, ahora contra Postgres.
     Mismo shape de dict que alertas.py::alertas_periodo() para poder
     mezclarse en la misma lista."""
-    v = _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=dni_filtro)
+    v = _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=dni_filtro,
+                        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro)
     if not len(v):
         return []
 

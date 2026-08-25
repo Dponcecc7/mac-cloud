@@ -38,6 +38,9 @@
     .btn.primary { background:var(--brand); color:#fff; }
     .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
+    .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
 
@@ -78,6 +81,10 @@
       .top-actions form, .top-actions input[type=week] { width:100%; }
       .top-actions input[type=week] { min-height:44px; font-size:15px; }
       .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
+
+      .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
+      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
+      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
 
       .panel { padding:14px !important; border-radius:12px; }
 
@@ -133,6 +140,27 @@
       <span style="color:var(--muted); font-size:12.5px;">{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado)</span>
       <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', semana=semana_str) }}">↓ Exportar Excel</a>
     </div>
+
+    {% if roles_disponibles %}
+    <div class="filtros-admin">
+      <form method="get" style="display:contents;">
+        <input type="hidden" name="semana" value="{{ semana_str }}">
+        <select name="supervisor">
+          <option value="">Supervisor: todos</option>
+          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+        </select>
+        <select name="region">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="rol">
+          <option value="">Rol: todos</option>
+          {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <button class="btn primary" type="submit">Aplicar filtros</button>
+      </form>
+    </div>
+    {% endif %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}

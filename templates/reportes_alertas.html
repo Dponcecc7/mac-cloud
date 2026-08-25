@@ -36,6 +36,10 @@
     .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
 
+    .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .filtros-admin .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+
     .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
     .alerta.falta { border-left-color:var(--bad); }
     .alerta.tardanza, .alerta.salida_temprana, .alerta.visita_larga { border-left-color:var(--warn); }
@@ -69,6 +73,10 @@
 
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
       .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
+
+      .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
+      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
+      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
 
       .alerta { padding:12px 14px; gap:10px; }
       .alerta .nivel { font-size:9px; padding:2px 6px; }
@@ -112,6 +120,27 @@
       </form>
       <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
     </div>
+
+    {% if roles_disponibles %}
+    <div class="filtros-admin">
+      <form method="get" style="display:contents;">
+        <input type="hidden" name="mes" value="{{ mes_str }}">
+        <select name="supervisor">
+          <option value="">Supervisor: todos</option>
+          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+        </select>
+        <select name="region">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="rol">
+          <option value="">Rol: todos</option>
+          {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <button class="btn" type="submit">Aplicar filtros</button>
+      </form>
+    </div>
+    {% endif %}
 
     {% if not alertas %}
       <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>

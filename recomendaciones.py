@@ -13,7 +13,7 @@ from alertas import SALIDA_ANTICIPADA_MIN, UMBRAL, _tiene_sustento
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
-from scoping import condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope
 
 UMBRAL_CAIDA_PCT = 15  # puntos porcentuales de caída en % Cumplimiento sin faltas (B)
 UMBRAL_RIESGO_SEMANA_PCT = 80  # (D) -- mismo umbral "amarillo" que ya usa reporte_semanal.py
@@ -30,16 +30,22 @@ BANDA_EXCELENTE = 95
 BANDA_SEGUIMIENTO = 85
 
 
-def insights_equipo(usuario_actual, dni_filtro=None, hoy=None):
+def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Devuelve la lista de insights/alertas predictivas para el equipo
     visible de `usuario_actual` -- o para un solo `dni_filtro` (ficha
-    individual, el acceso ya se valida aparte)."""
+    individual, el acceso ya se valida aparte). `rol_filtro`/`region_filtro`/
+    `supervisor_filtro`: filtros extra de Reportes (solo admin, ver
+    scoping.aplicar_filtros_extra)."""
     hoy = hoy or dt.date.today()
     anio_actual, num_actual, _ = hoy.isocalendar()
     inicio_actual, _ = semana_iso(anio_actual, num_actual)
     desde = inicio_actual - dt.timedelta(weeks=4)  # 4 semanas cerradas + la actual
 
-    detalle = calcular_detalle_semana(desde, hoy, usuario_actual, dni_filtro=dni_filtro)
+    detalle = calcular_detalle_semana(
+        desde, hoy, usuario_actual, dni_filtro=dni_filtro,
+        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+    )
     if not len(detalle):
         return []
     detalle = detalle.copy()
@@ -160,18 +166,25 @@ def _clip(x):
     return max(0.0, min(100.0, x))
 
 
-def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None):
+def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
+                           rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Resumen de perfil del mes en curso -- 4 métricas normalizadas a 0-100
-    (más alto = mejor), 25% de peso cada una: Cumplimiento de horas (mismo
-    % sin faltas ya validado en Horas semanales), Tardanzas, Faltas SIN
-    sustento (mismo criterio que alertas.py) y Salidas anticipadas (mismo
-    umbral de 10 min que ya usa alertas.py), todas sobre los días hábiles ya
-    transcurridos del mes. Para TODO el equipo visible de `usuario_actual`
-    (o un solo `dni_filtro`), no solo quienes ya tienen una señal arriba."""
+    (más alto = mejor), combinadas con PESO_CUMPLIMIENTO/PESO_FALTA/
+    PESO_TARDANZA/PESO_SALIDA: Cumplimiento de horas (mismo % sin faltas ya
+    validado en Horas semanales), Tardanzas, Faltas SIN sustento (mismo
+    criterio que alertas.py) y Salidas anticipadas (mismo umbral de 10 min
+    que ya usa alertas.py), todas sobre los días hábiles ya transcurridos
+    del mes. Para TODO el equipo visible de `usuario_actual` (o un solo
+    `dni_filtro`), no solo quienes ya tienen una señal arriba.
+    `rol_filtro`/`region_filtro`/`supervisor_filtro`: filtros extra de
+    Reportes (solo admin, ver scoping.aplicar_filtros_extra)."""
     hoy = hoy or dt.date.today()
     mes_desde = hoy.replace(day=1)
 
-    detalle_mes = calcular_detalle_semana(mes_desde, hoy, usuario_actual, dni_filtro=dni_filtro)
+    detalle_mes = calcular_detalle_semana(
+        mes_desde, hoy, usuario_actual, dni_filtro=dni_filtro,
+        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+    )
     if not len(detalle_mes):
         return []
 
@@ -199,6 +212,7 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None):
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 q = q.filter(cond_scope)
+            q = aplicar_filtros_extra(q, Persona, rol_filtro, region_filtro, supervisor_filtro)
         filas_salida = q.all()
     finally:
         session.close()

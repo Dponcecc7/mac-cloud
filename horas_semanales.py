@@ -23,7 +23,7 @@ import pandas as pd
 from alertas import _tiene_sustento
 from dimension_models import Feriado, Persona, PatronRecurrente, get_session
 from fact_models import ClasificacionDiaria
-from scoping import condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -85,10 +85,13 @@ def _motivo_falta(estado_base, estado, comentario):
     return "Falta"
 
 
-def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None):
+def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
+                             rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Detalle día-persona entre [desde, hasta] (inclusive), acotado al
     scope de acceso de `usuario_actual` -- o a un solo `dni_filtro` si se
     pasa (para la ficha individual, donde el acceso ya se validó aparte).
+    `rol_filtro`/`region_filtro`/`supervisor_filtro`: filtros extra de
+    Reportes (solo tienen efecto para admin, ver scoping.aplicar_filtros_extra).
     Devuelve un DataFrame vacío (sin columnas) si no hay filas."""
     session = get_session()
     try:
@@ -109,6 +112,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None):
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
+            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro)
         filas = query.all()
         if not filas:
             return pd.DataFrame()

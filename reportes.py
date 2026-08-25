@@ -12,6 +12,7 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, request, render_template, send_file, url_for
 from flask_login import current_user, login_required
 from openpyxl.styles import Font
+from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo
 from asistencia import _homologar_motivo
@@ -41,6 +42,44 @@ COLUMNAS_HORAS = [
 ]
 
 
+def _filtros_admin():
+    """Filtros de Supervisor/Región/Rol para las 4 pestañas de Reportes --
+    SOLO para admin (Davor, 2026-08-24: "solo debe haber filtros para el
+    perfil admin, para los supervisores no debe haber filtros"). Para
+    cualquier otro rol devuelve todo vacío -- las plantillas ocultan la
+    barra de filtros cuando `roles_disponibles` (etc.) viene vacío.
+    Devuelve (filtro_args, roles_disponibles, regiones_disponibles,
+    supervisores_disponibles)."""
+    if current_user.rol != "admin":
+        return {"rol": "", "region": "", "supervisor": ""}, [], [], []
+
+    filtro_args = {
+        "rol": request.args.get("rol") or "",
+        "region": request.args.get("region") or "",
+        "supervisor": request.args.get("supervisor") or "",
+    }
+    session = get_session()
+    try:
+        roles_disponibles = sorted({
+            r for (r,) in session.query(Persona.rol).filter(Persona.rol.isnot(None)).distinct().all()
+        })
+        regiones_disponibles = sorted({
+            r for (r,) in session.query(Persona.region).filter(Persona.region.isnot(None)).distinct().all()
+        })
+        SupervisorPersona = aliased(Persona)
+        supervisores_disponibles = sorted(
+            set(
+                session.query(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
+                .join(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
+                .filter(Persona.supervisor_dni.isnot(None)).distinct().all()
+            ),
+            key=lambda t: (t[1] or "").title(),
+        )
+    finally:
+        session.close()
+    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles
+
+
 def _semana_desde_query():
     """Lee ?semana=2026-W34 (formato de <input type=week>) -- si falta o es
     inválido, usa la semana ISO actual."""
@@ -62,12 +101,18 @@ def _semana_desde_query():
 @login_required
 def horas():
     desde, hasta, semana_str = _semana_desde_query()
-    detalle = calcular_detalle_semana(desde, hasta, current_user)
+    filtro_args, roles_disp, regiones_disp, supervisores_disp = _filtros_admin()
+    detalle = calcular_detalle_semana(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
     resumen = resumen_por_persona(detalle)
     filas = resumen.to_dict("records") if len(resumen) else []
     return render_template(
         "reportes_horas.html", usuario=current_user, activo="horas",
         semana_str=semana_str, desde=desde, hasta=hasta, filas=filas,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
     )
 
 
@@ -75,7 +120,11 @@ def horas():
 @login_required
 def horas_exportar():
     desde, hasta, semana_str = _semana_desde_query()
-    detalle = calcular_detalle_semana(desde, hasta, current_user)
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp = _filtros_admin()
+    detalle = calcular_detalle_semana(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
     resumen = resumen_por_persona(detalle)
 
     wb = openpyxl.Workbook()
@@ -115,21 +164,51 @@ def _mes_desde_query():
 @login_required
 def alertas():
     desde, hasta, mes_str = _mes_desde_query()
-    lista = alertas_periodo(desde, hasta, current_user)
+    filtro_args, roles_disp, regiones_disp, supervisores_disp = _filtros_admin()
+    lista = alertas_periodo(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
         mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
     )
+
+
+def _hoy_ref_desde_mes(mes_str, desde, hasta):
+    """Para insights_equipo()/resumen_perfil_equipo(), que trabajan contra
+    un `hoy` de referencia (no un rango desde/hasta): si el mes elegido es
+    el actual, usa la fecha real de hoy (para que las reglas de "semana en
+    curso"/"días hábiles transcurridos" sigan siendo correctas); si es un
+    mes pasado, usa el último día de ese mes (todo el mes cuenta como
+    "transcurrido")."""
+    hoy_real = dt.date.today()
+    if (desde.year, desde.month) == (hoy_real.year, hoy_real.month):
+        return hoy_real
+    return hasta
 
 
 @bp.get("/recomendaciones")
 @login_required
 def recomendaciones():
-    lista = insights_equipo(current_user)
-    perfiles = resumen_perfil_equipo(current_user)
+    desde, hasta, mes_str = _mes_desde_query()
+    hoy_ref = _hoy_ref_desde_mes(mes_str, desde, hasta)
+    filtro_args, roles_disp, regiones_disp, supervisores_disp = _filtros_admin()
+    lista = insights_equipo(
+        current_user, hoy=hoy_ref,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
+    perfiles = resumen_perfil_equipo(
+        current_user, hoy=hoy_ref,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
-        insights=lista, perfiles=perfiles,
+        insights=lista, perfiles=perfiles, mes_str=mes_str,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
     )
 
 
@@ -154,7 +233,11 @@ def _rango_desde_query(dias_por_defecto=21):
 @login_required
 def cobertura():
     desde, hasta = _rango_desde_query()
-    personas, fechas, celdas, categorias = matriz_cobertura(desde, hasta, current_user)
+    filtro_args, roles_disp, regiones_disp, supervisores_disp = _filtros_admin()
+    personas, fechas, celdas, categorias = matriz_cobertura(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
 
     # Resaltado simple: celda por debajo de la mitad del promedio de ESA
     # persona en el periodo elegido -- mismo criterio "umbral simple" del
@@ -168,6 +251,8 @@ def cobertura():
         "reportes_cobertura.html", usuario=current_user, activo="cobertura",
         desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
         categorias=categorias, promedios=promedios,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
     )
 
 
@@ -175,7 +260,11 @@ def cobertura():
 @login_required
 def cobertura_exportar():
     desde, hasta = _rango_desde_query()
-    personas, fechas, celdas, _categorias = matriz_cobertura(desde, hasta, current_user)
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp = _filtros_admin()
+    personas, fechas, celdas, _categorias = matriz_cobertura(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+    )
 
     wb = openpyxl.Workbook()
     ws = wb.active

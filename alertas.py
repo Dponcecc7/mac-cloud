@@ -10,7 +10,7 @@ import pandas as pd
 from cobertura import alertas_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
-from scoping import condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope
 
 UMBRAL = 3
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que asistencia.py usa para resaltar "salida temprana" un día suelto
@@ -35,11 +35,14 @@ def _tiene_sustento(comentario):
     return any(m in str(comentario).lower() for m in MOTIVOS_CON_SUSTENTO)
 
 
-def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
+def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None):
     """Devuelve la lista de alertas (tardanza y falta) para el rango
     [desde, hasta], acotada al scope de `usuario_actual` -- o a un solo
     `dni_filtro` si se pasa (el acceso ya se valida aparte, ver
-    reportes.py::ficha()). Ordenada por nivel de severidad descendente."""
+    reportes.py::ficha()). `rol_filtro`/`region_filtro`/`supervisor_filtro`:
+    filtros extra de Reportes (solo admin, ver scoping.aplicar_filtros_extra).
+    Ordenada por nivel de severidad descendente."""
     session = get_session()
     try:
         query = (
@@ -57,6 +60,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
+            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro)
         filas = query.all()
     finally:
         session.close()
@@ -164,7 +168,10 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None):
     # cobertura.py. Antes esto ya se calculaba cada 5 min en el pipeline
     # (pipeline/alerta_visita_larga.py) pero el resultado se descartaba al
     # terminar la corrida; ahora vive en Postgres y se puede mostrar acá.
-    alertas.extend(alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=dni_filtro))
+    alertas.extend(alertas_cobertura(
+        desde, hasta, usuario_actual, dni_filtro=dni_filtro,
+        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+    ))
 
     alertas.sort(key=lambda a: (-a["nivel"], -a["cantidad"], a["nombre"]))
     return alertas
