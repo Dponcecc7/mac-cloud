@@ -58,6 +58,11 @@
     .ayuda { font-size:11.5px; color:var(--muted); background:var(--bg); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; line-height:1.6; }
     .ayuda b { color:var(--ink); }
 
+    summary.panel-title { cursor:pointer; margin:0; }
+    summary.panel-title::-webkit-details-marker { color:var(--muted); }
+    details[open] summary.panel-title { margin-bottom:14px; }
+    details .filtros { margin-top:2px; }
+
     .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
     .flash.error { background:var(--bad-bg); color:var(--bad); }
     .flash.ok { background:var(--ok-bg); color:var(--ok); }
@@ -114,62 +119,6 @@
     {% endwith %}
 
     <div class="panel">
-      <p class="panel-title">Cambios registrados</p>
-      <form class="filtros" method="get">
-        <div>
-          <label>Buscar</label>
-          <input type="text" name="buscar" value="{{ buscar }}" placeholder="DNI o nombre">
-        </div>
-        <div>
-          <label>Campo</label>
-          <select name="campo">
-            <option value="">Todos</option>
-            {% for c in campos %}<option value="{{ c }}" {{ 'selected' if campo_filtro == c else '' }}>{{ c }}</option>{% endfor %}
-          </select>
-        </div>
-        <button type="submit" class="ghost">Filtrar</button>
-      </form>
-
-      <div class="table-wrap">
-      {% if cambios %}
-        <table>
-          <tr>
-            <th>Persona</th><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th>
-            <th>Día</th><th class="comentario">Comentario</th><th></th>
-          </tr>
-          {% for item in cambios %}
-          {% set c = item.c %}
-          <tr>
-            <td>
-              <a class="nombre-link" href="{{ url_for('reportes.ficha', dni=c.dni) }}">{{ (item.nombre or c.dni)|title }}</a><br>
-              <span class="dni">{{ c.dni }}</span>
-            </td>
-            <td>{{ c.campo }}</td>
-            <td>{{ c.valor_nuevo }}</td>
-            <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
-            <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
-            <td>{{ c.dia_semana or "Todos" }}</td>
-            <td class="comentario">{{ c.comentario or "—" }}</td>
-            <td>
-              <div class="acciones">
-                <a class="ghost" style="text-decoration:none; padding:6px 10px; border-radius:8px; border:1px solid var(--line); font-size:11.5px; font-weight:700;" href="{{ url_for('historial.editar', cambio_id=c.id) }}">Editar</a>
-                <form class="inline" method="post" action="{{ url_for('historial.eliminar', cambio_id=c.id) }}" onsubmit="return confirm('¿Borrar este cambio? No se puede deshacer.');">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="volver" value="{{ request.full_path }}">
-                  <button class="borrar" type="submit">Borrar</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </table>
-      {% else %}
-        <p class="empty">No hay cambios registrados{{ ' para esa búsqueda' if buscar or campo_filtro else '' }}.</p>
-      {% endif %}
-      </div>
-    </div>
-
-    <div class="panel" style="max-width:520px;">
       <p class="panel-title">Registrar cambio nuevo</p>
       <p class="ayuda">
         <b>Hora entrada/salida programada:</b> formato HH:MM (ej. 09:00).<br>
@@ -209,6 +158,64 @@
         <textarea name="comentario" rows="2"></textarea>
         <button type="submit">Registrar</button>
       </form>
+    </div>
+
+    <div class="panel">
+      <details {{ 'open' if buscar or campo_filtro else '' }}>
+        <summary class="panel-title">Cambios registrados ({{ cambios|length }})</summary>
+        <form class="filtros" method="get">
+          <div>
+            <label>Buscar</label>
+            <input type="text" name="buscar" value="{{ buscar }}" placeholder="DNI o nombre">
+          </div>
+          <div>
+            <label>Campo</label>
+            <select name="campo">
+              <option value="">Todos</option>
+              {% for c in campos %}<option value="{{ c }}" {{ 'selected' if campo_filtro == c else '' }}>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="ghost">Filtrar</button>
+        </form>
+
+        <div class="table-wrap">
+        {% if cambios %}
+          <table>
+            <tr>
+              <th>Persona</th><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th>
+              <th>Día</th><th class="comentario">Comentario</th><th></th>
+            </tr>
+            {% for item in cambios %}
+            {% set c = item.c %}
+            <tr>
+              <td>
+                <a class="nombre-link" href="{{ url_for('reportes.ficha', dni=c.dni) }}">{{ (item.nombre or c.dni)|title }}</a><br>
+                <span class="dni">{{ c.dni }}</span>
+              </td>
+              <td>{{ c.campo }}</td>
+              <td>{{ c.valor_nuevo }}</td>
+              <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
+              <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
+              <td>{{ c.dia_semana or "Todos" }}</td>
+              <td class="comentario">{{ c.comentario or "—" }}</td>
+              <td>
+                <div class="acciones">
+                  <a class="ghost" style="text-decoration:none; padding:6px 10px; border-radius:8px; border:1px solid var(--line); font-size:11.5px; font-weight:700;" href="{{ url_for('historial.editar', cambio_id=c.id) }}">Editar</a>
+                  <form class="inline" method="post" action="{{ url_for('historial.eliminar', cambio_id=c.id) }}" onsubmit="return confirm('¿Borrar este cambio? No se puede deshacer.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="volver" value="{{ request.full_path }}">
+                    <button class="borrar" type="submit">Borrar</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+        {% else %}
+          <p class="empty">No hay cambios registrados{{ ' para esa búsqueda' if buscar or campo_filtro else '' }}.</p>
+        {% endif %}
+        </div>
+      </details>
     </div>
   </div>
 </body>
