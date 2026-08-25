@@ -140,7 +140,7 @@
     {% endif %}
 
     <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} este mes</h2>
-    <p class="note">Puntaje = promedio de 4 métricas del mes en curso (25% cada una): Cumplimiento de horas, Tardanzas, Faltas (sin descanso médico/licencia/feriado regional) y Salidas antes de hora, todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
+    <p class="note">Puntaje = promedio ponderado de 4 métricas del mes en curso: Cumplimiento de horas (35%), Faltas sin descanso médico/licencia/feriado regional (35%), Tardanzas (15%) y Salidas antes de hora (15%), todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
     {% if not perfiles %}
       <p class="empty">Sin datos de clasificación este mes todavía.</p>
     {% else %}

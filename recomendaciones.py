@@ -18,10 +18,14 @@ from scoping import condicion_scope
 UMBRAL_CAIDA_PCT = 15  # puntos porcentuales de caída en % Cumplimiento sin faltas (B)
 UMBRAL_RIESGO_SEMANA_PCT = 80  # (D) -- mismo umbral "amarillo" que ya usa reporte_semanal.py
 
-# Resumen de perfil / puntaje del mes (Davor, 2026-08-24) -- 4 métricas del
-# mes en curso, cada una normalizada a 0-100 (más alto = mejor) con 25% de
-# peso cada una. Bandas de la carita final sobre el promedio de las 4.
-PESO_COMPONENTE = 0.25
+# Resumen de perfil / puntaje del mes (Davor, 2026-08-24, pesos ajustados
+# 2026-08-24) -- 4 métricas del mes en curso, cada una normalizada a 0-100
+# (más alto = mejor), combinadas con estos pesos. Bandas de la carita final
+# sobre el promedio ponderado de las 4.
+PESO_CUMPLIMIENTO = 0.35
+PESO_FALTA = 0.35
+PESO_TARDANZA = 0.15
+PESO_SALIDA = 0.15
 BANDA_EXCELENTE = 95
 BANDA_SEGUIMIENTO = 85
 
@@ -220,10 +224,19 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None):
         comp_falta = _clip(100.0 - falta_pct)
         comp_salida = _clip(100.0 - salida_pct)
 
-        componentes = [c for c in (comp_cumplimiento, comp_tardanza, comp_falta, comp_salida) if c is not None]
+        # Ponderado (35/35/15/15), no promedio simple -- si falta un
+        # componente (solo Cumplimiento puede venir None, sin datos de
+        # Horas semanales ese mes), se renormaliza sobre el peso de los que
+        # sí hay en vez de tratarlo como 0.
+        componentes = [
+            (comp_cumplimiento, PESO_CUMPLIMIENTO), (comp_tardanza, PESO_TARDANZA),
+            (comp_falta, PESO_FALTA), (comp_salida, PESO_SALIDA),
+        ]
+        componentes = [(v, w) for v, w in componentes if v is not None]
         if not componentes:
             continue
-        puntaje = sum(componentes) / len(componentes)
+        peso_total = sum(w for _, w in componentes)
+        puntaje = sum(v * w for v, w in componentes) / peso_total
 
         if puntaje >= BANDA_EXCELENTE:
             carita, etiqueta = "😊", "Excelente"
