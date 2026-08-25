@@ -67,6 +67,74 @@ def _hora(valor):
     return valor if pd.notna(valor) else None
 
 
+def crear_persona_individual(
+    propietario, dni, nombre, rol, canal, region, ciudad, zona,
+    supervisor_dni, correo, fecha_ingreso, patron_dias,
+):
+    """Alta de UNA persona nueva a Headcount sin pasar por el Excel de
+    "Cargar Headcount" -- Davor, 2026-08-25: "si quiero agregar un
+    mercaderista nuevo a mi personal, como lo haria... donde dice agregar
+    reemplazo, debe haber agregar nuevo headcount". A diferencia de
+    "Agregar reemplazo" (reemplazos.py), acá NO hace falta un DNI de
+    vacante existente del cual heredar datos -- es headcount genuinamente
+    nuevo, no la cobertura de una posición que ya existía.
+
+    `patron_dias`: lista de dicts {dia_semana, hora_entrada, hora_salida,
+    canal_dia, refrigerio} -- se ignoran los días sin hora de entrada Y
+    salida (persona sin ese día en su semana laboral, mismo criterio que
+    "sin fila = no trabaja ese día" que ya usa todo el pipeline)."""
+    session = get_session()
+    try:
+        existente = session.get(Persona, dni)
+        if existente and existente.analista_propietario and existente.analista_propietario != propietario:
+            raise ValueError(f"El DNI {dni} ya existe y pertenece a otro analista ({existente.analista_propietario}).")
+        if existente and existente.estado == "Activo":
+            raise ValueError(f"El DNI {dni} ya está Activo en el sistema -- usá Historial de cambios para modificar sus datos.")
+
+        es_reingreso = existente is not None
+        persona = existente or Persona(dni=dni)
+        if not es_reingreso:
+            session.add(persona)
+        persona.nombre_completo = nombre
+        persona.rol = rol
+        persona.canal = canal
+        persona.region = region
+        persona.ciudad = ciudad
+        persona.zona = zona
+        persona.supervisor_dni = supervisor_dni
+        persona.correo = correo
+        persona.fecha_ingreso = fecha_ingreso
+        persona.fecha_baja = None
+        persona.estado = "Activo"
+        persona.es_reingreso = es_reingreso
+        persona.motivo_baja = None
+        persona.registrado_por = propietario
+        persona.fecha_registro = dt.date.today()
+        persona.analista_propietario = propietario
+        session.flush()  # la persona ya debe existir en la sesion antes de tocar Patron (FK)
+
+        session.query(PatronRecurrente).filter_by(dni=dni).delete()
+        session.flush()
+        n_patron = 0
+        for fila in patron_dias:
+            if not fila.get("hora_entrada") or not fila.get("hora_salida"):
+                continue
+            session.add(PatronRecurrente(
+                dni=dni, dia_semana=fila["dia_semana"],
+                hora_entrada_prog=fila["hora_entrada"], hora_salida_prog=fila["hora_salida"],
+                canal_dia=fila.get("canal_dia") or canal, refrigerio=fila.get("refrigerio"),
+            ))
+            n_patron += 1
+
+        session.commit()
+        return es_reingreso, n_patron
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def _plantilla_excel(nombre_hoja, titulo, columnas, fila_ejemplo):
     wb = openpyxl.Workbook()
     ws = wb.active

@@ -777,3 +777,132 @@ def reemplazo_submit():
         volver=url_for("asistencia.reemplazo_form"),
         poll_workflow="pipeline_completo.yml" if ok_disparo else None,
     )
+
+
+# Sin domingo -- mismo criterio que WD_NORM en horas_semanales.py, ningún
+# módulo del pipeline espera un día de semana "Domingo" en PatronRecurrente.
+DIAS_PATRON = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+
+
+def _hora_form(valor):
+    if not valor:
+        return None
+    try:
+        return dt.time.fromisoformat(valor)
+    except ValueError:
+        return None
+
+
+@bp.get("/headcount-nuevo")
+@_analista_requerido
+def headcount_nuevo_form():
+    # Los desplegables se arman con los valores que YA existen en Postgres
+    # (acotados al scope del usuario) en vez de una lista fija a mano --
+    # mismo criterio que reportes.py::_filtros_admin() -- para no
+    # desincronizarse si el Maestro usa un Rol/Canal nuevo que acá no
+    # estaba contemplado.
+    session = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+
+        def _valores(columna):
+            q = session.query(columna).filter(columna.isnot(None))
+            if cond_scope is not None:
+                q = q.filter(cond_scope)
+            return sorted({v for (v,) in q.distinct().all() if v})
+
+        roles_disponibles = _valores(Persona.rol)
+        canales_disponibles = _valores(Persona.canal)
+        regiones_disponibles = _valores(Persona.region)
+        ciudades_disponibles = _valores(Persona.ciudad)
+        zonas_disponibles = _valores(Persona.zona)
+
+        q_sup = session.query(Persona.dni, Persona.nombre_completo).filter(
+            Persona.rol == "SUPERVISORES", Persona.estado == "Activo"
+        )
+        if cond_scope is not None:
+            q_sup = q_sup.filter(cond_scope)
+        supervisores_disponibles = sorted(q_sup.distinct().all(), key=lambda t: (t[1] or "").title())
+    finally:
+        session.close()
+
+    return render_template(
+        "asistencia_headcount_nuevo.html", usuario=current_user, activo="headcount_nuevo",
+        hoy=dt.date.today().isoformat(), dias_patron=DIAS_PATRON,
+        roles_disponibles=roles_disponibles, canales_disponibles=canales_disponibles,
+        regiones_disponibles=regiones_disponibles, ciudades_disponibles=ciudades_disponibles,
+        zonas_disponibles=zonas_disponibles, supervisores_disponibles=supervisores_disponibles,
+    )
+
+
+@bp.post("/headcount-nuevo")
+@_analista_requerido
+def headcount_nuevo_submit():
+    from cargas import crear_persona_individual
+
+    dni = request.form.get("dni", "").strip()
+    nombre = request.form.get("nombre", "").strip()
+    rol = request.form.get("rol", "").strip()
+    canal = request.form.get("canal", "").strip() or None
+    region = request.form.get("region", "").strip() or None
+    ciudad = request.form.get("ciudad", "").strip() or None
+    zona = request.form.get("zona", "").strip() or None
+    supervisor_dni = request.form.get("supervisor_dni", "").strip() or None
+    correo = request.form.get("correo", "").strip() or None
+    fecha_ingreso_str = request.form.get("fecha_ingreso", "").strip()
+
+    if not dni or not nombre or not rol or not fecha_ingreso_str:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="headcount_nuevo",
+            titulo="Falló", ok=False, detalle="Faltan campos obligatorios (DNI, Nombre, Rol, Fecha de ingreso).",
+            volver=url_for("asistencia.headcount_nuevo_form"),
+        )
+    try:
+        fecha_ingreso = dt.date.fromisoformat(fecha_ingreso_str)
+    except ValueError:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="headcount_nuevo",
+            titulo="Falló", ok=False, detalle="Fecha de ingreso inválida.",
+            volver=url_for("asistencia.headcount_nuevo_form"),
+        )
+
+    patron_dias = [
+        {
+            "dia_semana": dia,
+            "hora_entrada": _hora_form(request.form.get(f"entrada_{dia.lower()}", "").strip()),
+            "hora_salida": _hora_form(request.form.get(f"salida_{dia.lower()}", "").strip()),
+            "canal_dia": request.form.get(f"canal_{dia.lower()}", "").strip() or None,
+            "refrigerio": request.form.get(f"refrigerio_{dia.lower()}", "").strip() or None,
+        }
+        for dia in DIAS_PATRON
+    ]
+
+    try:
+        es_reingreso, n_patron = crear_persona_individual(
+            current_user.email, dni, nombre, rol, canal, region, ciudad, zona,
+            supervisor_dni, correo, fecha_ingreso, patron_dias,
+        )
+        detalle = f"{nombre.title()} (DNI {dni}) fue dado de alta{' como reingreso' if es_reingreso else ''}."
+        if n_patron:
+            detalle += f" Se guardaron {n_patron} días de horario."
+        else:
+            detalle += (
+                " No se cargó ningún horario -- completalo en \"Cargar Headcount\" (Patrón) o en "
+                "\"Historial de cambios\" antes de que empiece a trabajar, sino no se va a poder "
+                "clasificar su asistencia."
+            )
+        ok_disparo, _ = disparar_workflow("pipeline_completo.yml")
+        if not ok_disparo:
+            detalle += "\n\nNo se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario."
+        titulo = "Headcount agregado"
+    except Exception as e:
+        detalle = str(e)
+        titulo = "Falló"
+        ok_disparo = False
+
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="headcount_nuevo",
+        titulo=titulo, ok=(titulo == "Headcount agregado"), detalle=detalle,
+        volver=url_for("asistencia.headcount_nuevo_form"),
+        poll_workflow="pipeline_completo.yml" if titulo == "Headcount agregado" and ok_disparo else None,
+    )

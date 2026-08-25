@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Asistencia diaria</title>
+  <style>
+    :root { --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef; --brand:#2f6fb0; --bad:#dc2626; --bad-bg:#fee2e2; }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e0ecf8; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#a8c3dc; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e0ecf8; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .panel { background:var(--card); border-radius:14px; padding:20px 22px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:14px; }
+    .panel-title { font-size:13px; font-weight:700; margin:0 0 12px; }
+    .form-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:14px; }
+    label.field { display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:700; color:var(--muted); }
+    .ipt { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
+    .actions { display:flex; justify-content:flex-end; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+
+    table.patron { border-collapse:collapse; width:100%; }
+    table.patron th { text-align:left; padding:0 8px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; }
+    table.patron td { padding:4px 8px 4px 0; }
+    table.patron .dia { font-size:12.5px; font-weight:700; white-space:nowrap; padding-right:12px; }
+    table.patron input, table.patron select { font:inherit; font-size:12.5px; padding:6px 8px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
+    .table-wrap { overflow-x:auto; }
+
+    @media (max-width: 760px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+      .panel { padding:14px !important; border-radius:12px; }
+      .form-row { grid-template-columns:1fr; gap:10px; }
+      table.patron { min-width:640px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('personal') }}">Personal</a>
+          <a href="{{ url_for('asistencia.reporte') }}" class="active">Asistencia diaria</a>
+          <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Asistencia diaria</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('asistencia.reporte') }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.marcar_vista') }}">Marcar asistencia</a>
+      <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
+      <a href="{{ url_for('asistencia.reemplazo_form') }}">Agregar reemplazo</a>
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}" class="active">Agregar headcount</a>{% endif %}
+    </nav>
+
+    <div class="note"><b>Alta de una persona nueva</b> — para cubrir una vacante que ya existe en el sistema usá "Agregar reemplazo" en vez de esto. Esto es para headcount genuinamente nuevo (una posición que no existía).</div>
+
+    <form method="post" action="{{ url_for('asistencia.headcount_nuevo_submit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="panel">
+        <p class="panel-title">Datos de la persona</p>
+        <div class="form-row">
+          <label class="field">DNI<input class="ipt" name="dni" required></label>
+          <label class="field">Nombre completo<input class="ipt" name="nombre" required></label>
+          <label class="field">Fecha de ingreso<input class="ipt" type="date" name="fecha_ingreso" value="{{ hoy }}" required></label>
+        </div>
+        <div class="form-row">
+          <label class="field">Rol
+            <input class="ipt" name="rol" list="lista-roles" required placeholder="ej. MERCADERISTAS">
+            <datalist id="lista-roles">{% for r in roles_disponibles %}<option value="{{ r }}">{% endfor %}</datalist>
+          </label>
+          <label class="field">Canal
+            <input class="ipt" name="canal" list="lista-canales" placeholder="ej. MULTICANAL">
+            <datalist id="lista-canales">{% for c in canales_disponibles %}<option value="{{ c }}">{% endfor %}</datalist>
+          </label>
+          <label class="field">Supervisor
+            <select class="ipt" name="supervisor_dni">
+              <option value="">Sin supervisor</option>
+              {% for dni_sup, nombre_sup in supervisores_disponibles %}<option value="{{ dni_sup }}">{{ (nombre_sup or dni_sup)|title }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="field">Región
+            <input class="ipt" name="region" list="lista-regiones">
+            <datalist id="lista-regiones">{% for r in regiones_disponibles %}<option value="{{ r }}">{% endfor %}</datalist>
+          </label>
+          <label class="field">Ciudad
+            <input class="ipt" name="ciudad" list="lista-ciudades">
+            <datalist id="lista-ciudades">{% for c in ciudades_disponibles %}<option value="{{ c }}">{% endfor %}</datalist>
+          </label>
+          <label class="field">Zona / Ruta
+            <input class="ipt" name="zona" list="lista-zonas">
+            <datalist id="lista-zonas">{% for z in zonas_disponibles %}<option value="{{ z }}">{% endfor %}</datalist>
+          </label>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr;">
+          <label class="field">Correo corporativo (opcional)<input class="ipt" type="email" name="correo"></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="panel-title">Horario semanal (opcional acá -- se puede completar después)</p>
+        <p class="note" style="margin-bottom:14px;">Dejá un día en blanco (sin hora de entrada y salida) si esa persona no trabaja ese día. Sin ningún horario cargado, la persona queda dada de alta pero no se va a poder clasificar su asistencia hasta completarlo.</p>
+        <div class="table-wrap">
+        <table class="patron">
+          <tr><th>Día</th><th>Entrada</th><th>Salida</th><th>Canal del día</th><th>Refrigerio</th></tr>
+          {% for dia in dias_patron %}
+          <tr>
+            <td class="dia">{{ dia }}</td>
+            <td><input type="time" name="entrada_{{ dia.lower() }}"></td>
+            <td><input type="time" name="salida_{{ dia.lower() }}"></td>
+            <td>
+              <input list="lista-canal-dia" name="canal_{{ dia.lower() }}" placeholder="ej. Tradicional">
+            </td>
+            <td>
+              <select name="refrigerio_{{ dia.lower() }}">
+                <option value="">—</option>
+                <option value="Con refrigerio">Con refrigerio</option>
+                <option value="Medio refrigerio">Medio refrigerio</option>
+                <option value="Sin refrigerio">Sin refrigerio</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+        <datalist id="lista-canal-dia"><option value="Tradicional"><option value="Autoservicio"><option value="Farmacia"></datalist>
+        </div>
+      </div>
+
+      <div class="actions"><button class="btn" type="submit">Agregar headcount</button></div>
+    </form>
+  </div>
+</body>
+</html>

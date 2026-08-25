@@ -113,6 +113,7 @@
       <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_str) }}" class="{{ 'active' if activo=='marcar' else '' }}">Marcar asistencia</a>
       <a href="{{ url_for('asistencia.cliente', fecha=fecha_str) }}" class="{{ 'active' if activo=='cliente' else '' }}">Enviar a cliente</a>
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}" class="{{ 'active' if activo=='headcount_nuevo' else '' }}">Agregar headcount</a>{% endif %}
     </nav>
 
     <div class="top-actions">

@@ -78,6 +78,7 @@
       <a href="{{ url_for('asistencia.marcar_vista') }}">Marcar asistencia</a>
       <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
       <a href="{{ url_for('asistencia.reemplazo_form') }}" class="active">Agregar reemplazo</a>
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
     </nav>
 
     <div class="note"><b>Reemplazos pendientes de confirmar</b> — reportados por los supervisores desde la app, revisá los datos y confirmá.</div>
