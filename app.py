@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import text
 from sqlalchemy.orm import aliased
@@ -133,6 +133,20 @@ def create_app():
     app.register_blueprint(cargas_bp)
     app.register_blueprint(asistencia_bp)
     app.register_blueprint(historial_bp)
+
+    @app.errorhandler(405)
+    def _metodo_no_permitido(e):
+        # Pasa cuando el navegador reintenta con GET una URL que solo acepta
+        # POST -- típico de una pestaña en segundo plano que Chrome/Safari
+        # recarga solo, reproduciendo la última URL de la barra de
+        # direcciones sin el método original (ej. /historial/crear después
+        # de enviar un formulario). Sin esto se veía la página cruda de
+        # error de Werkzeug en vez de volver a un lugar útil. No se usa
+        # flash() acá -- el Dashboard (destino más común) no renderiza
+        # mensajes flash, y quedaría colgado para aparecer sin contexto en
+        # la próxima página que sí los muestre.
+        destino = "dashboard" if current_user.is_authenticated else "auth.login"
+        return redirect(url_for(destino))
 
     @app.get("/health")
     def health():
