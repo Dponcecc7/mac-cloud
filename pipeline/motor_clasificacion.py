@@ -102,6 +102,29 @@ def _upsert_postgres(session, existentes_por_clave, fila):
         existentes_por_clave[(dni, fecha)] = nuevo
 
 
+def _parse_hora_corregida(valor, dni, fecha, lado):
+    """Hora corregida a mano por un analista/supervisor en Tabla 3. pandas
+    3.x exige "hh:mm:ss" en pd.to_timedelta() -- un <input type="time"> del
+    formulario web (o alguien tipeando "8:50" sin segundos) manda "h:mm"/
+    "hh:mm", que pandas 2.x aceptaba pero 3.x rechaza con ValueError,
+    abortando toda la corrida del motor para TODOS (visto en producción
+    2026-08-25: "08:50"/"08:00" tumbaron ~2 horas de corridas). Se completa
+    con ":00" antes de rendirse. Mismo fix aplicado en
+    MAC/motor_clasificacion_diaria.py."""
+    texto = str(valor).strip()
+    try:
+        return pd.to_timedelta(texto)
+    except ValueError:
+        pass
+    if texto.count(":") == 1:
+        try:
+            return pd.to_timedelta(texto + ":00")
+        except ValueError:
+            pass
+    print(f"Aviso: hora de {lado} corregida inválida para DNI {dni} ({fecha}): {valor!r} -- ignorada.")
+    return pd.NaT
+
+
 def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial):
     """Calcula la fila de un dia-persona. Copiada TAL CUAL de
     MAC/motor_clasificacion_diaria.py -- no tocar sin revisar el original
@@ -166,9 +189,9 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             entrada_esp_td = pd.to_timedelta(str(entrada_esp))
             salida_esp_td = pd.to_timedelta(str(salida_esp))
             if pd.notna(hora_ent_corr):
-                entrada_real = pd.to_timedelta(str(hora_ent_corr))
+                entrada_real = _parse_hora_corregida(hora_ent_corr, dni, fecha, "entrada")
             if pd.notna(hora_sal_corr):
-                salida_real = pd.to_timedelta(str(hora_sal_corr))
+                salida_real = _parse_hora_corregida(hora_sal_corr, dni, fecha, "salida")
             # Corrección parcial (solo entrada O solo salida, día sin
             # marcación real de la app -- entrada_real/salida_real arrancan
             # en None): cada diff se calcula solo si ese lado tiene un valor

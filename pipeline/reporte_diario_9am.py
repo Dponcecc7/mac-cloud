@@ -34,7 +34,7 @@ from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from athena_client import traer_visitas  # noqa: E402
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
-from motor_clasificacion import TIPO_NEGOCIO_A_CANAL  # noqa: E402
+from motor_clasificacion import TIPO_NEGOCIO_A_CANAL, _parse_hora_corregida  # noqa: E402
 import graph_lists  # noqa: E402
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
@@ -398,7 +398,10 @@ def main():
             entrada_real = pd.to_timedelta(str(entrada_real_clasif[dni]))
         entrada_desde_correccion = dni in correcciones_entrada
         if entrada_desde_correccion:
-            entrada_real = pd.to_timedelta(str(correcciones_entrada[dni]))
+            # Mismo gotcha que motor_clasificacion.py::_parse_hora_corregida
+            # -- corrección de Tabla 3 en "hh:mm" (sin segundos) tumba
+            # pd.to_timedelta() en pandas 3.x, visto en producción 2026-08-25.
+            entrada_real = _parse_hora_corregida(correcciones_entrada[dni], dni, hoy.date(), "entrada")
             dnis_entrada_corregida.add(dni)
 
         if not entrada_desde_correccion and (es_vacante or "VACANTE" in comentario_entrada_norm):
@@ -437,7 +440,7 @@ def main():
         salida_real_ant = None if ingreso_despues_de_ayer else salida_ant_por_dni.get(dni)
         salida_desde_correccion = dni in correcciones_salida and not ingreso_despues_de_ayer
         if salida_desde_correccion:
-            salida_real_ant = pd.to_timedelta(str(correcciones_salida[dni]))
+            salida_real_ant = _parse_hora_corregida(correcciones_salida[dni], dni, anterior.date(), "salida")
             dnis_salida_corregida.add(dni)
 
         comentario_salida = None
