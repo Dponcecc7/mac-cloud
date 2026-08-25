@@ -95,6 +95,8 @@
       width:100%; padding:7px 9px; margin-bottom:10px; border:1px solid var(--line);
       border-radius:8px; box-sizing:border-box; font:inherit; font-size:12.5px; background:var(--bg); color:var(--ink);
     }
+    form.historial-form select[multiple] { height:auto; padding:4px; }
+    form.historial-form select[multiple] option { padding:4px 7px; border-radius:5px; }
     form.historial-form .fila3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
     @media (max-width: 700px) { form.historial-form .fila3 { grid-template-columns:1fr; } }
     form.inline { display:inline; }
@@ -379,21 +381,20 @@
             <input type="text" name="valor_nuevo" required>
           </div>
           <div>
-            <label>Día de la semana (opcional)</label>
-            <select name="dia_semana">
-              <option value="">Todos los días</option>
-              {% for d in dias_semana_historial %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-            </select>
+            <label>Fecha desde</label>
+            <input type="date" name="fecha_desde" required>
           </div>
         </div>
         <div class="fila3">
           <div>
-            <label>Fecha desde</label>
-            <input type="date" name="fecha_desde" required>
-          </div>
-          <div>
             <label>Fecha hasta (opcional)</label>
             <input type="date" name="fecha_hasta">
+          </div>
+          <div>
+            <label>Día(s) de la semana (opcional -- Ctrl/Cmd+click para elegir varios)</label>
+            <select name="dia_semana" multiple size="4">
+              {% for d in dias_semana_historial %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
           </div>
           <div>
             <label>Comentario (opcional)</label>

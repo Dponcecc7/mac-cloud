@@ -49,11 +49,20 @@
       border-radius:8px; box-sizing:border-box; font:inherit; font-size:13px; background:var(--bg); color:var(--ink);
     }
     form.crear .fila2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    form.crear select[multiple] { height:auto; padding:4px; }
+    form.crear select[multiple] option { padding:5px 8px; border-radius:5px; }
+    .dias-ayuda { font-size:11px; color:var(--muted); margin:-6px 0 12px; }
     form.inline { display:inline; }
     button { padding:9px 16px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:12.5px; }
     button.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
     button.borrar { background:var(--bad-bg); color:var(--bad); }
     .acciones { display:flex; gap:6px; }
+
+    .carga-masiva { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .carga-masiva form { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .carga-masiva input[type=file] { font-size:12.5px; }
+    a.descargar { color:var(--brand); font-size:12.5px; font-weight:700; text-decoration:none; }
+    a.descargar:hover { text-decoration:underline; }
 
     .ayuda { font-size:11.5px; color:var(--muted); background:var(--bg); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; line-height:1.6; }
     .ayuda b { color:var(--ink); }
@@ -82,6 +91,10 @@
       form.crear .fila2 { grid-template-columns:1fr; }
       table { font-size:11.5px; }
       th, td { padding:7px 8px; }
+      .carga-masiva { flex-direction:column; align-items:stretch; }
+      .carga-masiva form { width:100%; }
+      .carga-masiva input[type=file] { flex:1 1 auto; }
+      .carga-masiva button { min-height:44px; }
     }
   </style>
 </head>
@@ -121,11 +134,7 @@
     <div class="panel">
       <p class="panel-title">Registrar cambio nuevo</p>
       <p class="ayuda">
-        <b>Hora entrada/salida programada:</b> formato HH:MM (ej. 09:00).<br>
-        <b>Refrigerio:</b> "Con refrigerio", "Medio refrigerio" o "Sin refrigerio".<br>
-        <b>Canal / Canal del día:</b> el texto exacto del canal (ej. Tradicional, Farmacia, Autoservicio).<br>
-        <b>Supervisor:</b> el nombre completo tal como figura en el Maestro.<br>
-        <b>Zona:</b> el texto de zona/ruta tal como figura en el Maestro.
+        {% for campo, formato in formato_por_campo.items() %}<b>{{ campo }}:</b> {{ formato }}<br>{% endfor %}
       </p>
       <form class="crear" method="post" action="{{ url_for('historial.crear') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -149,15 +158,27 @@
             <input type="date" name="fecha_hasta">
           </div>
         </div>
-        <label>Día de la semana (opcional -- si no se elige, aplica todos los días del rango)</label>
-        <select name="dia_semana">
-          <option value="">Todos los días</option>
+        <label>Día(s) de la semana (opcional)</label>
+        <select name="dia_semana" multiple size="7">
           {% for d in dias_semana %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
         </select>
+        <p class="dias-ayuda">Ctrl/Cmd + click para elegir varios días. Ninguno elegido = aplica todos los días del rango.</p>
         <label>Comentario (opcional)</label>
         <textarea name="comentario" rows="2"></textarea>
         <button type="submit">Registrar</button>
       </form>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Carga masiva por Excel</p>
+      <div class="carga-masiva">
+        <a class="descargar" href="{{ url_for('historial.plantilla') }}">⬇ Descargar plantilla</a>
+        <form method="post" action="{{ url_for('historial.cargar') }}" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="file" name="archivo" accept=".xlsx" required>
+          <button type="submit" class="ghost">Subir archivo</button>
+        </form>
+      </div>
     </div>
 
     <div class="panel">
