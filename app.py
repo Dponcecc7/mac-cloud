@@ -339,20 +339,6 @@ def create_app():
         else:
             tendencia_puntos = ""
 
-        resumen_persona = r.groupby(["dni", "nombre"]).agg(
-            dias=("estado_base", "size"),
-            falta=("estado_base", lambda s: int((s == "FALTA").sum())),
-            tardanza=("estado_base", lambda s: int((s == "TARDANZA").sum())),
-        ).reset_index()
-        top_falta = (
-            resumen_persona[resumen_persona["falta"] > 0]
-            .sort_values(["falta", "tardanza"], ascending=False).head(8).to_dict("records")
-        )
-        top_tardanza = (
-            resumen_persona[resumen_persona["tardanza"] > 0]
-            .sort_values(["tardanza", "falta"], ascending=False).head(8).to_dict("records")
-        )
-
         # "Tiene reemplazo - {motivo cese}" no es un motivo de falta -- es el
         # reporte de baja/reemplazo que un supervisor manda desde la app
         # móvil (ver reporte_diario_9am.py::comentarios_supervisor_dia()),
@@ -362,7 +348,34 @@ def create_app():
             (r["estado_base"] == "FALTA")
             & ~r["comentario"].astype(str).str.strip().str.lower().str.startswith("tiene reemplazo")
         ]
-        faltas_por_motivo = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio).value_counts().head(8)
+        motivo_falta = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio)
+        faltas_por_motivo = motivo_falta.value_counts().head(8)
+
+        # Tabla "Faltas" del detalle del periodo: descanso médico y licencia
+        # son ausencias justificadas y programadas, no fallas de asistencia
+        # -- no deben sumar al ranking de faltas por persona (pedido
+        # explícito de Davor, 2026-08-24).
+        MOTIVOS_NO_CONTABLES_FALTAS = {"Descanso médico", "Licencia"}
+        r["_falta_contable"] = r["estado_base"] == "FALTA"
+        r.loc[faltas_sin_reemplazo.index, "_falta_contable"] = ~motivo_falta.isin(MOTIVOS_NO_CONTABLES_FALTAS)
+
+        resumen_persona = r.groupby(["dni", "nombre"]).agg(
+            dias=("estado_base", "size"),
+            falta=("_falta_contable", "sum"),
+            tardanza=("estado_base", lambda s: int((s == "TARDANZA").sum())),
+        ).reset_index()
+        resumen_persona["falta"] = resumen_persona["falta"].astype(int)
+        # Se muestran todas las personas con al menos 1 falta/tardanza en el
+        # periodo, no solo un "Top N" -- pedido explícito: el detalle del
+        # periodo debe mostrar todos los datos aunque sea un solo registro.
+        top_falta = (
+            resumen_persona[resumen_persona["falta"] > 0]
+            .sort_values(["falta", "tardanza"], ascending=False).to_dict("records")
+        )
+        top_tardanza = (
+            resumen_persona[resumen_persona["tardanza"] > 0]
+            .sort_values(["tardanza", "falta"], ascending=False).to_dict("records")
+        )
 
         # Agrupa los días VACACIONES sueltos en "viajes" contiguos por
         # persona y calcula la duración en días CALENDARIO (salida -> regreso
