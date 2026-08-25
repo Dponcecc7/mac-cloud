@@ -296,25 +296,31 @@
     </div>
     {% endif %}
 
-    {% if sin_sincronizar %}
+    {% if corregidos_a_mano %}
     <div class="panel" style="padding:14px 16px; border-left:4px solid var(--warn);">
-      <p class="panel-title" style="margin-bottom:6px;">Confirmados a mano, pendiente marcación ({{ sin_sincronizar|length }})</p>
-      <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les confirmó asistencia manualmente (botón rápido u hora tipeada, ej. para mandar el reporte temprano) pero el aplicativo todavía no registró ninguna visita real -- realizar seguimiento durante el día.</p>
+      <p class="panel-title" style="margin-bottom:6px;">Confirmados a mano ({{ corregidos_a_mano|length }})</p>
+      <p style="margin:0 0 8px; font-size:12px; color:var(--muted);">Se les confirmó asistencia manualmente (botón rápido u hora tipeada, ej. para mandar el reporte temprano). Se quedan acá aparte todo el día -- cuando el aplicativo ya registra una visita real, se muestra como dato informativo, sin reemplazar lo confirmado a mano.</p>
       <div>
-        {% for p in sin_sincronizar %}
+        {% for p in corregidos_a_mano %}
         {% if usuario.rol == "supervisor" %}
         <div class="marcaron-row">
-          <span class="hora">—</span>
-          <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
-          <span class="badge warn">Pendiente marcación</span>
+          <span class="hora">{{ p.entrada_real[:5] if p.entrada_real else "—" }}</span>
+          <div class="quien">
+            <b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
+            {% if p.hora_real_detalle %}<br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}</span>{% endif %}
+          </div>
+          <span class="badge {{ 'ok' if p.entrada_real else 'warn' }}">{{ 'Confirmado a mano' if p.entrada_real else 'Pendiente marcación' }}</span>
         </div>
         {% else %}
         <details class="marcaron-item">
           <summary>
             <div class="marcaron-row">
-              <span class="hora">—</span>
-              <div class="quien"><b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
-              <span class="badge warn">Pendiente marcación</span>
+              <span class="hora">{{ p.entrada_real[:5] if p.entrada_real else "—" }}</span>
+              <div class="quien">
+                <b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
+                {% if p.hora_real_detalle %}<br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}</span>{% endif %}
+              </div>
+              <span class="badge {{ 'ok' if p.entrada_real else 'warn' }}">{{ 'Confirmado a mano' if p.entrada_real else 'Pendiente marcación' }}</span>
               <span class="editar-txt">Editar</span>
             </div>
           </summary>

@@ -29,7 +29,7 @@ import openpyxl
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, get_session
+from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, Visita, get_session
 from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
@@ -286,14 +286,17 @@ def _ya_marcaron(filas):
     aplicativo hoy. Usa `canal_hoy` (canales_marcados), no `entrada_real`
     -- una corrección manual de hora en Tabla 3 pisa `entrada_real` igual
     aunque no haya ninguna visita real ese día (ver docstring de
-    _marcado_manual_sin_sincronizar), mientras que `canales_marcados` solo
-    se llena a partir de visitas reales y el bloque de corrección de
+    _corregidos_a_mano), mientras que `canales_marcados` solo se llena a
+    partir de visitas reales y el bloque de corrección de
     motor_clasificacion.py nunca lo toca -- es la señal confiable de "esto
     es una marcación real, no una que le puso el supervisor" (Davor,
     2026-08-24: reportó ver a alguien en "Ya marcaron" que en realidad
-    todavía no había marcado, solo tenía la hora que él le puso a mano)."""
+    todavía no había marcado, solo tenía la hora que él le puso a mano).
+    Excluye a quien tenga una corrección manual activa -- esos viven aparte
+    en "Confirmados a mano" TODO el día, ver _corregidos_a_mano (Davor,
+    2026-08-25)."""
     return sorted(
-        (f for f in filas if f["canal_hoy"]),
+        (f for f in filas if f["canal_hoy"] and not (f["entrada_corregida"] or f["entrada_pendiente"])),
         key=lambda f: f["entrada_real"] or "",
     )
 
@@ -309,23 +312,48 @@ def _faltas_vacaciones_vacantes(filas):
     )
 
 
-def _marcado_manual_sin_sincronizar(filas):
-    """Gente confirmada a mano hoy -- con el botón rápido "Asistió"/"Apoyo
-    zona" (`entrada_pendiente`, MARCADOR_SIN_APP en el Estado) O con una
-    hora tipeada directamente (`entrada_corregida`, ej. para poder mandar
-    el reporte temprano con captura) -- que a esta hora TODAVÍA no tiene
-    ninguna visita real del aplicativo (`canal_hoy` vacío). Antes esto
-    miraba solo `entrada_pendiente`, que no cubría el caso de una hora
-    tipeada (`entrada_corregida`) -- ese caso queda con `entrada_real`
-    poblado igual (por la hora que se tipeó), así que sin este chequeo
-    aparte una persona así ni salía acá ni se distinguía de una marcación
-    real en "Ya marcaron" (Davor, 2026-08-24: "hoy le puse 08:00 María
-    Calderón... pero aún no marca... confirmé porque necesité mandar mi
-    asistencia con las capturas")."""
-    return [
-        f for f in filas
-        if not f["canal_hoy"] and (f["entrada_corregida"] or f["entrada_pendiente"])
-    ]
+def _corregidos_a_mano(filas):
+    """Gente con una corrección manual de hora activa hoy -- botón rápido
+    "Asistió"/"Apoyo zona" (`entrada_pendiente`, MARCADOR_SIN_APP en el
+    Estado) O una hora tipeada directamente (`entrada_corregida`, ej. "Ya
+    marcaron: Editar"/"Confirmados a mano: Editar", para poder mandar el
+    reporte temprano con captura). Antes esta sección solo mostraba a
+    quienes el aplicativo TODAVÍA no les había registrado ninguna visita
+    real (`canal_hoy` vacío) -- apenas llegaba una visita real desaparecían
+    de acá y se mezclaban en "Ya marcaron" mostrando la hora tipeada como si
+    fuera la real, sin ninguna señal de que había sido una corrección manual
+    (Davor, 2026-08-25: "todos los que ponga hora manual, deben aparecer
+    aparte, todo el día, y solo confirmarme cuando ya marcaron con su hora
+    de marcación real, solo como detalle"). Ahora se quedan acá TODO el día
+    -- _ya_marcaron() los excluye a propósito -- y marcar_vista() les agrega
+    `hora_real_detalle`/`canal_real_detalle` (ver _marcaciones_reales_hoy)
+    cuando el aplicativo ya registró de verdad, solo como dato informativo,
+    sin pisar la hora corregida."""
+    return [f for f in filas if f["entrada_corregida"] or f["entrada_pendiente"]]
+
+
+def _marcaciones_reales_hoy(dnis, fecha):
+    """Hora y canal de la primera visita REAL (Postgres `visitas`, ver
+    dimension_models.Visita) para cada DNI en `fecha` -- el "detalle"
+    informativo que pide _corregidos_a_mano() una vez que el aplicativo ya
+    registró de verdad a alguien que se había confirmado a mano. Nunca pisa
+    la hora corregida, solo se muestra al lado."""
+    if not dnis:
+        return {}
+    session = get_session()
+    try:
+        filas_v = (
+            session.query(Visita.dni, Visita.hora_inicio, Visita.tipo_negocio)
+            .filter(Visita.dni.in_(dnis), Visita.fecha_inicio == fecha, Visita.hora_inicio.isnot(None))
+            .all()
+        )
+    finally:
+        session.close()
+    reales = {}
+    for dni, hora, canal in filas_v:
+        if dni not in reales or hora < reales[dni][0]:
+            reales[dni] = (hora, canal)
+    return reales
 
 
 def _reemplazos_hoy(fecha, usuario_actual):
@@ -456,15 +484,20 @@ def marcar_vista():
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
     faltas_vacaciones_vacantes = _faltas_vacaciones_vacantes(filas) if filas else []
-    sin_sincronizar = _marcado_manual_sin_sincronizar(filas) if filas else []
+    corregidos_a_mano = _corregidos_a_mano(filas) if filas else []
+    reales_hoy = _marcaciones_reales_hoy([f["dni"] for f in corregidos_a_mano if f["canal_hoy"]], fecha)
+    for f in corregidos_a_mano:
+        detalle = reales_hoy.get(f["dni"])
+        f["hora_real_detalle"] = detalle[0] if detalle else None
+        f["canal_real_detalle"] = detalle[1] if detalle else None
     reemplazos = _reemplazos_hoy(fecha, current_user)
     fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
     return render_template(
         "asistencia_marcar.html", usuario=current_user, activo="marcar",
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
         pendientes=pendientes, marcaron=marcaron,
-        motivos=_motivos_falta() if (pendientes or marcaron or sin_sincronizar or faltas_vacaciones_vacantes) else None,
-        faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, sin_sincronizar=sin_sincronizar,
+        motivos=_motivos_falta() if (pendientes or marcaron or corregidos_a_mano or faltas_vacaciones_vacantes) else None,
+        faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, corregidos_a_mano=corregidos_a_mano,
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
         regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
