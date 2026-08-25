@@ -584,11 +584,21 @@ def marcar():
     fecha = dt.date.fromisoformat(fecha_str)
     accion = request.form.get("accion", "").strip()
     motivo = request.form.get("motivo", "").strip()
+    comentario_extra = request.form.get("comentario", "").strip()
 
     if accion not in ACCIONES_MARCAR:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
     if accion == "Falta" and not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
+
+    # El detalle adicional va entre paréntesis al final -- _homologar_motivo()
+    # / _motivo_limpio() ya recortan cualquier paréntesis final al agrupar
+    # "Faltas por motivo" (mismo mecanismo que ya usa MARCADOR_BORRADO), así
+    # que el motivo sigue agrupando bien aunque cada persona escriba un
+    # detalle distinto acá.
+    comentario_falta = f"Falta - {motivo}"
+    if comentario_extra:
+        comentario_falta += f" ({comentario_extra})"
 
     ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
     if not ok_lock:
@@ -603,7 +613,7 @@ def marcar():
         ws = wb["Registro diario supervisor"]
         fila_libre = ws.max_row + 1
         if accion == "Falta":
-            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, f"Falta - {motivo}")
+            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_falta)
         else:
             _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
         subir_in_place(TABLA3_RUTA_GRAPH, wb)
@@ -615,7 +625,7 @@ def marcar():
         try:
             session.add(CorreccionWeb(
                 dni=dni, fecha=fecha,
-                comentario_entrada=(f"Falta - {motivo}" if accion == "Falta" else accion),
+                comentario_entrada=(comentario_falta if accion == "Falta" else accion),
                 registrado_por=current_user.email,
             ))
             session.commit()
