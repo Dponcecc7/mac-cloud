@@ -191,7 +191,7 @@
               </td>
               <td>
                 <input class="ipt" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}">
-                {% if f.comentario_entrada %}
+                {% if f.comentario_entrada and vista == 'reporte' %}
                 <label class="chk-borrar" title="Borra este comentario y deja que se reclasifique de nuevo (según la marcación real, si la hay)">
                   <input type="checkbox" name="borrar_entrada_{{ f.dni }}"> Borrar
                 </label>
@@ -202,7 +202,7 @@
               {% if vista == 'reporte' %}<td>{{ f.canal_ayer|title }}</td>{% endif %}
               <td>
                 <input class="ipt" name="comentario_salida_{{ f.dni }}" value="{{ f.comentario_salida }}">
-                {% if f.comentario_salida %}
+                {% if f.comentario_salida and vista == 'reporte' %}
                 <label class="chk-borrar" title="Borra este comentario y deja que se reclasifique de nuevo (según la marcación real, si la hay)">
                   <input type="checkbox" name="borrar_salida_{{ f.dni }}"> Borrar
                 </label>
