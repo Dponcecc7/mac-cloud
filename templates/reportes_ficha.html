@@ -284,40 +284,47 @@
       {% endif %}
     </div>
 
-    <div class="grid2">
-      <div class="panel">
-        <p class="panel-title">Tardanzas del mes ({{ tardanzas_mes|length }})</p>
-        {% if not tardanzas_mes %}<p class="empty">Sin tardanzas este mes.</p>
-        {% else %}
-        <div class="table-wrap">
-          <table>
-            <tr><th>Fecha</th><th>Estado</th><th>Entrada real</th><th>Entrada programada</th></tr>
-            {% for t in tardanzas_mes %}
-            <tr>
-              <td>{{ t.fecha }}</td>
-              <td><span class="badge-pct warn">{{ t.estado_corto }}</span></td>
-              <td>{{ t.entrada_real }}</td><td>{{ t.entrada_esperada }}</td>
-            </tr>
-            {% endfor %}
-          </table>
-        </div>
-        {% endif %}
+    <div class="panel">
+      <p class="panel-title">Tardanzas y salidas anticipadas del mes ({{ tardanzas_mes|length }})</p>
+      {% if not tardanzas_mes %}<p class="empty">Sin tardanzas ni salidas anticipadas este mes.</p>
+      {% else %}
+      {% if usuario.rol in ("analista", "admin") %}
+      <p class="empty" style="margin:-6px 0 8px;">"Editar" corrige la hora programada de ESE día puntual (ej. si el horario cambió y recién avisaron después) -- completa el formulario de Historial de cambios más abajo.</p>
+      {% endif %}
+      <div class="table-wrap">
+        <table>
+          <tr><th>Fecha</th><th>Estado</th><th>Entrada real</th><th>Entrada prog.</th><th></th><th>Salida real</th><th>Salida prog.</th><th></th></tr>
+          {% for t in tardanzas_mes %}
+          <tr>
+            <td>{{ t.fecha }}</td>
+            <td>
+              {% if t.tardanza %}<span class="badge-pct warn">Tardanza</span>{% endif %}
+              {% if t.salida_temprana %}<span class="badge-pct warn">Salida anticipada</span>{% endif %}
+            </td>
+            <td>{{ t.entrada_real }}</td><td>{{ t.entrada_esperada }}</td>
+            <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora entrada programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
+            <td>{{ t.salida_real }}</td><td>{{ t.salida_esperada }}</td>
+            <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora salida programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </table>
       </div>
+      {% endif %}
+    </div>
 
-      <div class="panel">
-        <p class="panel-title">Faltas del mes ({{ faltas_mes|length }})</p>
-        {% if not faltas_mes %}<p class="empty">Sin faltas este mes.</p>
-        {% else %}
-        <div class="table-wrap">
-          <table>
-            <tr><th>Fecha</th><th>Motivo</th></tr>
-            {% for f in faltas_mes %}
-            <tr><td>{{ f.fecha }}</td><td>{{ f.motivo }}</td></tr>
-            {% endfor %}
-          </table>
-        </div>
-        {% endif %}
+    <div class="panel">
+      <p class="panel-title">Faltas del mes ({{ faltas_mes|length }})</p>
+      {% if not faltas_mes %}<p class="empty">Sin faltas este mes.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr><th>Fecha</th><th>Motivo</th></tr>
+          {% for f in faltas_mes %}
+          <tr><td>{{ f.fecha }}</td><td>{{ f.motivo }}</td></tr>
+          {% endfor %}
+        </table>
       </div>
+      {% endif %}
     </div>
 
     <div class="grid2">
@@ -402,35 +409,35 @@
       {% endif %}
 
       {% if usuario.rol in ("analista", "admin") %}
-      <form class="historial-form" method="post" action="{{ url_for('historial.crear') }}">
+      <form id="historial-form" class="historial-form" method="post" action="{{ url_for('historial.crear') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="dni" value="{{ persona.dni }}">
         <input type="hidden" name="volver" value="{{ url_for('reportes.ficha', dni=persona.dni) }}">
         <div class="fila3">
           <div>
             <label>Campo</label>
-            <select name="campo" required>
+            <select id="historial-campo" name="campo" required>
               <option value="">Elegí un campo</option>
               {% for c in campos_historial %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
             </select>
           </div>
           <div>
             <label>Valor nuevo</label>
-            <input type="text" name="valor_nuevo" required>
+            <input id="historial-valor" type="text" name="valor_nuevo" required>
           </div>
           <div>
             <label>Fecha desde</label>
-            <input type="date" name="fecha_desde" required>
+            <input id="historial-fecha-desde" type="date" name="fecha_desde" required>
           </div>
         </div>
         <div class="fila3">
           <div>
             <label>Fecha hasta (opcional)</label>
-            <input type="date" name="fecha_hasta">
+            <input id="historial-fecha-hasta" type="date" name="fecha_hasta">
           </div>
           <div>
             <label>Día(s) de la semana (opcional -- Ctrl/Cmd+click para elegir varios)</label>
-            <select name="dia_semana" multiple size="4">
+            <select id="historial-dia" name="dia_semana" multiple size="4">
               {% for d in dias_semana_historial %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
             </select>
           </div>
@@ -441,6 +448,21 @@
         </div>
         <button class="enviar" type="submit">Registrar cambio</button>
       </form>
+      <script>
+        // "Editar" en Tardanzas/salidas anticipadas del mes -- completa
+        // este mismo formulario en vez de duplicar la lógica de guardado
+        // (Davor, 2026-08-26: "con la opcion de poder editar la salida
+        // programada o entrada programada"). Corrige SOLO ese día puntual
+        // (fecha_hasta = fecha_desde), no un rango -- para un cambio de
+        // horario permanente se sigue completando el formulario a mano.
+        function prefillHistorial(campo, fechaIso) {
+          document.getElementById('historial-campo').value = campo;
+          document.getElementById('historial-fecha-desde').value = fechaIso;
+          document.getElementById('historial-fecha-hasta').value = fechaIso;
+          for (const opt of document.getElementById('historial-dia').options) { opt.selected = false; }
+          document.getElementById('historial-valor').focus();
+        }
+      </script>
       {% endif %}
     </div>
   </div>

@@ -14,7 +14,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Font
 from sqlalchemy.orm import aliased
 
-from alertas import alertas_periodo
+from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
 from asistencia import _homologar_motivo
 from cobertura import marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
@@ -547,17 +547,40 @@ def ficha(dni):
             })
     semana_vista_str = f"{anio_v}-W{num_v:02d}"
 
-    # Tardanzas del mes -- lista explícita (no solo el conteo agregado),
-    # para ver a simple vista qué días llegó tarde y por cuánto.
+    # Tardanzas Y salidas anticipadas del mes, combinadas en una sola tabla
+    # con las 4 horas (entrada/salida real y programada) -- Davor,
+    # 2026-08-26: "deberia salir detalle de las salidas anticipadas quiza
+    # junto con tardanzas... Detalle entrada, entrada programada, salida,
+    # salida programada". salida_anticipada_min no viene en detalle_mes
+    # (calcular_detalle_semana no la trae), se consulta aparte -- mismo
+    # patrón que resumen_perfil_equipo() en recomendaciones.py.
+    session = get_session()
+    try:
+        salida_anticipada_por_fecha = dict(
+            session.query(ClasificacionDiaria.fecha, ClasificacionDiaria.salida_anticipada_min)
+            .filter(ClasificacionDiaria.dni == dni, ClasificacionDiaria.fecha >= mes_desde, ClasificacionDiaria.fecha <= mes_hasta)
+            .all()
+        )
+    finally:
+        session.close()
+
     tardanzas_mes = []
     if len(detalle_mes):
-        for _, row in detalle_mes[detalle_mes["estado"].str.startswith("TARDANZA")].sort_values("fecha", ascending=False).iterrows():
+        for _, row in detalle_mes.sort_values("fecha", ascending=False).iterrows():
+            estado_base = row["estado"].split(" (")[0]
+            es_tardanza = estado_base == "TARDANZA"
+            sal_ant = salida_anticipada_por_fecha.get(row["fecha"].date())
+            es_salida_temprana = sal_ant is not None and sal_ant > SALIDA_ANTICIPADA_MIN
+            if not es_tardanza and not es_salida_temprana:
+                continue
             tardanzas_mes.append({
+                "fecha_iso": row["fecha"].date().isoformat(),
                 "fecha": row["fecha"].strftime("%d/%m"),
                 "estado": row["estado"],
-                "estado_corto": ESTADO_CORTO.get(row["estado"].split(" (")[0], "Tardanza"),
-                "entrada_real": row["entrada_real"] or "—",
-                "entrada_esperada": row["entrada_esperada"] or "—",
+                "estado_corto": ESTADO_CORTO.get(estado_base, estado_base.title()),
+                "tardanza": es_tardanza, "salida_temprana": es_salida_temprana,
+                "entrada_real": row["entrada_real"] or "—", "entrada_esperada": row["entrada_esperada"] or "—",
+                "salida_real": row["salida_real"] or "—", "salida_esperada": row["salida_esperada"] or "—",
             })
 
     # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,
