@@ -140,7 +140,13 @@
 
     .panel + .panel { margin-top:14px; }
     .empty { color:var(--muted); font-size:12px; padding:6px 0; }
-    .tabla-wrap { max-height:220px; overflow-y:auto; overflow-x:auto; flex:1; }
+    /* height fija, no max-height -- con max-height + flex:1 las 4 tarjetas
+       de "Detalle del periodo" dependían de que el stretch del grid diera
+       exactamente la altura del contenido más alto; una tarjeta con menos
+       filas (ej. Vacaciones/Vacantes) quedaba más baja que Tardanzas en vez
+       de parejas (Davor, 2026-08-26). Con height fija las 4 miden lo mismo
+       siempre, con scroll interno si el contenido no entra. */
+    .tabla-wrap { height:220px; overflow-y:auto; overflow-x:auto; flex:1; }
   </style>
 </head>
 <body>
