@@ -133,6 +133,57 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
     return personas, fechas, celdas, categorias
 
 
+def marcaciones_del_dia(fecha, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+    """Detalle fila por fila de cada marcación GPS (visita a PDV) de un día
+    puntual -- a diferencia de matriz_cobertura() (resumen agregado, un
+    número por día), esto es la bitácora cruda: hora de inicio/fin, PDV,
+    canal y si quedó dentro del geofence. Para ver a qué hora marcó
+    REALMENTE alguien, ej. cuando una corrección manual en "Marcar
+    asistencia" no coincide con lo que el aplicativo registró (Davor,
+    2026-08-25, sobre un caso real: puso 08:50 a mano pero la marcación
+    real fue a las 11:23). No pesa nada -- reusa la misma `_cargar_visitas`
+    que ya trae Cobertura, acotada a un solo día en vez de un rango, y el
+    volumen por persona/día es de unas pocas visitas, no miles."""
+    v = _cargar_visitas(fecha, fecha, usuario_actual,
+                        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+                        ciudad_filtro=ciudad_filtro)
+    if not len(v):
+        return []
+
+    # Athena entrega la MISMA visita dos veces mientras está en curso -- una
+    # fila apenas empieza (hora_fin literalmente el texto "NaN", no NULL) y
+    # otra cuando cierra, con la hora real. Como la unicidad de `visitas`
+    # incluye hora_fin, ambas se guardan (correcto para no perder historial),
+    # pero acá mostrar las dos duplicaría cada visita cerrada. Se prefiere la
+    # fila con hora_fin real; si todavía no cerró, se muestra como "en curso".
+    v = v.copy()
+    v["hora_fin_valida"] = v["hora_fin"].where(v["hora_fin"].notna() & (v["hora_fin"] != "NaN"))
+    v = v.sort_values(["dni", "punto_venta_id", "hora_inicio", "hora_fin_valida"], na_position="first")
+    v = v.drop_duplicates(subset=["dni", "punto_venta_id", "fecha_inicio", "hora_inicio"], keep="last")
+
+    personas = []
+    for (dni, nombre, ciudad, supervisor), grupo in v.groupby(["dni", "nombre", "ciudad", "supervisor_dni"], dropna=False, sort=False):
+        marcaciones = [
+            {
+                "hora_inicio": row["hora_inicio"],
+                # pd.isna(), no "if hora_fin_valida" -- NaN es truthy en
+                # Python (bool(float('nan')) == True), así que un chequeo
+                # ingenuo dejaba pasar el NaN de pandas hasta la plantilla.
+                "hora_fin": None if pd.isna(row["hora_fin_valida"]) else row["hora_fin_valida"],
+                "punto_venta": row["punto_venta"], "canal": row["tipo_negocio"],
+                "geofence_ok": bool(row["geofence_ok"]),
+                "distancia": None if pd.isna(row["distancia_metros_inicio"]) else round(row["distancia_metros_inicio"]),
+            }
+            for _, row in grupo.sort_values("hora_inicio_td").iterrows()
+        ]
+        personas.append({
+            "dni": dni, "nombre": nombre, "ciudad": ciudad,
+            "supervisor": grupo["supervisor"].iloc[0], "marcaciones": marcaciones,
+        })
+    personas.sort(key=lambda p: (p["nombre"] or "").title())
+    return personas
+
+
 def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
                        rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Visita larga (última visita del día > 60 min y antes de la hora de

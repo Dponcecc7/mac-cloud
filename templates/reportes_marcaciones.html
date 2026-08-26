@@ -47,28 +47,16 @@
     .table-wrap { overflow-x:auto; max-height:70vh; }
     table { border-collapse:collapse; width:100%; font-size:12px; }
     th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
-    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:center; }
-    td.info { text-align:left; }
+    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
     td.info a { color:var(--ink); text-decoration:none; font-weight:600; }
     td.info a:hover { color:var(--brand); text-decoration:underline; }
     th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
-    th:nth-child(1), td:nth-child(1) { left:0; }
     tr:last-child td { border-bottom:none; }
+    tr.persona-primera td { border-top:2px solid var(--line); }
 
-    .celda-baja { background:var(--warn-bg); color:var(--warn); font-weight:700; border-radius:5px; }
-    .celda-vacia { color:var(--muted); }
+    .badge { padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
+    .badge.bad { background:var(--bad-bg); color:var(--bad); }
     .empty { color:var(--muted); font-size:13px; padding:12px 0; }
-
-    .chips { display:inline-flex; gap:2px; margin-left:4px; vertical-align:middle; }
-    .chip { width:14px; height:14px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px; font-weight:800; color:#fff; line-height:1; }
-    .chip.au { background:#2c6e91; }
-    .chip.farma { background:var(--ok); }
-    .chip.censo { background:var(--brand); }
-
-    .leyenda { display:flex; flex-wrap:wrap; gap:16px; align-items:center; font-size:12px; color:var(--ink); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:14px; }
-    .leyenda .item { display:inline-flex; align-items:center; gap:6px; }
-    .leyenda .swatch { width:14px; height:14px; border-radius:4px; display:inline-block; flex-shrink:0; }
-    .leyenda .swatch.baja { background:var(--warn-bg); border:1px solid var(--warn); }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -82,12 +70,10 @@
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
       .top-actions input[type=date] { width:100%; min-height:44px; font-size:15px; }
-      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
       .panel { padding:12px !important; border-radius:12px; }
-      .leyenda { gap:8px 14px; font-size:11.5px; padding:9px 12px; }
     }
   </style>
 </head>
@@ -120,25 +106,21 @@
       <a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
       <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
-      <a href="{{ url_for('reportes.cobertura') }}" class="active">Cobertura</a>
-      <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
+      <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
+      <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" class="active">Marcaciones</a>
     </nav>
 
     <div class="top-actions">
       <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <input type="date" name="desde" value="{{ desde.isoformat() }}">
-        <span style="color:var(--muted);">→</span>
-        <input type="date" name="hasta" value="{{ hasta.isoformat() }}">
-        <button class="btn primary" type="submit">Aplicar</button>
+        <input type="date" name="fecha" value="{{ fecha_str }}">
+        <button class="btn primary" type="submit">Ver</button>
       </form>
-      <a class="btn ghost" href="{{ url_for('reportes.cobertura_exportar', desde=desde.isoformat(), hasta=hasta.isoformat()) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
-        <input type="hidden" name="desde" value="{{ desde.isoformat() }}">
-        <input type="hidden" name="hasta" value="{{ hasta.isoformat() }}">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -162,42 +144,38 @@
 
     <div class="panel">
       {% if not personas %}
-        <p class="empty">Sin visitas registradas en este periodo.</p>
+        <p class="empty">Sin marcaciones registradas para <b>{{ fecha.strftime('%d/%m/%Y') }}</b>.</p>
       {% else %}
-      <div class="leyenda">
-        <span class="item"><span class="chip au">A</span> Visitó Autoservicios</span>
-        <span class="item"><span class="chip farma">F</span> Visitó Farmacia</span>
-        <span class="item"><span class="chip censo">C</span> Día de Punto Censo</span>
-        <span class="item"><span class="swatch baja"></span> Por debajo de su propio promedio</span>
-      </div>
       <div class="table-wrap">
         <table>
           <tr>
             <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
-            {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
+            <th>Hora inicio</th><th>Hora fin</th><th>Canal</th><th>Punto de venta</th><th>Distancia</th>
           </tr>
           {% for p in personas %}
-          <tr>
-            <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
-            <td>{{ (p.ciudad or '—')|title }}</td>
-            <td>{{ (p.supervisor or '—')|title }}</td>
-            {% for f in fechas %}
-              {% set v = celdas.get((p.dni, f)) %}
-              {% set prom = promedios.get(p.dni, 0) %}
-              {% set cats = categorias.get((p.dni, f), []) %}
-              {% if v is none %}
-                <td class="celda-vacia">—</td>
-              {% elif prom > 0 and v < prom * 0.5 %}
-                <td class="celda-baja" title="Bien por debajo de su promedio del periodo ({{ prom|round(1) }})">{{ v }}{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
+            {% for m in p.marcaciones %}
+            <tr class="{{ 'persona-primera' if loop.first else '' }}">
+              {% if loop.first %}
+              <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
+              <td>{{ (p.ciudad or '—')|title }}</td>
+              <td>{{ (p.supervisor or '—')|title }}</td>
               {% else %}
-                <td>{{ v }}{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
+              <td class="info"></td><td></td><td></td>
               {% endif %}
+              <td>{{ (m.hora_inicio or '—')[:5] }}</td>
+              <td>{{ m.hora_fin[:5] if m.hora_fin else 'En curso' }}</td>
+              <td>{{ (m.canal or '—')|title }}</td>
+              <td>{{ m.punto_venta or '—' }}</td>
+              <td>
+                {{ m.distancia ~ ' m' if m.distancia is not none else '—' }}
+                {% if not m.geofence_ok %}<span class="badge bad">Fuera de rango</span>{% endif %}
+              </td>
+            </tr>
             {% endfor %}
-          </tr>
           {% endfor %}
         </table>
       </div>
-      <p class="note">Un número = PDVs distintos visitados ese día (Punto Censo cuenta cada relevo aparte, sin ubicación fija real que colapsar). Solo aparece quien tuvo al menos una visita registrada en el rango elegido. Celda resaltada = menos de la mitad del promedio propio de esa persona en el periodo.</p>
+      <p class="note">Cada fila es una marcación GPS real del aplicativo (bitácora cruda, no un resumen) -- para ver a qué hora marcó alguien de verdad, independiente de cualquier corrección manual cargada en "Marcar asistencia". "Fuera de rango" = a más de 200 m del punto de venta esperado.</p>
       {% endif %}
     </div>
   </div>

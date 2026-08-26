@@ -16,7 +16,7 @@ from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo
 from asistencia import _homologar_motivo
-from cobertura import matriz_cobertura
+from cobertura import marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
@@ -310,6 +310,36 @@ def cobertura_exportar():
     return send_file(
         buf, as_attachment=True, download_name=f"Cobertura_Diaria_{desde}_a_{hasta}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+def _fecha_desde_query():
+    """Lee ?fecha= (formato ISO) -- si falta o es inválida, usa hoy. Mismo
+    patrón que asistencia.marcar_vista() (vista de un solo día, no un rango)."""
+    fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
+    try:
+        return dt.date.fromisoformat(fecha_str), fecha_str
+    except ValueError:
+        hoy = dt.date.today()
+        return hoy, hoy.isoformat()
+
+
+@bp.get("/marcaciones")
+@login_required
+def marcaciones():
+    fecha, fecha_str = _fecha_desde_query()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    personas = marcaciones_del_dia(
+        fecha, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"],
+    )
+    return render_template(
+        "reportes_marcaciones.html", usuario=current_user, activo="marcaciones",
+        fecha=fecha, fecha_str=fecha_str, personas=personas,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
+        ciudades_disponibles=ciudades_disp,
     )
 
 
