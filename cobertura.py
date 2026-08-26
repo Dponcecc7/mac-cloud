@@ -133,7 +133,7 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
     return personas, fechas, celdas, categorias
 
 
-def marcaciones_del_dia(fecha, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Detalle fila por fila de cada marcación GPS (visita a PDV) de un día
     puntual -- a diferencia de matriz_cobertura() (resumen agregado, un
     número por día), esto es la bitácora cruda: hora de inicio/fin, PDV,
@@ -144,7 +144,7 @@ def marcaciones_del_dia(fecha, usuario_actual, rol_filtro=None, region_filtro=No
     real fue a las 11:23). No pesa nada -- reusa la misma `_cargar_visitas`
     que ya trae Cobertura, acotada a un solo día en vez de un rango, y el
     volumen por persona/día es de unas pocas visitas, no miles."""
-    v = _cargar_visitas(fecha, fecha, usuario_actual,
+    v = _cargar_visitas(fecha, fecha, usuario_actual, dni_filtro=dni_filtro,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
                         ciudad_filtro=ciudad_filtro)
     if not len(v):

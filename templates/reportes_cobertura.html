@@ -185,19 +185,20 @@
               {% set v = celdas.get((p.dni, f)) %}
               {% set prom = promedios.get(p.dni, 0) %}
               {% set cats = categorias.get((p.dni, f), []) %}
+              {% set url_ruta = url_for('reportes.marcaciones', fecha=f.strftime('%Y-%m-%d'), dni=p.dni) %}
               {% if v is none %}
                 <td class="celda-vacia">—</td>
               {% elif prom > 0 and v < prom * 0.5 %}
-                <td class="celda-baja" title="Bien por debajo de su promedio del periodo ({{ prom|round(1) }})">{{ v }}{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
+                <td class="celda-baja" title="Bien por debajo de su promedio del periodo ({{ prom|round(1) }}) -- clic para ver la ruta del día"><a href="{{ url_ruta }}" style="color:inherit; text-decoration:none; font-weight:inherit;">{{ v }}</a>{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
               {% else %}
-                <td>{{ v }}{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
+                <td title="Clic para ver la ruta del día"><a href="{{ url_ruta }}" style="color:inherit; text-decoration:none;">{{ v }}</a>{% if cats %}<span class="chips">{% for c in cats %}<span class="chip {{ c }}">{{ c[0]|upper }}</span>{% endfor %}</span>{% endif %}</td>
               {% endif %}
             {% endfor %}
           </tr>
           {% endfor %}
         </table>
       </div>
-      <p class="note">Un número = PDVs distintos visitados ese día (Punto Censo cuenta cada relevo aparte, sin ubicación fija real que colapsar). Solo aparece quien tuvo al menos una visita registrada en el rango elegido. Celda resaltada = menos de la mitad del promedio propio de esa persona en el periodo.</p>
+      <p class="note">Un número = PDVs distintos visitados ese día (Punto Censo cuenta cada relevo aparte, sin ubicación fija real que colapsar) -- hacé clic en el número para ver la ruta del día completa. Solo aparece quien tuvo al menos una visita registrada en el rango elegido. Celda resaltada = menos de la mitad del promedio propio de esa persona en el periodo.</p>
       {% endif %}
     </div>
   </div>

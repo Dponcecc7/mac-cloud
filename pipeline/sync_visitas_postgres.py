@@ -20,6 +20,14 @@ import sys
 import pandas as pd
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+# Columnas que SÍ pueden cambiar para una visita ya sincronizada -- ej.
+# tipo_negocio, si se corrige la regla de clasificación en athena_client.py
+# (como pasó 2026-08-26: se cambió de adivinar por nombre de cadena a usar
+# campana_id). Las columnas de la UNIQUE constraint (dni, punto_venta_id,
+# fecha_inicio, hora_inicio, fecha_fin, hora_fin) identifican la visita y
+# nunca deberían cambiar, así que quedan afuera.
+COLUMNAS_ACTUALIZABLES = ["punto_venta", "tipo_negocio", "distancia_metros_inicio", "motivo_visita"]
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import get_engine, Visita  # noqa: E402
 
@@ -61,9 +69,13 @@ def preparar_filas(df):
 
 def upsert_visitas(filas):
     """Inserta `filas` (lista de dicts, columnas = COLUMNAS, fechas ya como
-    date de Python) en lotes, ignorando duplicados exactos. Devuelve cuántas
-    filas se procesaron (no necesariamente todas nuevas -- las repetidas se
-    ignoran en silencio, es el comportamiento esperado en cada corrida)."""
+    date de Python) en lotes -- una visita ya sincronizada actualiza
+    COLUMNAS_ACTUALIZABLES en vez de ignorarse (antes era
+    on_conflict_do_nothing puro: una visita dentro de la ventana de 10 días
+    que ya existiera en Postgres nunca se corregía aunque el ETL cambiara de
+    criterio, ej. el fix de tipo_negocio por campana_id del 2026-08-26 no se
+    reflejaba en nada ya sincronizado). Devuelve cuántas filas se
+    procesaron (no necesariamente todas nuevas)."""
     if not filas:
         return 0
     engine = get_engine()
@@ -71,8 +83,10 @@ def upsert_visitas(filas):
     with engine.begin() as conn:
         for i in range(0, len(filas), TAMANO_LOTE):
             lote = filas[i:i + TAMANO_LOTE]
-            stmt = pg_insert(Visita.__table__).values(lote).on_conflict_do_nothing(
-                constraint="uq_visita_dedup"
+            stmt = pg_insert(Visita.__table__).values(lote)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_visita_dedup",
+                set_={col: getattr(stmt.excluded, col) for col in COLUMNAS_ACTUALIZABLES},
             )
             conn.execute(stmt)
             procesadas += len(lote)

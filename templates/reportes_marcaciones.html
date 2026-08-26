@@ -110,14 +110,30 @@
       <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" class="active">Marcaciones</a>
     </nav>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="panel" style="margin-bottom:14px; padding:10px 16px; border-left:4px solid {{ 'var(--bad)' if category == 'error' else 'var(--ok)' }};">
+          <p style="margin:0; font-size:13px;">{{ message }}</p>
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if dni_foco %}
+    <div class="note" style="margin-bottom:14px;">
+      Ruta del día de <b>{{ (nombre_foco or dni_foco)|title }}</b> --
+      <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" style="color:var(--brand); font-weight:700;">← Ver todo el equipo</a>
+    </div>
+    {% endif %}
+
     <div class="top-actions">
       <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        {% if dni_foco %}<input type="hidden" name="dni" value="{{ dni_foco }}">{% endif %}
         <input type="date" name="fecha" value="{{ fecha_str }}">
         <button class="btn primary" type="submit">Ver</button>
       </form>
     </div>
 
-    {% if roles_disponibles %}
+    {% if roles_disponibles and not dni_foco %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
         <input type="hidden" name="fecha" value="{{ fecha_str }}">

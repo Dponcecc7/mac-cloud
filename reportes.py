@@ -328,15 +328,40 @@ def _fecha_desde_query():
 @login_required
 def marcaciones():
     fecha, fecha_str = _fecha_desde_query()
+
+    # "Ver ruta del día" desde Cobertura (clic en el número) -- acota a una
+    # sola persona. Mismo criterio de acceso que reportes.ficha(): validar
+    # el scope acá, no solo confiar en dni_filtro de marcaciones_del_dia()
+    # (que en _cargar_visitas se salta condicion_scope cuando hay dni_filtro
+    # -- sin este chequeo cualquier usuario logueado podría ver la ruta de
+    # cualquier DNI armando la URL a mano).
+    dni_foco = request.args.get("dni") or None
+    nombre_foco = None
+    if dni_foco:
+        session = get_session()
+        try:
+            query = session.query(Persona).filter(Persona.dni == dni_foco)
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
+            persona_foco = query.first()
+        finally:
+            session.close()
+        if persona_foco:
+            nombre_foco = persona_foco.nombre_completo
+        else:
+            flash("No se encontró a esa persona o no tenés acceso a su ruta.", "error")
+            dni_foco = None
+
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
     personas = marcaciones_del_dia(
-        fecha, current_user,
+        fecha, current_user, dni_filtro=dni_foco,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"],
     )
     return render_template(
         "reportes_marcaciones.html", usuario=current_user, activo="marcaciones",
-        fecha=fecha, fecha_str=fecha_str, personas=personas,
+        fecha=fecha, fecha_str=fecha_str, personas=personas, dni_foco=dni_foco, nombre_foco=nombre_foco,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp,
