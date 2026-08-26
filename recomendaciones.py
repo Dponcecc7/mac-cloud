@@ -30,20 +30,25 @@ BANDA_EXCELENTE = 95
 BANDA_SEGUIMIENTO = 85
 
 
-def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
+def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
                      rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
     """Devuelve la lista de insights/alertas predictivas para el equipo
     visible de `usuario_actual` -- o para un solo `dni_filtro` (ficha
-    individual, el acceso ya se valida aparte). `rol_filtro`/`region_filtro`/
-    `supervisor_filtro`/`ciudad_filtro`: filtros extra de Reportes (solo
-    admin/analista, ver scoping.aplicar_filtros_extra)."""
-    hoy = hoy or dt.date.today()
-    anio_actual, num_actual, _ = hoy.isocalendar()
+    individual, el acceso ya se valida aparte). `desde` acota el bloque C
+    ("a un paso de la alerta formal", que cuenta sobre ese rango en vez de
+    forzar el mes calendario completo -- Davor, 2026-08-26: quería poder
+    filtrar Desempeño por días sueltos, no solo mes completo); default
+    `hasta.replace(day=1)` si no se pasa, igual que antes. `hasta` es la
+    fecha de referencia para "esta semana"/"días transcurridos" (default
+    hoy real). `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`:
+    filtros extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra)."""
+    hasta = hasta or dt.date.today()
+    anio_actual, num_actual, _ = hasta.isocalendar()
     inicio_actual, _ = semana_iso(anio_actual, num_actual)
-    desde = inicio_actual - dt.timedelta(weeks=4)  # 4 semanas cerradas + la actual
+    desde_semanas = inicio_actual - dt.timedelta(weeks=4)  # 4 semanas cerradas + la actual
 
     detalle = calcular_detalle_semana(
-        desde, hoy, usuario_actual, dni_filtro=dni_filtro,
+        desde_semanas, hasta, usuario_actual, dni_filtro=dni_filtro,
         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
         ciudad_filtro=ciudad_filtro,
     )
@@ -60,7 +65,7 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
 
     tardanzas_semana = detalle[detalle["estado_base"] == "TARDANZA"].groupby(["dni", "semana_iso"]).size()
 
-    mes_desde = hoy.replace(day=1)
+    mes_desde = desde or hasta.replace(day=1)
     detalle_mes = detalle[detalle["fecha"] >= pd.Timestamp(mes_desde)]
     tardanzas_mes = detalle_mes[detalle_mes["estado_base"] == "TARDANZA"].groupby("dni").size()
     # Mismo criterio que alertas.py: descanso médico/licencia/feriado
@@ -137,7 +142,7 @@ def insights_equipo(usuario_actual, dni_filtro=None, hoy=None,
         # D) Riesgo de no llegar al objetivo de la semana en curso -- compara
         # horas trabajadas vs a trabajar SOLO de los días ya transcurridos
         # (no toda la semana, que penalizaría siempre hasta el sábado).
-        avance = detalle[(detalle["dni"] == dni) & (detalle["semana_iso"] == num_actual) & (detalle["fecha"] <= pd.Timestamp(hoy))]
+        avance = detalle[(detalle["dni"] == dni) & (detalle["semana_iso"] == num_actual) & (detalle["fecha"] <= pd.Timestamp(hasta))]
         dias_habiles = int((avance["horas_a_trabajar"] > 0).sum())
         if dias_habiles >= 2:
             resumen_avance = resumen_por_persona(avance)
@@ -167,23 +172,26 @@ def _clip(x):
     return max(0.0, min(100.0, x))
 
 
-def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
+def resumen_perfil_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
                            rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
-    """Resumen de perfil del mes en curso -- 4 métricas normalizadas a 0-100
-    (más alto = mejor), combinadas con PESO_CUMPLIMIENTO/PESO_FALTA/
-    PESO_TARDANZA/PESO_SALIDA: Cumplimiento de horas (mismo % sin faltas ya
-    validado en Horas semanales), Tardanzas, Faltas SIN sustento (mismo
-    criterio que alertas.py) y Salidas anticipadas (mismo umbral de 10 min
-    que ya usa alertas.py), todas sobre los días hábiles ya transcurridos
-    del mes. Para TODO el equipo visible de `usuario_actual` (o un solo
-    `dni_filtro`), no solo quienes ya tienen una señal arriba.
-    `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`: filtros
-    extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra)."""
-    hoy = hoy or dt.date.today()
-    mes_desde = hoy.replace(day=1)
+    """Resumen de perfil del periodo elegido (default: mes en curso) -- 4
+    métricas normalizadas a 0-100 (más alto = mejor), combinadas con
+    PESO_CUMPLIMIENTO/PESO_FALTA/PESO_TARDANZA/PESO_SALIDA: Cumplimiento de
+    horas (mismo % sin faltas ya validado en Horas semanales), Tardanzas,
+    Faltas SIN sustento (mismo criterio que alertas.py) y Salidas
+    anticipadas (mismo umbral de 10 min que ya usa alertas.py), todas sobre
+    los días hábiles ya transcurridos del periodo. Para TODO el equipo
+    visible de `usuario_actual` (o un solo `dni_filtro`), no solo quienes
+    ya tienen una señal arriba. `desde`/`hasta` (default mes calendario en
+    curso) -- Davor, 2026-08-26: quería poder filtrar hasta un día
+    puntual, no solo el mes completo. `rol_filtro`/`region_filtro`/
+    `supervisor_filtro`/`ciudad_filtro`: filtros extra de Reportes (solo
+    admin/analista, ver scoping.aplicar_filtros_extra)."""
+    hasta = hasta or dt.date.today()
+    desde = desde or hasta.replace(day=1)
 
     detalle_mes = calcular_detalle_semana(
-        mes_desde, hoy, usuario_actual, dni_filtro=dni_filtro,
+        desde, hasta, usuario_actual, dni_filtro=dni_filtro,
         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
         ciudad_filtro=ciudad_filtro,
     )
@@ -206,7 +214,7 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, hoy=None,
         q = (
             session.query(ClasificacionDiaria.dni, ClasificacionDiaria.salida_anticipada_min)
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
-            .filter(ClasificacionDiaria.fecha >= mes_desde, ClasificacionDiaria.fecha <= hoy)
+            .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
         )
         if dni_filtro:
             q = q.filter(ClasificacionDiaria.dni == dni_filtro)

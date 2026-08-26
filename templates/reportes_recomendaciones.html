@@ -38,7 +38,8 @@
     .stat-pill { display:inline-block; padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); margin-bottom:16px; }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
     .filtros-admin .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
@@ -88,7 +89,8 @@
       .perfil-grid { grid-template-columns:1fr; }
 
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions input[type=date] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions .btn { width:100%; min-height:44px; text-align:center; }
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
@@ -129,15 +131,19 @@
     </nav>
 
     <div class="top-actions">
-      <form method="get">
-        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+      <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <input type="date" name="desde" value="{{ desde.isoformat() }}">
+        <span style="color:var(--muted);">→</span>
+        <input type="date" name="hasta" value="{{ hasta.isoformat() }}">
+        <button class="btn" type="submit">Aplicar</button>
       </form>
     </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
-        <input type="hidden" name="mes" value="{{ mes_str }}">
+        <input type="hidden" name="desde" value="{{ desde.isoformat() }}">
+        <input type="hidden" name="hasta" value="{{ hasta.isoformat() }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -184,10 +190,10 @@
       {% endfor %}
     {% endif %}
 
-    <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} este mes</h2>
-    <p class="note">Puntaje = promedio ponderado de 4 métricas del mes en curso: Cumplimiento de horas (35%), Faltas sin descanso médico/licencia/feriado regional (35%), Tardanzas (15%) y Salidas antes de hora (15%), todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
+    <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} en el periodo</h2>
+    <p class="note">Puntaje = promedio ponderado de 4 métricas del periodo elegido ({{ desde.strftime('%d/%m') }} al {{ hasta.strftime('%d/%m') }}): Cumplimiento de horas (35%), Faltas sin descanso médico/licencia/feriado regional (35%), Tardanzas (15%) y Salidas antes de hora (15%), todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
     {% if not perfiles %}
-      <p class="empty">Sin datos de clasificación este mes todavía.</p>
+      <p class="empty">Sin datos de clasificación en ese periodo todavía.</p>
     {% else %}
     <div class="perfil-grid">
       {% for p in perfiles %}

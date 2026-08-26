@@ -195,38 +195,46 @@ def alertas():
     )
 
 
-def _hoy_ref_desde_mes(mes_str, desde, hasta):
-    """Para insights_equipo()/resumen_perfil_equipo(), que trabajan contra
-    un `hoy` de referencia (no un rango desde/hasta): si el mes elegido es
-    el actual, usa la fecha real de hoy (para que las reglas de "semana en
-    curso"/"días hábiles transcurridos" sigan siendo correctas); si es un
-    mes pasado, usa el último día de ese mes (todo el mes cuenta como
-    "transcurrido")."""
-    hoy_real = dt.date.today()
-    if (desde.year, desde.month) == (hoy_real.year, hoy_real.month):
-        return hoy_real
-    return hasta
+def _rango_mes_actual_por_defecto():
+    """Como _rango_desde_query() (Cobertura), pero el default de `desde` es
+    el día 1 del mes de `hasta` en vez de una cantidad fija de días atrás
+    -- Reportes > Desempeño mostraba el mes calendario completo sin poder
+    acotarlo (Davor, 2026-08-26: "que sea calendario, no mes completo, que
+    pueda filtrar hasta ciertos dias"). Con ?desde=&hasta= se puede pedir
+    cualquier rango de días; sin params, sigue viéndose el mes en curso
+    hasta hoy (mismo comportamiento de antes)."""
+    hoy = dt.date.today()
+    try:
+        hasta = dt.date.fromisoformat(request.args["hasta"]) if request.args.get("hasta") else hoy
+    except ValueError:
+        hasta = hoy
+    try:
+        desde = dt.date.fromisoformat(request.args["desde"]) if request.args.get("desde") else hasta.replace(day=1)
+    except ValueError:
+        desde = hasta.replace(day=1)
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    return desde, hasta
 
 
 @bp.get("/recomendaciones")
 @login_required
 def recomendaciones():
-    desde, hasta, mes_str = _mes_desde_query()
-    hoy_ref = _hoy_ref_desde_mes(mes_str, desde, hasta)
+    desde, hasta = _rango_mes_actual_por_defecto()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
     lista = insights_equipo(
-        current_user, hoy=hoy_ref,
+        current_user, desde=desde, hasta=hasta,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"],
     )
     perfiles = resumen_perfil_equipo(
-        current_user, hoy=hoy_ref,
+        current_user, desde=desde, hasta=hasta,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"],
     )
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
-        insights=lista, perfiles=perfiles, mes_str=mes_str,
+        insights=lista, perfiles=perfiles, desde=desde, hasta=hasta,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp,
@@ -527,7 +535,7 @@ def ficha(dni):
             })
 
     alertas_mes = alertas_periodo(mes_desde, mes_hasta, None, dni_filtro=dni)
-    insights = insights_equipo(None, dni_filtro=dni, hoy=hoy)
+    insights = insights_equipo(None, dni_filtro=dni, hasta=hoy)
 
     return render_template(
         "reportes_ficha.html", usuario=current_user, activo="ficha",
