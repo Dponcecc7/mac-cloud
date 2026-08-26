@@ -13,6 +13,7 @@ cambios de Historial en cada corrida en la nube -- por eso esta version lee
 directo de Postgres en vez de intentar portar el mismo Graph-download que
 usan otros modulos.
 """
+import datetime as dt
 import os
 import sys
 
@@ -62,6 +63,26 @@ def cargar_historial():
     return idx
 
 
+_CAMPOS_HORA = ("hora entrada programada", "hora salida programada")
+
+
+def _hora_valida(valor):
+    """"Hora entrada/salida programada" termina en pd.to_timedelta() dentro
+    del motor de clasificación (pandas 3.x exige "hh:mm:ss"). La pantalla
+    de "Historial de cambios" (historial.py::_normalizar_hora, 2026-08-26)
+    ya valida esto al cargar un cambio nuevo, pero filas viejas pueden
+    seguir teniendo un "hh:mm" sin segundos guardado de antes de ese fix --
+    completa con ":00" si hace falta, o None si ni así es una hora real."""
+    texto = str(valor).strip()
+    if texto.count(":") == 1:
+        texto = texto + ":00"
+    try:
+        dt.time.fromisoformat(texto)
+    except ValueError:
+        return None
+    return texto
+
+
 def valor_efectivo(idx, dni, campo, fecha, valor_default):
     """Si hay un cambio vigente en `fecha` para (dni, campo), devuelve ese
     valor; si no, devuelve valor_default (lo que diga Maestro/Patron). Si la
@@ -80,4 +101,14 @@ def valor_efectivo(idx, dni, campo, fecha, valor_default):
     if not vigentes:
         return valor_default
     vigentes.sort(key=lambda x: x[0])
+    if campo.lower() in _CAMPOS_HORA:
+        valor_normalizado = _hora_valida(vigentes[-1][2])
+        if valor_normalizado is None:
+            # Un "hh:mm"/texto no rescatable acá tumbaba TODO el motor de
+            # clasificación horas después, sin ningún aviso (apagón real
+            # 2026-08-25/26) -- se ignora el override y se cae al patrón
+            # por defecto en vez de propagar basura.
+            print(f"ADVERTENCIA historial_cambios: valor de hora inválido {vigentes[-1][2]!r} para DNI {dni}, campo '{campo}' ({fecha}) -- se ignora, se usa el patrón por defecto.")
+            return valor_default
+        return valor_normalizado
     return vigentes[-1][2]

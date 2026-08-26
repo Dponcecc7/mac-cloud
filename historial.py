@@ -101,6 +101,11 @@ def _leer_datos_comunes(form):
 
     if not dni or campo not in CAMPOS_VALIDOS or not valor_nuevo or not fecha_desde:
         return None, "Completá DNI, Campo, Valor nuevo y Fecha desde."
+    if campo in CAMPOS_HORA:
+        valor_normalizado = _normalizar_hora(valor_nuevo)
+        if valor_normalizado is None:
+            return None, f'"{valor_nuevo}" no es una hora válida -- usá el formato HH:MM (ej. 09:00).'
+        valor_nuevo = valor_normalizado
     try:
         fecha_desde = dt.date.fromisoformat(fecha_desde)
         fecha_hasta = dt.date.fromisoformat(fecha_hasta) if fecha_hasta else None
@@ -126,6 +131,29 @@ def _texto(valor):
     if pd.isna(valor):
         return None
     return str(valor).strip() or None
+
+
+CAMPOS_HORA = ("Hora entrada programada", "Hora salida programada")
+
+
+def _normalizar_hora(valor):
+    """"Hora entrada/salida programada" termina en pd.to_timedelta() dentro
+    del motor de clasificación -- pandas 3.x exige "hh:mm:ss", pero la ayuda
+    en pantalla le pide al usuario "HH:MM" (ej. "09:00"). Sin esto, un valor
+    así tipeado se guardaba tal cual y recién tumbaba el motor de
+    clasificación HORAS después, en producción, sin ningún aviso al momento
+    de cargarlo (apagón real 2026-08-25/26, dos veces con este mismo
+    origen). Se completa con ":00" si falta y se valida que sea una hora
+    real -- devuelve None si no se puede salvar, para frenar la carga con
+    un error claro en vez de guardar basura."""
+    texto = valor.strip()
+    if texto.count(":") == 1:
+        texto = texto + ":00"
+    try:
+        dt.time.fromisoformat(texto)
+    except ValueError:
+        return None
+    return texto
 
 
 def _plantilla_historial_excel():
@@ -363,6 +391,12 @@ def cargar():
             if not valor_nuevo:
                 errores.append(f"Fila {fila_excel}: falta Valor nuevo.")
                 continue
+            if campo in CAMPOS_HORA:
+                valor_normalizado = _normalizar_hora(valor_nuevo)
+                if valor_normalizado is None:
+                    errores.append(f"Fila {fila_excel}: \"{valor_nuevo}\" no es una hora válida -- usá el formato HH:MM (ej. 09:00).")
+                    continue
+                valor_nuevo = valor_normalizado
             if not fecha_desde:
                 errores.append(f"Fila {fila_excel}: falta Fecha desde.")
                 continue
