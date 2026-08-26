@@ -92,8 +92,27 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
     cursor = conn.cursor()
     es_diaria = tabla == "dim_lf_general_visitas_diarias"
 
+    # dim_lf_general_campana_pdv trae UNA FILA POR CADA CAMPAÑA que un PDV
+    # tuvo alguna vez (cliente_id/campana_id son particiones -- es un
+    # snapshot por campaña, no un maestro con una fila por PDV), asi que un
+    # JOIN directo por punto_venta_id multiplica cada visita en N filas (un
+    # PDV real llegó a tener 6 campañas distintas) y el dedup posterior por
+    # claves de visita se quedaba con una AL AZAR -- bug real encontrado
+    # 2026-08-26 (Davor: "GF_BOTICA NORTE FARMA" salía Farmacia, la campaña
+    # real vigente ahí es Tradicional/998). Se resuelve quedandose con la
+    # fila de campaña actualizada mas recientemente (updated_at) por PDV,
+    # que es la que de verdad esta operando ese punto de venta hoy.
+    campana_vigente_cte = f"""
+        WITH campana_vigente AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY punto_venta_id ORDER BY updated_at DESC) AS rn
+            FROM livetradebi.dim_lf_general_campana_pdv
+            WHERE cliente_id = {CLIENTE_ID}
+        )
+    """
+
     if es_diaria:
         query = f"""
+            {campana_vigente_cte}
             SELECT v.dni_usuario, v.nombre_usuario, v.punto_venta_id,
                    v.fecha_inicio, v.fecha_fin, v.hora_celular AS hora_inicio_raw,
                    v.hora_llegada_servidor AS hora_fin_raw,
@@ -102,13 +121,14 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    p.nombre_personalizado, p.cadena_personalizada, p.empresa_personalizada,
                    p.departamento, p.provincia, p.distrito, p.latitud, p.longitud, p.campana_id
             FROM livetradebi.{tabla} v
-            JOIN livetradebi.dim_lf_general_campana_pdv p
-              ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id
+            JOIN campana_vigente p
+              ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id AND p.rn = 1
             WHERE v.cliente_id = {CLIENTE_ID}
             {filtro_fecha_sql}
         """
     else:
         query = f"""
+            {campana_vigente_cte}
             SELECT v.dni_usuario, v.nombre_usuario, v.punto_venta_id,
                    v.fecha_inicio, v.fecha_fin, v.hora_inicio AS hora_inicio_raw,
                    v.hora_fin AS hora_fin_raw,
@@ -117,8 +137,8 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    v.nombre_personalizado, v.cadena_personalizada, v.empresa_personalizada,
                    v.departamento, v.provincia, v.distrito, p.latitud, p.longitud, p.campana_id
             FROM livetradebi.{tabla} v
-            LEFT JOIN livetradebi.dim_lf_general_campana_pdv p
-              ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id
+            LEFT JOIN campana_vigente p
+              ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id AND p.rn = 1
             WHERE v.cliente_id = {CLIENTE_ID}
             {filtro_fecha_sql}
         """
