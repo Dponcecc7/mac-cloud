@@ -834,6 +834,26 @@ def estado_workflow():
     return jsonify(estado_ultima_corrida(nombre) or {})
 
 
+_WORKFLOWS_ENCADENABLES = ("exportar_dimensiones.yml", "pipeline_completo.yml")
+
+
+@bp.post("/disparar_siguiente")
+@login_required
+def disparar_siguiente():
+    # Paso 2 de la cadena "actualizar Maestro -> correr motor de clasificación"
+    # (ver poll_siguiente en asistencia_resultado.html) -- el JS de polling
+    # llama a esto apenas exportar_dimensiones.yml termina bien, para recién
+    # ahí disparar pipeline_completo.yml (que lee el Excel que ese primer
+    # paso acaba de regenerar). Whitelist a propósito: esto SÍ dispara una
+    # acción (a diferencia de estado_workflow, que solo lee), no aceptar
+    # cualquier nombre de archivo.
+    nombre = request.form.get("wf", "")
+    if nombre not in _WORKFLOWS_ENCADENABLES:
+        return jsonify({"ok": False}), 400
+    ok, _mensaje = disparar_workflow(nombre)
+    return jsonify({"ok": ok})
+
+
 @bp.get("/reemplazo")
 @_analista_requerido
 def reemplazo_form():
@@ -903,10 +923,13 @@ def reemplazo_submit():
         except Exception:
             pass  # el reemplazo en si ya se guardo bien -- esto es solo prolijidad, no bloquea el flujo principal
 
-        ok_disparo, _ = disparar_workflow("pipeline_completo.yml")
+        # Mismo motivo que headcount_nuevo_submit(): exportar_dimensiones.yml
+        # primero para que el Excel Maestro refleje al reemplazo antes de
+        # que el motor de clasificación lo lea.
+        ok_disparo, _ = disparar_workflow("exportar_dimensiones.yml")
         detalle = "\n".join(log)
         if not ok_disparo:
-            detalle += "\n\nEl reemplazo se guardó, pero no se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario."
+            detalle += "\n\nEl reemplazo se guardó, pero no se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario en unos minutos."
         titulo = "Reemplazo agregado"
     except Exception as e:
         detalle = str(e)
@@ -917,7 +940,8 @@ def reemplazo_submit():
         "asistencia_resultado.html", usuario=current_user, activo="reemplazo",
         titulo=titulo, ok=(titulo == "Reemplazo agregado"), detalle=detalle,
         volver=url_for("asistencia.reemplazo_form"),
-        poll_workflow="pipeline_completo.yml" if ok_disparo else None,
+        poll_workflow="exportar_dimensiones.yml" if ok_disparo else None,
+        poll_siguiente="pipeline_completo.yml" if ok_disparo else None,
     )
 
 
@@ -1033,9 +1057,14 @@ def headcount_nuevo_submit():
                 "\"Historial de cambios\" antes de que empiece a trabajar, sino no se va a poder "
                 "clasificar su asistencia."
             )
-        ok_disparo, _ = disparar_workflow("pipeline_completo.yml")
+        # exportar_dimensiones.yml primero, NO pipeline_completo.yml directo
+        # -- el motor de clasificación lee el Excel Maestro, que recién
+        # queda al día después de ese primer paso (ver poll_siguiente en
+        # asistencia_resultado.html; Davor, 2026-08-26: headcount nuevo no
+        # aparecía en el reporte por dispararse el paso equivocado).
+        ok_disparo, _ = disparar_workflow("exportar_dimensiones.yml")
         if not ok_disparo:
-            detalle += "\n\nNo se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario."
+            detalle += "\n\nNo se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario en unos minutos."
         titulo = "Headcount agregado"
     except Exception as e:
         detalle = str(e)
@@ -1046,5 +1075,104 @@ def headcount_nuevo_submit():
         "asistencia_resultado.html", usuario=current_user, activo="headcount_nuevo",
         titulo=titulo, ok=(titulo == "Headcount agregado"), detalle=detalle,
         volver=url_for("asistencia.headcount_nuevo_form"),
-        poll_workflow="pipeline_completo.yml" if titulo == "Headcount agregado" and ok_disparo else None,
+        poll_workflow="exportar_dimensiones.yml" if titulo == "Headcount agregado" and ok_disparo else None,
+        poll_siguiente="pipeline_completo.yml" if titulo == "Headcount agregado" and ok_disparo else None,
+    )
+
+
+@bp.get("/dar-de-baja")
+@_analista_requerido
+def dar_de_baja_form():
+    """Contraparte de "Agregar headcount" -- mercaderista es una posición
+    por días, así que hace falta poder dar de baja a alguien SIN
+    necesariamente tener ya a quien lo reemplace (a diferencia de "Agregar
+    reemplazo", que pide los dos DNIs a la vez) (Davor, 2026-08-26). Deja la
+    posición en estado Vacante -- "Agregar reemplazo" ya sabe cubrir
+    vacantes existentes cuando aparezca quien la tome."""
+    session = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+        query = session.query(Persona.dni, Persona.nombre_completo, Persona.rol, Persona.ciudad).filter(
+            Persona.estado == "Activo"
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+    finally:
+        session.close()
+
+    return render_template(
+        "asistencia_dar_de_baja.html", usuario=current_user, activo="dar_de_baja",
+        hoy=dt.date.today().isoformat(), activos=activos,
+    )
+
+
+@bp.post("/dar-de-baja")
+@_analista_requerido
+def dar_de_baja_submit():
+    dni = request.form.get("dni", "").strip()
+    fecha_baja_str = request.form.get("fecha_baja", "").strip()
+    motivo = request.form.get("motivo_baja", "").strip() or None
+
+    if not dni or not fecha_baja_str:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="dar_de_baja",
+            titulo="Falló", ok=False, detalle="Faltan campos obligatorios (persona, fecha de baja).",
+            volver=url_for("asistencia.dar_de_baja_form"),
+        )
+    try:
+        fecha_baja = dt.date.fromisoformat(fecha_baja_str)
+    except ValueError:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="dar_de_baja",
+            titulo="Falló", ok=False, detalle="Fecha de baja inválida.",
+            volver=url_for("asistencia.dar_de_baja_form"),
+        )
+
+    session = get_session()
+    try:
+        # condicion_scope() aplicada ACÁ, no solo confiar en que el
+        # desplegable del formulario ya venga acotado -- mismo criterio que
+        # reportes.marcaciones()/reportes.ficha() para no confiar en un DNI
+        # que llegue por POST directo sin pasar por el desplegable.
+        query = session.query(Persona).filter(Persona.dni == dni)
+        cond_scope = condicion_scope(Persona, current_user)
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        persona = query.first()
+
+        if persona is None:
+            titulo, ok = "Falló", False
+            detalle = "No se encontró a esa persona o no tenés acceso a darla de baja."
+        elif persona.estado != "Activo":
+            titulo, ok = "Falló", False
+            detalle = f"DNI {dni} no está Activo ahora mismo (está en '{persona.estado}')."
+        else:
+            nombre = persona.nombre_completo
+            persona.estado = "Vacante"
+            persona.fecha_baja = fecha_baja
+            persona.motivo_baja = motivo
+            session.commit()
+            titulo, ok = "Baja registrada", True
+            detalle = (
+                f"{(nombre or dni).title()} (DNI {dni}) quedó de baja desde {fecha_baja_str}. "
+                "La posición queda Vacante -- usá \"Agregar reemplazo\" cuando tengas a quien la cubra."
+            )
+    finally:
+        session.close()
+
+    ok_disparo = False
+    if ok:
+        # Misma cadena que headcount_nuevo_submit()/reemplazo_submit(): el
+        # motor de clasificación lee el Excel Maestro, no Postgres directo.
+        ok_disparo, _ = disparar_workflow("exportar_dimensiones.yml")
+        if not ok_disparo:
+            detalle += "\n\nNo se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde el reporte diario en unos minutos."
+
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="dar_de_baja",
+        titulo=titulo, ok=ok, detalle=detalle,
+        volver=url_for("asistencia.dar_de_baja_form"),
+        poll_workflow="exportar_dimensiones.yml" if ok and ok_disparo else None,
+        poll_siguiente="pipeline_completo.yml" if ok and ok_disparo else None,
     )

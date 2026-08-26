@@ -31,7 +31,16 @@
         <p class="sub" id="poll-msg">Esto puede tardar unos minutos, podés esperar acá o volver más tarde.</p>
       </div>
       <script>
-        const wf = {{ poll_workflow|tojson }};
+        let wf = {{ poll_workflow|tojson }};
+        // Cadena de 2 pasos (ej. alta de headcount): primero regenerar el
+        // Excel maestro desde Postgres (exportar_dimensiones.yml), recién
+        // ahí correr el motor de clasificación (pipeline_completo.yml) --
+        // si se disparara pipeline_completo.yml de una, leería el Excel
+        // TODAVÍA VIEJO y la persona nueva no aparecería en ningún reporte
+        // hasta la próxima corrida suelta de exportar_dimensiones (cada
+        // 15-45 min) (Davor, 2026-08-26: headcount nuevo no le figuraba en
+        // el reporte por esto exacto).
+        let siguiente = {{ (poll_siguiente or "")|tojson }};
         let intentos = 0;
         function checar() {
           intentos++;
@@ -50,6 +59,22 @@
               }
               if (info.status === 'completed') {
                 const bien = info.conclusion === 'success';
+                if (bien && siguiente) {
+                  const wf_siguiente = siguiente;
+                  siguiente = '';
+                  titulo.textContent = 'Actualizando (paso 2 de 2)...';
+                  msg.textContent = 'El maestro de personal ya se actualizó -- ahora corriendo el motor de clasificación.';
+                  const form = new URLSearchParams();
+                  form.append('wf', wf_siguiente);
+                  fetch(`{{ url_for('asistencia.disparar_siguiente') }}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': {{ csrf_token()|tojson }} },
+                    body: form,
+                  })
+                    .then(() => { wf = wf_siguiente; intentos = 0; setTimeout(checar, 8000); })
+                    .catch(() => setTimeout(checar, 10000));
+                  return;
+                }
                 panel.className = 'panel ' + (bien ? 'ok' : 'bad');
                 barra.className = 'progress-fill ' + (bien ? 'listo' : 'fallo');
                 titulo.textContent = bien ? 'Listo' : 'Algo falló';
