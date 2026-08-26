@@ -467,8 +467,23 @@ def main():
 
             registro_sup = sup_idx.get(clave)
 
-            fila = clasificar_dia(dni, persona["Nombre completo"], fecha, weekday, pat,
-                                   col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial)
+            # Cualquier bug no anticipado en clasificar_dia() para UN
+            # dni/fecha puntual (ej. los dos apagones reales de 2026-08-25
+            # y 2026-08-26, ambos "un solo dato mal tipeado tira abajo TODO
+            # el motor para las ~90 personas y bloquea los pasos 3-8 del
+            # pipeline") ya no debe frenar la corrida entera -- se salta
+            # ese día/persona con un aviso visible en el log, y el resto
+            # del equipo se sigue clasificando normal. Los guards puntuales
+            # (_parse_hora_corregida, valor_efectivo) siguen siendo la
+            # primera línea de defensa porque dan un mensaje más específico
+            # y no pierden el día de esa persona -- esto es la red de
+            # seguridad para lo que todavía no se anticipó.
+            try:
+                fila = clasificar_dia(dni, persona["Nombre completo"], fecha, weekday, pat,
+                                       col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial)
+            except Exception as e:
+                print(f"ADVERTENCIA: no se pudo clasificar DNI {dni} en {fecha.date()} -- {e!r} -- se omite, la corrida sigue con el resto.")
+                continue
             resultados_nuevos.append(fila)
             if ya_procesado and tiene_correccion:
                 filas_corregidas += 1
