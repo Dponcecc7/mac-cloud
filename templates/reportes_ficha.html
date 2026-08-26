@@ -68,6 +68,19 @@
     .semana-barra { height:100%; border-radius:6px; }
     .semana-pct { width:38px; text-align:right; flex-shrink:0; font-weight:700; font-size:11.5px; }
 
+    .tareo-strip { display:flex; gap:4px; overflow-x:auto; padding-bottom:6px; }
+    .tareo-dia { flex:0 0 auto; width:34px; text-align:center; border-radius:8px; padding:4px 2px; background:var(--bg); }
+    .tareo-dia .num { display:block; font-size:11px; font-weight:700; color:var(--muted); }
+    .tareo-dia .dow { display:block; font-size:8.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.02em; }
+    .tareo-dia .cod { display:block; margin-top:3px; font-size:11px; font-weight:800; border-radius:5px; padding:2px 0; }
+    .tareo-dia .cod.ok { background:var(--ok-bg); color:var(--ok); }
+    .tareo-dia .cod.warn { background:var(--warn-bg); color:var(--warn); }
+    .tareo-dia .cod.bad { background:var(--bad-bg); color:var(--bad); }
+    .tareo-dia .cod.info { background:#dbeafe; color:#2563eb; }
+    .tareo-dia .cod.muted { background:var(--line); color:var(--muted); }
+    .tareo-leyenda { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:11px; color:var(--muted); margin-top:10px; }
+    .tareo-leyenda .cod { display:inline-block; width:16px; height:16px; border-radius:4px; text-align:center; line-height:16px; font-size:9px; font-weight:800; margin-right:4px; vertical-align:middle; }
+
     .table-wrap { overflow-x:auto; }
     table { border-collapse:collapse; width:100%; font-size:12px; }
     th { text-align:left; padding:6px 8px; font-size:10px; text-transform:uppercase; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
@@ -184,6 +197,31 @@
         </div>
         {% else %}<p class="empty">Sin datos de clasificación este mes.</p>{% endif %}
       </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Tareo del mes</p>
+      {% if not tareo_mes %}<p class="empty">Sin datos de clasificación este mes.</p>
+      {% else %}
+      <div class="tareo-strip">
+        {% for d in tareo_mes %}
+        <div class="tareo-dia" title="{{ d.dia_semana }} {{ d.fecha.strftime('%d/%m') }} — {{ d.titulo }}">
+          <span class="num">{{ d.dia }}</span>
+          <span class="dow">{{ d.dia_semana }}</span>
+          <span class="cod {{ d.clase }}">{{ d.codigo }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="tareo-leyenda">
+        <span><span class="cod ok">A</span>Asistió a tiempo</span>
+        <span><span class="cod warn">T</span>Tardanza</span>
+        <span><span class="cod bad">F</span>Falta</span>
+        <span><span class="cod info">DM</span>Descanso médico</span>
+        <span><span class="cod info">V</span>Vacaciones</span>
+        <span><span class="cod muted">PC</span>Posición por cubrir</span>
+        <span><span class="cod muted">—</span>Sin marcación (no le tocaba trabajar)</span>
+      </div>
+      {% endif %}
     </div>
 
     <div class="grid2">

@@ -34,6 +34,25 @@ DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Dom
 # formato" en vez de mostrar el estado crudo ("ASISTIÓ A TIEMPO", 2026-08-24).
 ESTADO_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA": "Falta", "VACANTE": "Vacante", "VACACIONES": "Vacaciones"}
 
+# Mismo vocabulario que ya usa la vista "Tareo" de One Page (F/PC/T/V/DM/A/—)
+# -- Davor, 2026-08-26: "cuando entro a ver el personal... me deberia salir
+# como un tareo... algo asi como la vista de One Page".
+def _codigo_tareo(estado_base, comentario):
+    comentario_norm = str(comentario).lower() if pd.notna(comentario) else ""
+    if estado_base == "FALTA":
+        if "descanso" in comentario_norm and "medic" in comentario_norm:
+            return "DM", "info"
+        return "F", "bad"
+    if estado_base == "TARDANZA":
+        return "T", "warn"
+    if estado_base == "VACANTE":
+        return "PC", "muted"
+    if estado_base == "VACACIONES":
+        return "V", "info"
+    if estado_base == "ASISTIÓ A TIEMPO":
+        return "A", "ok"
+    return "?", "muted"
+
 COLUMNAS_HORAS = [
     ("nombre", "Nombre"), ("supervisor", "Supervisor"), ("ciudad", "Ciudad"), ("region", "Región"),
     ("dias_falta_vacante", "Días Falta/Vacante"), ("horas_trabajadas", "Horas trabajadas"),
@@ -413,6 +432,27 @@ def ficha(dni):
     resumen_mes = resumen_por_persona(detalle_mes)
     indicador_mes = resumen_mes.iloc[0].to_dict() if len(resumen_mes) else None
 
+    # Tareo del mes -- calendario compacto día por día (mismo estilo que la
+    # vista "Tareo" de One Page), reusando detalle_mes (ya calculado arriba,
+    # no hace falta una consulta nueva). Un día sin fila (domingo, feriado,
+    # antes del ingreso, o todavía no procesado) se muestra como "—".
+    por_fecha = {row["fecha"].date(): row for _, row in detalle_mes.iterrows()} if len(detalle_mes) else {}
+    tareo_mes = []
+    fecha_cursor = mes_desde
+    while fecha_cursor <= mes_hasta:
+        row = por_fecha.get(fecha_cursor)
+        if row is None:
+            codigo, clase, titulo = "—", "muted", "Sin marcación (no le tocaba trabajar)"
+        else:
+            estado_base = row["estado"].split(" (")[0]
+            codigo, clase = _codigo_tareo(estado_base, row["comentario"])
+            titulo = row["estado"]
+        tareo_mes.append({
+            "fecha": fecha_cursor, "dia": fecha_cursor.day, "dia_semana": DIAS_ES[fecha_cursor.weekday()][:2],
+            "codigo": codigo, "clase": clase, "titulo": titulo,
+        })
+        fecha_cursor += dt.timedelta(days=1)
+
     # Vacaciones (últimos 180 días) -- reusa el mismo agrupador en "viajes"
     # que ya usa el Dashboard.
     session = get_session()
@@ -540,7 +580,7 @@ def ficha(dni):
     return render_template(
         "reportes_ficha.html", usuario=current_user, activo="ficha",
         persona=persona, nombre_supervisor=nombre_supervisor,
-        indicador_mes=indicador_mes, viajes_vacaciones=viajes_vacaciones,
+        indicador_mes=indicador_mes, tareo_mes=tareo_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,

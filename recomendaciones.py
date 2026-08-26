@@ -232,8 +232,24 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=Non
     else:
         salidas_tempranas = pd.Series(dtype=int)
 
+    # Solo gente ACTUALMENTE activa -- alguien dado de baja durante el
+    # periodo (ej. renunció el 21/08) sigue teniendo días hábiles y puede
+    # salir con un puntaje "Excelente" perfecto de sus pocos días
+    # trabajados, pero ya no es parte del equipo y ensucia el ranking
+    # (Davor, 2026-08-26: "Fernando... no debería aparecer en el reporte").
+    session = get_session()
+    try:
+        estados = dict(
+            session.query(Persona.dni, Persona.estado)
+            .filter(Persona.dni.in_(detalle_mes["dni"].unique().tolist())).all()
+        )
+    finally:
+        session.close()
+
     resumen = []
     for dni in detalle_mes["dni"].unique():
+        if estados.get(dni) != "Activo":
+            continue
         dh = int(dias_habiles.get(dni, 0))
         if dh == 0:
             continue
