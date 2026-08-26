@@ -36,6 +36,15 @@ CADENAS_FARMACIA = {
 }
 DEFAULT_TIPO_NEGOCIO = "TRADICIONAL"
 
+# Mapeo directo campana_id -> tipo_negocio (Davor, 2026-08-26) -- más
+# confiable que adivinar por nombre de cadena (cadena_a_tipo_negocio() abajo),
+# que sirve como respaldo solo para campañas fuera de este mapeo.
+CAMPANA_ID_A_TIPO_NEGOCIO = {
+    924: "TRADICIONAL", 987: "TRADICIONAL", 998: "TRADICIONAL",
+    255: "FARMACIA",
+    10: "AUTOSERVICIOS",
+}
+
 
 def cadena_a_tipo_negocio(cadena):
     c = str(cadena).strip().upper()
@@ -91,7 +100,7 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    v.posicion_inicio, v.posicion_fin, v.visita_efectiva,
                    v.bateria_inicio, v.bateria_fin, NULL AS motivo_visita,
                    p.nombre_personalizado, p.cadena_personalizada, p.empresa_personalizada,
-                   p.departamento, p.provincia, p.distrito, p.latitud, p.longitud
+                   p.departamento, p.provincia, p.distrito, p.latitud, p.longitud, p.campana_id
             FROM livetradebi.{tabla} v
             JOIN livetradebi.dim_lf_general_campana_pdv p
               ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id
@@ -106,7 +115,7 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    v.posicion_inicio, v.posicion_fin, v.visita_efectiva,
                    v.bateria_inicio, v.bateria_fin, v.motivo_visita,
                    v.nombre_personalizado, v.cadena_personalizada, v.empresa_personalizada,
-                   v.departamento, v.provincia, v.distrito, p.latitud, p.longitud
+                   v.departamento, v.provincia, v.distrito, p.latitud, p.longitud, p.campana_id
             FROM livetradebi.{tabla} v
             LEFT JOIN livetradebi.dim_lf_general_campana_pdv p
               ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id
@@ -135,7 +144,15 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
         lambda r: haversine_m(r["_lat_fin"], r["_lon_fin"], r["latitud"], r["longitud"]), axis=1
     )
 
-    df["tipo_negocio"] = df["cadena_personalizada"].map(cadena_a_tipo_negocio)
+    # campana_id es la fuente confiable (Davor, 2026-08-26); cadena_personalizada
+    # queda como respaldo solo para campañas fuera de CAMPANA_ID_A_TIPO_NEGOCIO
+    # (o sin campana_id, ej. si el join no matcheó).
+    campana_id_num = pd.to_numeric(df["campana_id"], errors="coerce")
+    df["tipo_negocio"] = campana_id_num.map(CAMPANA_ID_A_TIPO_NEGOCIO)
+    sin_campana_conocida = df["tipo_negocio"].isna()
+    df.loc[sin_campana_conocida, "tipo_negocio"] = (
+        df.loc[sin_campana_conocida, "cadena_personalizada"].map(cadena_a_tipo_negocio)
+    )
 
     if es_diaria:
         hora_inicio_dt = pd.to_datetime(df["hora_inicio_raw"], errors="coerce")
