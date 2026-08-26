@@ -13,6 +13,7 @@ import sys
 import pandas as pd
 
 from dimension_models import Persona, PatronRecurrente, Visita, get_session
+from fact_models import ClasificacionDiaria
 from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -161,6 +162,23 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
     v = v.sort_values(["dni", "punto_venta_id", "hora_inicio", "hora_fin_valida"], na_position="first")
     v = v.drop_duplicates(subset=["dni", "punto_venta_id", "fecha_inicio", "hora_inicio"], keep="last")
 
+    # Si además hay una corrección manual cargada ese día (Tabla 3, vía
+    # "Marcar asistencia"), se muestra como nota -- para no olvidar que ese
+    # día se le puso otra hora a mano, aunque acá se vea la ruta GPS real
+    # (Davor, 2026-08-26: "deberia aparecer ahi como detalle, para no
+    # olvidar que ese dia yo le coloque otra hora").
+    session = get_session()
+    try:
+        correcciones = {
+            c.dni: c for c in session.query(ClasificacionDiaria).filter(
+                ClasificacionDiaria.dni.in_(v["dni"].unique().tolist()),
+                ClasificacionDiaria.fecha == fecha,
+                ClasificacionDiaria.fuente_dato == "Corregido manualmente (Tabla 3)",
+            ).all()
+        }
+    finally:
+        session.close()
+
     personas = []
     for (dni, nombre, ciudad, supervisor), grupo in v.groupby(["dni", "nombre", "ciudad", "supervisor_dni"], dropna=False, sort=False):
         marcaciones = [
@@ -176,9 +194,20 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
             }
             for _, row in grupo.sort_values("hora_inicio_td").iterrows()
         ]
+        correccion = correcciones.get(dni)
+        correccion_manual = None
+        if correccion:
+            partes = []
+            if correccion.entrada_real:
+                partes.append(f"entrada {correccion.entrada_real[:5]}")
+            if correccion.salida_real:
+                partes.append(f"salida {correccion.salida_real[:5]}")
+            correccion_manual = " y ".join(partes) if partes else None
+
         personas.append({
             "dni": dni, "nombre": nombre, "ciudad": ciudad,
             "supervisor": grupo["supervisor"].iloc[0], "marcaciones": marcaciones,
+            "correccion_manual": correccion_manual,
         })
     personas.sort(key=lambda p: (p["nombre"] or "").title())
     return personas

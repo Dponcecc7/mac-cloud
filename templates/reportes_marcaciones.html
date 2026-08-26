@@ -172,7 +172,10 @@
             {% for m in p.marcaciones %}
             <tr class="{{ 'persona-primera' if loop.first else '' }}">
               {% if loop.first %}
-              <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
+              <td class="info">
+                <a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a>
+                {% if p.correccion_manual %}<br><span style="font-size:11px; font-weight:normal; color:var(--warn);">Confirmado a mano: {{ p.correccion_manual }}</span>{% endif %}
+              </td>
               <td>{{ (p.ciudad or '—')|title }}</td>
               <td>{{ (p.supervisor or '—')|title }}</td>
               {% else %}
