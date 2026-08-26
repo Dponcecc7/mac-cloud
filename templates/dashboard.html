@@ -139,6 +139,15 @@
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
 
     .panel + .panel { margin-top:14px; }
+    /* Encontrado midiendo con Playwright (Davor, 2026-08-26, 3ra vuelta de
+       esta incidencia) -- la regla de arriba es para paneles APILADOS
+       verticalmente en el resto del dashboard, pero ".panel + .panel"
+       también matchea a los paneles del grid4 (son hermanos DOM
+       adyacentes igual, el selector no sabe que están uno al lado del
+       otro) -- empujaba a los 3 últimos 14px hacia abajo DENTRO de la
+       misma fila, mientras el primero (Tardanzas) se quedaba arriba. El
+       ancho fijo de .tabla-wrap nunca fue el problema real. */
+    .grid4 .panel + .panel { margin-top:0; }
     .empty { color:var(--muted); font-size:12px; padding:6px 0; }
     /* height fija SIN flex:1 -- "flex:1" es taquigrafía de "flex-grow:1
        flex-shrink:1 flex-basis:0%", y ese flex-basis:0% pisa el height
