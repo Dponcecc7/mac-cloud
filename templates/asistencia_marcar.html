@@ -307,7 +307,10 @@
           <span class="hora">{{ p.entrada_real[:5] if p.entrada_real else "—" }}</span>
           <div class="quien">
             <b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
-            {% if p.hora_real_detalle %}<br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}</span>{% endif %}
+            {% if p.hora_real_detalle %}
+            {% set canal_distinto = p.canal_real_detalle and p.canal and p.canal_real_detalle|title != p.canal|title %}
+            <br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}{{ ' (su canal asignado es ' + p.canal|title + ' -- esa primera visita fue en otro canal)' if canal_distinto else '' }}</span>
+            {% endif %}
           </div>
           <span class="badge {{ 'ok' if p.entrada_real else 'warn' }}">{{ 'Confirmado a mano' if p.entrada_real else 'Pendiente marcación' }}</span>
         </div>
@@ -318,7 +321,10 @@
               <span class="hora">{{ p.entrada_real[:5] if p.entrada_real else "—" }}</span>
               <div class="quien">
                 <b>{{ p.mercaderista|title }}</b> <span>· {{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span>
-                {% if p.hora_real_detalle %}<br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}</span>{% endif %}
+                {% if p.hora_real_detalle %}
+            {% set canal_distinto = p.canal_real_detalle and p.canal and p.canal_real_detalle|title != p.canal|title %}
+            <br><span style="font-size:11px; color:var(--muted);">Marcó realmente a las {{ p.hora_real_detalle[:5] }}{{ ' · ' + p.canal_real_detalle|title if p.canal_real_detalle else '' }}{{ ' (su canal asignado es ' + p.canal|title + ' -- esa primera visita fue en otro canal)' if canal_distinto else '' }}</span>
+            {% endif %}
               </div>
               <span class="badge {{ 'ok' if p.entrada_real else 'warn' }}">{{ 'Confirmado a mano' if p.entrada_real else 'Pendiente marcación' }}</span>
               <span class="editar-txt">Editar</span>
