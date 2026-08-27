@@ -8,11 +8,19 @@ graph_credentials.local.env -- ese archivo no existe en un runner de GitHub
 Actions. Mismo patrón que ya usa app.py con DATABASE_URL/SECRET_KEY.
 
 graph_excel.py (el original, en asistencia_app/) sigue existiendo tal cual
-para los scripts que corren local -- este módulo es solo para lo que corre
-en GitHub Actions.
+para los scripts que corren local.
+
+CORRECCIÓN 2026-08-27: a pesar de lo que decía acá antes, este módulo NO es
+solo para GitHub Actions -- asistencia.py (el proceso web de Render) también
+lo importa. Eso importa porque un runner de GH Actions vive un par de
+minutos (el cache de token de acá abajo nunca alcanza a vencer en la
+práctica), pero el proceso de Render vive horas -- el cache SIN control de
+vencimiento causó un apagón real (401 Unauthorized contra Graph, todo lo
+que toca Tabla 3 roto hasta el próximo reinicio del proceso). Ver _token().
 """
 import io
 import os
+import time
 
 import msal
 import requests
@@ -25,11 +33,22 @@ SANCELA_DRIVE_ID = "b!kmKOTe_IokaGam5Gtzts6jEZ3lG7ZrZIgwxmB3O2ir7XCIzlEMUUTZoHFy
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 
-_token_cache = {"token": None}
+# Apagón real 2026-08-27: este módulo, a pesar del docstring de arriba
+# ("solo para lo que corre en GitHub Actions"), también lo usa asistencia.py
+# en el proceso web de Render -- que es LARGO VIVIENDO (a diferencia de un
+# runner de GH Actions, que muere apenas termina). El cache de token de
+# abajo nunca revisaba vencimiento, solo "¿ya tengo uno?" -- una vez que el
+# token de Microsoft vencía (~60-90 min), CUALQUIER cosa que tocara Tabla 3
+# vía Graph (marcar, guardar, headcount, reemplazo...) empezaba a tirar 401
+# hasta el próximo reinicio del proceso (un deploy, o el ciclo de sueño de
+# Render free tier). Ahora se guarda cuándo vence de verdad (expires_in de
+# MSAL, con margen de 5 min) y se renueva solo antes de esa hora.
+_token_cache = {"token": None, "expira_en": 0}
+_MARGEN_RENOVACION_SEG = 300
 
 
-def _token():
-    if _token_cache["token"] is not None:
+def _token(forzar_nuevo=False):
+    if not forzar_nuevo and _token_cache["token"] is not None and time.time() < _token_cache["expira_en"]:
         return _token_cache["token"]
     authority = f"https://login.microsoftonline.com/{os.environ['TENANT_ID']}"
     app = msal.ConfidentialClientApplication(
@@ -39,7 +58,21 @@ def _token():
     if "access_token" not in resultado:
         raise RuntimeError(f"No se pudo autenticar contra Graph: {resultado.get('error_description')}")
     _token_cache["token"] = resultado["access_token"]
+    _token_cache["expira_en"] = time.time() + resultado.get("expires_in", 3600) - _MARGEN_RENOVACION_SEG
     return resultado["access_token"]
+
+
+def _con_reintento_401(hacer_pedido):
+    """Ejecuta `hacer_pedido()` (una llamada a requests.get/put que usa
+    _headers() adentro) y, si igual devuelve 401 por algún motivo que
+    _token() no anticipó (revocado, permisos cambiados, reloj desincronizado),
+    fuerza un token nuevo y reintenta UNA vez -- red de seguridad además del
+    control de vencimiento de arriba, no un reemplazo."""
+    r = hacer_pedido()
+    if r.status_code == 401:
+        _token(forzar_nuevo=True)
+        r = hacer_pedido()
+    return r
 
 
 def _headers():
@@ -48,7 +81,7 @@ def _headers():
 
 def resolver_item_id(ruta_relativa):
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/root:/{ruta_relativa}"
-    r = requests.get(url, headers=_headers())
+    r = _con_reintento_401(lambda: requests.get(url, headers=_headers()))
     r.raise_for_status()
     return r.json()["id"]
 
@@ -57,7 +90,7 @@ def descargar(ruta_relativa):
     """Devuelve el contenido del archivo (bytes)."""
     item_id = resolver_item_id(ruta_relativa)
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/items/{item_id}/content"
-    r = requests.get(url, headers=_headers())
+    r = _con_reintento_401(lambda: requests.get(url, headers=_headers()))
     r.raise_for_status()
     return r.content
 
@@ -99,9 +132,13 @@ def subir_creando_si_no_existe(ruta_relativa, wb_o_bytes):
         contenido = wb_o_bytes
 
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/root:/{ruta_relativa}:/content"
-    headers = dict(_headers())
-    headers["Content-Type"] = "application/octet-stream"
-    r = requests.put(url, headers=headers, data=contenido)
+
+    def _pedido():
+        headers = dict(_headers())
+        headers["Content-Type"] = "application/octet-stream"
+        return requests.put(url, headers=headers, data=contenido)
+
+    r = _con_reintento_401(_pedido)
     r.raise_for_status()
     return r.json()
 
@@ -118,8 +155,12 @@ def subir_in_place(ruta_relativa, wb_o_bytes):
         contenido = wb_o_bytes
 
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/items/{item_id}/content"
-    headers = dict(_headers())
-    headers["Content-Type"] = "application/octet-stream"
-    r = requests.put(url, headers=headers, data=contenido)
+
+    def _pedido():
+        headers = dict(_headers())
+        headers["Content-Type"] = "application/octet-stream"
+        return requests.put(url, headers=headers, data=contenido)
+
+    r = _con_reintento_401(_pedido)
     r.raise_for_status()
     return r.json()
