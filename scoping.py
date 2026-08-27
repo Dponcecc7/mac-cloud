@@ -8,9 +8,22 @@
   su propio DNI, via Usuario.dni_asociado). Sin esto, un supervisor veía
   todo el equipo del cliente, no solo el suyo.
 
+- **Analista de canal**: acotado a su canal_asignado (Diego=Farmacia,
+  Yeny=Autoservicio, Kevin=Tradicional -- 2026-08-27). Antes todos los
+  analistas del mismo cliente_id_athena veían TODO ese grupo sin importar
+  canal (por eso Diego veía headcount Tradicional). Ve una Persona si su
+  canal principal coincide O si tiene algún día de PatronRecurrente en ese
+  canal -- esto último es lo que deja que un mercaderista compartido entre
+  canales (ej. canal="MULTICANAL", unos días Farmacia otros Autoservicio)
+  aparezca para CADA analista de canal en el suyo, sin duplicar la fila
+  (Persona sigue siendo una sola fila por DNI -- admin la ve una sola vez).
+
 Admin ve todo (supervisión cruzada). Un usuario sin nada de esto asignado
 todavía también ve todo -- para no romper accesos existentes en silencio;
 asignale un cliente_id_athena/dni_asociado en Usuarios para acotarlo."""
+from sqlalchemy import func, select
+
+from dimension_models import PatronRecurrente
 from models import Usuario
 
 
@@ -34,6 +47,10 @@ def condicion_scope(persona_model, usuario_actual):
         # sí mismos en su propia lista de mercaderistas (Davor, 2026-08-24:
         # "no tendria sentido").
         return (persona_model.supervisor_dni == dni_normalizado) & (persona_model.dni != dni_normalizado)
+    if getattr(usuario_actual, "canal_asignado", None):
+        canal_norm = usuario_actual.canal_asignado.strip().upper()
+        dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia) == canal_norm)
+        return (func.upper(persona_model.canal) == canal_norm) | persona_model.dni.in_(dnis_con_ese_canal)
     if usuario_actual.cliente_id_athena is not None:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()

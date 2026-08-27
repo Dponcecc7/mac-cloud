@@ -153,12 +153,25 @@
       <div class="resumen">
         <div class="stat"><b>{{ nuevas|length }}</b>nuevas</div>
         <div class="stat"><b>{{ actualizadas|length }}</b>actualizadas</div>
+        <div class="stat"><b>{{ compartidos|length }}</b>compartidas con otro canal</div>
         <div class="stat"><b>{{ conflictos|length }}</b>en conflicto</div>
         <div class="stat"><b>{{ n_patron }}</b>filas de Patrón</div>
       </div>
+      {% if compartidos %}
+        <div class="panel">
+          <p class="panel-title">DNIs compartidos con otro canal (se fusionó tu Patrón, no se tocaron sus datos base)</p>
+          <p class="sub">Estas personas ya existían a nombre de otro analista, pero con un canal distinto al tuyo — es la misma persona trabajando ambos canales en días distintos. No se pisó su nombre/rol/etc.; solo se agregaron/actualizaron los días de tu Excel en su Patrón Recurrente.</p>
+          <table>
+            <tr><th>DNI</th></tr>
+            {% for dni in compartidos %}
+            <tr><td>{{ dni }}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% endif %}
       {% if conflictos %}
         <div class="panel">
-          <p class="panel-title">DNIs que no se tocaron (ya pertenecen a otro analista)</p>
+          <p class="panel-title">DNIs que no se tocaron (ya pertenecen a otro analista de tu mismo canal)</p>
           <table>
             <tr><th>DNI</th><th>Nombre</th><th>Pertenece a</th></tr>
             {% for c in conflictos %}

@@ -215,9 +215,11 @@ def headcount_submit():
             flash(f"Error leyendo el Patrón Recurrente: {e}", "error")
             return redirect(url_for("cargas.headcount_form"))
 
+    canal_propio = (getattr(current_user, "canal_asignado", None) or "").strip().upper() or None
+
     session = get_session()
     try:
-        nuevas, actualizadas, conflictos = [], [], []
+        nuevas, actualizadas, conflictos, compartidos = [], [], [], []
         supervisores_propios = {
             per.nombre_completo.strip().upper(): per.dni
             for per in session.query(Persona).filter_by(analista_propietario=propietario, rol="SUPERVISORES").all()
@@ -226,20 +228,43 @@ def headcount_submit():
         for _, row in m.iterrows():
             dni = _dni(row["DNI"])
             existente = session.get(Persona, dni)
-            if existente and existente.analista_propietario != propietario:
+            # Mercaderista compartido entre canales (Davor, 2026-08-27): si
+            # el dueño actual es OTRO analista pero de un canal DISTINTO al
+            # mío, no es un error de tipeo -- es la misma persona trabajando
+            # ambos canales en días distintos (ver PatronRecurrente.canal_dia
+            # mas abajo). No le piso sus datos base (nombre/rol/etc, siguen
+            # siendo del dueño original); solo se van a fusionar mis días de
+            # Patrón para este DNI. Si el canal es el MISMO, sigue siendo
+            # conflicto real (probable DNI mal tipeado).
+            es_compartido = (
+                existente is not None and existente.analista_propietario != propietario
+                and canal_propio and (existente.canal or "").strip().upper() != canal_propio
+            )
+            if existente and existente.analista_propietario != propietario and not es_compartido:
                 conflictos.append({
                     "dni": dni, "nombre": _texto(row["Nombre completo"]),
                     "dueño_actual": existente.analista_propietario,
                 })
+                continue
+            if es_compartido:
+                compartidos.append(dni)
                 continue
 
             sup_texto = _texto(row["Supervisor asignado"])
             supervisor_dni = supervisores_propios.get(sup_texto.strip().upper()) if sup_texto else None
             nombre = _texto(row["Nombre completo"]) or "(sin nombre)"
             rol = _texto(row["Rol"])
+            # Canal forzado al del analista (Davor, 2026-08-27): antes se
+            # confiaba en lo que decía la columna "Canal" del Excel -- así
+            # terminó "todo cargado como Tradicional" pase lo que pase que
+            # tipeara cada quien. Si el analista tiene canal_asignado (Diego,
+            # Yeny), se ignora la columna del Excel y se usa el suyo; si no
+            # (Kevin, Davor) se sigue respetando lo tipeado, sin cambio de
+            # comportamiento.
+            canal = canal_propio or _texto(row["Canal"])
 
             datos = dict(
-                nombre_completo=nombre, rol=rol, canal=_texto(row["Canal"]), region=_texto(row["Región"]),
+                nombre_completo=nombre, rol=rol, canal=canal, region=_texto(row["Región"]),
                 ciudad=_texto(row["Ciudad / Mercado"]), zona=_texto(row["Zona / Ruta asignada"]),
                 supervisor_dni=supervisor_dni, correo=_texto(row["Correo corporativo"]),
                 fecha_ingreso=_fecha(row["Fecha de ingreso"]), fecha_baja=_fecha(row["Fecha de baja"]),
@@ -263,20 +288,27 @@ def headcount_submit():
 
         n_patron = 0
         if p is not None:
-            dnis_propios = set(nuevas) | set(actualizadas)
-            dnis_con_patron_nuevo = {d for d in p["DNI"].apply(_dni) if d in dnis_propios}
-            for dni in dnis_con_patron_nuevo:
-                session.query(PatronRecurrente).filter_by(dni=dni).delete()
+            dnis_propios = set(nuevas) | set(actualizadas) | set(compartidos)
+            filas_patron = [
+                (dni, _texto(row["Día de la semana"]),
+                 _hora(row["Hora entrada programada"]), _hora(row["Hora salida programada"]),
+                 canal_propio or _texto(row["Canal del día"]), _texto(row["Refrigerio"]))
+                for dni, row in ((_dni(r["DNI"]), r) for _, r in p.iterrows())
+                if dni in dnis_propios
+            ]
+            # Se borra SOLO (dni, dia_semana) que se va a re-insertar, no
+            # todo el patron del dni -- antes un upload PARCIAL (ej. Yeny
+            # sube solo lunes/miércoles/viernes de un compartido) borraba
+            # también los días de Diego que no venían en su archivo. Con
+            # esto, cada analista solo toca los días que trae su propio
+            # Excel, sin importar de quién sean los demás días.
+            for dni, dia, *_r in filas_patron:
+                session.query(PatronRecurrente).filter_by(dni=dni, dia_semana=dia).delete()
             session.flush()
-            for _, row in p.iterrows():
-                dni = _dni(row["DNI"])
-                if dni not in dnis_con_patron_nuevo:
-                    continue
+            for dni, dia, hora_ent, hora_sal, canal_dia, refrigerio in filas_patron:
                 session.add(PatronRecurrente(
-                    dni=dni, dia_semana=_texto(row["Día de la semana"]),
-                    hora_entrada_prog=_hora(row["Hora entrada programada"]),
-                    hora_salida_prog=_hora(row["Hora salida programada"]),
-                    canal_dia=_texto(row["Canal del día"]), refrigerio=_texto(row["Refrigerio"]),
+                    dni=dni, dia_semana=dia, hora_entrada_prog=hora_ent, hora_salida_prog=hora_sal,
+                    canal_dia=canal_dia, refrigerio=refrigerio,
                 ))
                 n_patron += 1
 
@@ -289,10 +321,11 @@ def headcount_submit():
 
     flash(
         f"Carga completa: {len(nuevas)} personas nuevas, {len(actualizadas)} actualizadas, "
+        f"{len(compartidos)} compartidas con otro canal (se fusionó su Patrón, sin tocar sus datos base), "
         f"{len(conflictos)} en conflicto, {n_patron} filas de Patrón agregadas.",
         "ok" if not conflictos else "error",
     )
     return render_template(
         "cargas_headcount.html", usuario=current_user, resultado=True,
-        nuevas=nuevas, actualizadas=actualizadas, conflictos=conflictos, n_patron=n_patron,
+        nuevas=nuevas, actualizadas=actualizadas, conflictos=conflictos, compartidos=compartidos, n_patron=n_patron,
     )
