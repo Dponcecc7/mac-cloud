@@ -11,7 +11,15 @@ import datetime as dt
 
 from dimension_models import Persona, PatronRecurrente, get_session
 
-CAMPOS_HEREDADOS = ["rol", "canal", "region", "ciudad", "zona", "supervisor_dni"]
+# "analista_propietario" agregado 2026-08-27 -- sin esto, un reemplazo
+# quedaba con esa columna en NULL (nunca se seteaba en ningún lado para la
+# persona nueva), y en SQL "columna IN (...)"/"NOT IN (...)" con NULL no
+# matchea NINGUNA de las dos -- la persona desaparecía tanto de la lista de
+# "visibles" de condicion_scope() (scoping.py) como de cualquier intento de
+# encontrar "a quién le falta el dato". Invisible para cualquier analista
+# (admin no tiene ese filtro, por eso Davor SÍ los veía) hasta que alguien
+# comparara el total a mano (Kevin: 73 vs Davor: 75).
+CAMPOS_HEREDADOS = ["rol", "canal", "region", "ciudad", "zona", "supervisor_dni", "analista_propietario"]
 
 
 def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_run=False, motivo_baja=None):
