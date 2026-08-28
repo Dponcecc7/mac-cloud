@@ -195,10 +195,26 @@ def _mes_desde_query():
     return desde, hasta, f"{anio}-{mes:02d}"
 
 
+def _dia_foco_desde_query():
+    """Día de foco de Alertas (?dia=YYYY-MM-DD) -- sin el parámetro (primera
+    carga) default a hoy; presente pero vacío ("Ver todo el mes" lo dejó
+    así) = sin foco (None); inválido = hoy."""
+    if "dia" not in request.args:
+        return dt.date.today()
+    dia_str = request.args.get("dia", "")
+    if not dia_str:
+        return None
+    try:
+        return dt.date.fromisoformat(dia_str)
+    except ValueError:
+        return dt.date.today()
+
+
 @bp.get("/alertas")
 @login_required
 def alertas():
     desde, hasta, mes_str = _mes_desde_query()
+    dia_foco = _dia_foco_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
     lista = alertas_periodo(
         desde, hasta, current_user,
@@ -207,7 +223,7 @@ def alertas():
     )
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
-        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, hoy=dt.date.today(),
+        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp,

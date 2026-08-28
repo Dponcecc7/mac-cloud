@@ -58,7 +58,12 @@
     .alerta.otro_canal .mensaje, .alerta.punto_censo .mensaje, .alerta.corregido_manual .mensaje { color:var(--brand); }
     .alerta .detalle { font-size:11.5px; color:var(--muted); }
     .alerta .fechas { margin-top:4px; }
+    .alerta .motivos-lista { margin:4px 0 0; padding-left:16px; }
+    .alerta .motivos-lista li { margin-bottom:2px; }
     .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
+    .alerta.critico { border-left-color:var(--bad); background:var(--bad-bg); }
+    .alerta.critico .mensaje { color:var(--bad); font-weight:700; }
+    .alerta.critico .nivel { background:var(--bad); color:#fff; }
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
 
@@ -126,20 +131,24 @@
       <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
     </nav>
 
+    {# Un solo <form> para mes/día/filtros admin -- antes eran 2 <form>
+       separados y elegir un día, después tocar "Aplicar filtros" (el OTRO
+       form), perdía el día porque ese <form> no lo incluía (Davor,
+       2026-08-28: "tenia seleccionado el 22, agregue filtro ciudad... y la
+       fecha volvió a 28, hay un bug ahi"). Con un solo form, cualquier
+       submit (mes, Aplicar filtros) manda el valor de día que esté puesto
+       en ese momento. #}
+    <form method="get" id="form-filtros">
     <div class="top-actions">
-      <form method="get">
-        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
-      </form>
+      <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
       <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
-      <input type="date" id="filtro-dia" value="{{ hoy.isoformat() }}" title="Mostrar solo alertas con al menos una fecha este día">
-      <button type="button" class="btn ghost" id="btn-ver-mes" onclick="quitarFiltroDia()">Ver todo el mes</button>
+      <input type="date" name="dia" id="filtro-dia" value="{{ dia_foco.isoformat() if dia_foco else '' }}" title="Mostrar solo alertas con al menos una fecha este día">
+      <button type="button" class="btn ghost" onclick="document.getElementById('filtro-dia').value=''; this.form.submit();">Ver todo el mes</button>
       <span class="stat-pill" id="contador-dia"></span>
     </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
-      <form method="get" style="display:contents;">
-        <input type="hidden" name="mes" value="{{ mes_str }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -157,9 +166,9 @@
           {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
         <button class="btn" type="submit">Aplicar filtros</button>
-      </form>
     </div>
     {% endif %}
+    </form>
 
     {% if not alertas %}
       <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
@@ -168,24 +177,28 @@
       {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano'} %}
       {% set tipos_presentes = alertas | map(attribute='tipo') | unique | list %}
       <div class="filtro-tipos" id="filtro-tipos">
-        <span class="chip-tipo activo" data-tipo="">Todos ({{ alertas|length }})</span>
+        <span class="chip-tipo activo" data-tipo="" data-label="Todos">Todos ({{ alertas|length }})</span>
         {% for t in tipos_presentes %}
         {% set n = alertas | selectattr('tipo', 'equalto', t) | list | length %}
-        <span class="chip-tipo" data-tipo="{{ t }}">{{ iconos.get(t, '') }} {{ etiquetas.get(t, t) }} ({{ n }})</span>
+        <span class="chip-tipo" data-tipo="{{ t }}" data-label="{{ iconos.get(t, '') }} {{ etiquetas.get(t, t) }}">{{ iconos.get(t, '') }} {{ etiquetas.get(t, t) }} ({{ n }})</span>
         {% endfor %}
       </div>
       {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}" data-tipo="{{ a.tipo }}" data-fechas="{{ a.fechas|join(',') }}">
-        <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
+      <div class="alerta {{ a.tipo }}{{ ' critico' if a.critico else '' }}" data-tipo="{{ a.tipo }}" data-fechas="{{ a.fechas|join(',') }}">
+        <div class="icono">{{ '🚨' if a.critico else iconos.get(a.tipo, '⚠️') }}</div>
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
           <p class="mensaje">{{ a.mensaje }}</p>
           <div class="detalle">
-            Fechas: {{ a.fechas|join(', ') }}
-            {% if a.motivos %}<div class="fechas">Motivos: {{ a.motivos|join(', ') }}</div>{% endif %}
+            {% if a.tipo == 'salida_temprana' %}
+              <ul class="motivos-lista">{% for m in a.motivos %}<li>{{ m }}</li>{% endfor %}</ul>
+            {% else %}
+              Fechas: {{ a.fechas|join(', ') }}
+              {% if a.motivos %}<ul class="motivos-lista">{% for m in a.motivos %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+            {% endif %}
           </div>
         </div>
-        <span class="nivel">Nivel {{ a.nivel }}</span>
+        <span class="nivel">{{ 'CRÍTICO' if a.critico else 'Nivel ' ~ a.nivel }}</span>
       </div>
       {% endfor %}
     {% endif %}
@@ -209,16 +222,32 @@
     function aplicarFiltros() {
       var ddmm = ddmmDe(inputDia.value);
       var tipoActivo = document.querySelector("#filtro-tipos .chip-tipo.activo").getAttribute("data-tipo");
-      var visibles = 0;
-      document.querySelectorAll(".alerta").forEach(function (card) {
-        var ocultoTipo = tipoActivo !== "" && card.getAttribute("data-tipo") !== tipoActivo;
+      var cards = document.querySelectorAll(".alerta");
+      // Los chips mostraban el conteo del MES completo aunque el filtro de
+      // día ya redujera lo que se ve -- "Corregido a mano (6)" con solo 2
+      // visibles (Davor, 2026-08-28). Ahora el conteo de cada chip se
+      // recalcula sobre lo que el filtro de DÍA deja visible (el de tipo no
+      // participa acá -- cada chip cuenta como si él mismo estuviera activo).
+      var conteoPorTipo = {}, totalPorDia = 0, visibles = 0;
+      cards.forEach(function (card) {
+        var tipo = card.getAttribute("data-tipo");
         var fechas = card.getAttribute("data-fechas").split(",");
         var ocultoDia = ddmm !== null && fechas.indexOf(ddmm) === -1;
+        if (!ocultoDia) {
+          totalPorDia++;
+          conteoPorTipo[tipo] = (conteoPorTipo[tipo] || 0) + 1;
+        }
+        var ocultoTipo = tipoActivo !== "" && tipo !== tipoActivo;
         card.classList.toggle("oculto-tipo", ocultoTipo);
         card.classList.toggle("oculto-dia", ocultoDia);
         if (!ocultoTipo && !ocultoDia) visibles++;
       });
-      contadorDia.textContent = ddmm ? (visibles + " con ocurrencia el " + ddmm) : "";
+      document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (chip) {
+        var tipo = chip.getAttribute("data-tipo");
+        var n = tipo === "" ? totalPorDia : (conteoPorTipo[tipo] || 0);
+        chip.textContent = chip.getAttribute("data-label") + " (" + n + ")";
+      });
+      contadorDia.textContent = ddmm ? (visibles + " visible" + (visibles === 1 ? "" : "s") + " con ocurrencia el " + ddmm) : "";
     }
 
     document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (chip) {

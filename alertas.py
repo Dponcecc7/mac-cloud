@@ -25,6 +25,44 @@ FUENTE_CORREGIDO_MANUAL = "Corregido manualmente (Tabla 3)"  # mismo texto exact
 MOTIVOS_CON_SUSTENTO = ("descanso médico", "descanso medico", "licencia", "feriado regional")
 
 
+# Jornada "casi nula" (Davor, 2026-08-28) -- alguien que marca entrada y a
+# los pocos minutos ya marca salida, sin trabajar realmente el día (caso
+# real: 07:50 a 07:53, 3 minutos). Umbral bajo a propósito -- esto NO es
+# "llegó/se fue un poco antes", es directamente no haber trabajado.
+UMBRAL_JORNADA_CRITICA_MIN = 60
+
+
+def _fmt_min(minutos):
+    horas, mins = divmod(int(round(minutos)), 60)
+    return f"{horas}h{mins:02d}min" if horas else f"{mins} min"
+
+
+def _detalle_salida(row):
+    """Detalle de UNA ocurrencia de salida anticipada -- (texto, es_critico).
+    Antes solo se acumulaba la fecha ("8 días este periodo"), sin decir a
+    qué hora entró/salió ni cuánto trabajó realmente ese día."""
+    entrada = (row.entrada_real or "—")[:5]
+    salida = (row.salida_real or "—")[:5]
+    antes_txt = _fmt_min(row.salida_anticipada_min) if pd.notna(row.salida_anticipada_min) else "—"
+
+    minutos_trab = None
+    if row.entrada_real and row.salida_real:
+        delta = pd.to_timedelta(str(row.salida_real)) - pd.to_timedelta(str(row.entrada_real))
+        minutos_trab = delta.total_seconds() / 60
+
+    if minutos_trab is None or minutos_trab < 0:
+        trab_txt, es_critico = "—", False
+    else:
+        trab_txt = _fmt_min(minutos_trab)
+        es_critico = minutos_trab < UMBRAL_JORNADA_CRITICA_MIN
+
+    fecha_str = row.fecha.strftime("%d/%m")
+    texto = f"{fecha_str}: entró {entrada}, salió {salida} -- trabajó {trab_txt} ({antes_txt} antes de lo programado)"
+    if es_critico:
+        texto = f"🚨 {texto} -- jornada casi nula"
+    return texto, es_critico
+
+
 def _tiene_sustento(comentario):
     # pd.isna(), no "not comentario" -- un comentario vacío puede llegar acá
     # como NaN de pandas (no None) segun como se construyó el DataFrame, y
@@ -51,7 +89,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                            ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor,
                            ClasificacionDiaria.trabajo_otro_canal, ClasificacionDiaria.salida_anticipada_min,
                            ClasificacionDiaria.canal_esperado, ClasificacionDiaria.canales_marcados,
-                           ClasificacionDiaria.fuente_dato)
+                           ClasificacionDiaria.fuente_dato, ClasificacionDiaria.entrada_real, ClasificacionDiaria.salida_real)
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
         )
@@ -72,12 +110,14 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
         r = pd.DataFrame(filas, columns=[
             "dni", "nombre", "fecha", "estado", "comentario",
             "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados", "fuente_dato",
+            "entrada_real", "salida_real",
         ])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
     else:
         r = pd.DataFrame(columns=[
             "dni", "nombre", "fecha", "estado", "comentario", "estado_base",
             "trabajo_otro_canal", "salida_anticipada_min", "canal_esperado", "canales_marcados", "fuente_dato",
+            "entrada_real", "salida_real",
         ])
 
     for tipo, estado_objetivo, mensaje_base in (
@@ -131,6 +171,13 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
 
     # Salida anticipada recurrente -- mismo umbral (10 min) que ya usa
     # asistencia.py para resaltar un día suelto, ahora acumulado en el mes.
+    # Davor, 2026-08-28: "esa salida anticipada no me dice nada... trabajó
+    # solo tal horas, salió 4h antes" -- caso real detectado por él a mano:
+    # Solis Manihuari entró 07:50 y salió 07:53 (3 min trabajados) y solo
+    # figuraba como "1 día más" del acumulado, sin que nada resaltara que esa
+    # jornada fue casi nula. Ahora cada ocurrencia muestra entrada/salida
+    # real y cuánto trabajó, y si algún día quedó por debajo de
+    # UMBRAL_JORNADA_CRITICA_MIN se marca aparte como caso crítico.
     grupo_salida = r[r["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN]
     if len(grupo_salida):
         for dni, grupo in grupo_salida.groupby("dni"):
@@ -138,12 +185,17 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
+            detalles = [_detalle_salida(row) for row in grupo.sort_values("fecha").itertuples()]
+            hay_critico = any(critico for _, critico in detalles)
+            mensaje = f"Salida anticipada recurrente ({nivel}x -- {cantidad} días este periodo)"
+            if hay_critico:
+                mensaje = f"Salida anticipada recurrente -- incluye jornada(s) casi nulas ({cantidad} días este periodo)"
             alertas.append({
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "salida_temprana",
-                "cantidad": cantidad, "nivel": nivel,
-                "mensaje": f"Salida anticipada recurrente ({nivel}x -- {cantidad} días este periodo)",
+                "cantidad": cantidad, "nivel": nivel, "critico": hay_critico,
+                "mensaje": mensaje,
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
-                "motivos": [],
+                "motivos": [texto for texto, _critico in detalles],
             })
 
     # Hora puesta a mano por un analista/supervisor (Entrada/Salida
