@@ -100,19 +100,29 @@
       <p class="panel-title">Cuentas</p>
       <div class="table-wrap">
       <table>
-        <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>DNI asociado</th><th>Activo</th><th>Último login</th><th></th></tr>
+        <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>Canal asignado</th><th>DNI asociado (supervisor)</th><th></th><th>Activo</th><th>Último login</th><th></th></tr>
         {% for u in usuarios %}
         <tr>
           <td>{{ u.email }}</td>
           <td>{{ u.rol }}</td>
           <td>
-            <form class="inline" method="post" action="{{ url_for('admin.set_cliente_usuario', usuario_id=u.id) }}" style="display:flex; gap:6px;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="text" name="cliente_id_athena" value="{{ u.cliente_id_athena or '' }}" placeholder="—" style="width:70px; padding:4px 6px; margin:0;">
-              <button class="ghost" type="submit" style="padding:4px 10px; font-size:11.5px;">Guardar</button>
-            </form>
+            <input type="text" name="cliente_id_athena" form="acceso-{{ u.id }}" value="{{ u.cliente_id_athena or '' }}" placeholder="—" title="Cliente ID de Athena -- ve a todos los del mismo grupo si no tiene canal asignado" style="width:70px; padding:4px 6px; margin:0;">
           </td>
-          <td>{{ u.dni_asociado or "—" }}</td>
+          <td>
+            <select name="canal_asignado" form="acceso-{{ u.id }}" title="Si está seteado, solo ve Personas de ese canal (Farmacia/Autoservicio/Tradicional), sin importar quién las cargó">
+              <option value="" {{ 'selected' if not u.canal_asignado else '' }}>— (sin canal, usa Cliente ID)</option>
+              {% for c in ("FARMACIA", "AUTOSERVICIO", "TRADICIONAL") %}
+              <option value="{{ c }}" {{ 'selected' if u.canal_asignado == c else '' }}>{{ c|title }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <input type="text" name="dni_asociado" form="acceso-{{ u.id }}" value="{{ u.dni_asociado or '' }}" placeholder="—" title="Solo aplica si el Rol es Supervisor -- ve a su equipo directo" style="width:90px; padding:4px 6px; margin:0;">
+          </td>
+          <td>
+            <button class="ghost" type="submit" form="acceso-{{ u.id }}" style="padding:4px 10px; font-size:11.5px;">Guardar acceso</button>
+            <form id="acceso-{{ u.id }}" class="inline" method="post" action="{{ url_for('admin.set_acceso_usuario', usuario_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+          </td>
           <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
           <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "Nunca" }}</td>
           <td>

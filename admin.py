@@ -79,15 +79,35 @@ def toggle_usuario(usuario_id):
     return redirect(url_for("admin.usuarios"))
 
 
-@bp.route("/usuarios/<int:usuario_id>/cliente", methods=["POST"])
+CANALES_ASIGNABLES = ["FARMACIA", "AUTOSERVICIO", "TRADICIONAL"]
+
+
+@bp.route("/usuarios/<int:usuario_id>/acceso", methods=["POST"])
 @admin_required
-def set_cliente_usuario(usuario_id):
+def set_acceso_usuario(usuario_id):
+    """Un solo formulario para los 3 campos que controlan qué Personas ve
+    cada usuario (Davor, 2026-08-28: "puedo seleccionar cada campo que
+    quiero darle acceso... ahora lo veo muy general" -- antes solo se podía
+    tocar Cliente ID desde acá, canal_asignado (ver scoping.py) y DNI
+    asociado no tenían forma de editarse sin entrar a la base a mano)."""
     usuario = Usuario.query.get_or_404(usuario_id)
-    valor = request.form.get("cliente_id_athena", "").strip()
-    if valor and not valor.isdigit():
+
+    cliente_id_athena = request.form.get("cliente_id_athena", "").strip()
+    canal_asignado = request.form.get("canal_asignado", "").strip().upper() or None
+    dni_asociado = request.form.get("dni_asociado", "").strip() or None
+    if dni_asociado:
+        # Mismo motivo que en el alta (arriba): sin cero a la izquierda, para
+        # que matchee Persona.supervisor_dni en scoping.py.
+        dni_asociado = dni_asociado.lstrip("0") or "0"
+
+    if cliente_id_athena and not cliente_id_athena.isdigit():
         flash("El cliente ID de Athena tiene que ser un número.", "error")
+    elif canal_asignado and canal_asignado not in CANALES_ASIGNABLES:
+        flash(f"Canal inválido -- tiene que ser uno de: {', '.join(CANALES_ASIGNABLES)}.", "error")
     else:
-        usuario.cliente_id_athena = int(valor) if valor else None
+        usuario.cliente_id_athena = int(cliente_id_athena) if cliente_id_athena else None
+        usuario.canal_asignado = canal_asignado
+        usuario.dni_asociado = dni_asociado
         db.session.commit()
-        flash(f"Cliente de {usuario.email} actualizado.", "ok")
+        flash(f"Acceso de {usuario.email} actualizado.", "ok")
     return redirect(url_for("admin.usuarios"))
