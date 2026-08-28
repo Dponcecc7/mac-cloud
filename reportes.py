@@ -395,6 +395,90 @@ def marcaciones():
     )
 
 
+LEYENDA_TAREO = [
+    ("A", "ok", "Asistió a tiempo"), ("T", "warn", "Tardanza"), ("F", "bad", "Falta"),
+    ("DM", "info", "Descanso médico"), ("V", "info", "Vacaciones"), ("PC", "muted", "Posición por cubrir"),
+    ("—", "muted", "Sin marcación (no le tocaba trabajar)"),
+]
+
+
+def _matriz_tareo(desde, hasta, filtro_args):
+    """Detalle día-persona del rango (reusa calcular_detalle_semana, mismo
+    scope/filtros que el resto de Reportes) reducido a un código de tareo
+    por (dni, fecha) -- mismo vocabulario que reportes.ficha() ya usa para
+    "Tareo del mes" de UNA persona (Davor, 2026-08-28: "cuando entro a ver
+    el personal... que sea como un tareo", ahora para TODO el equipo con
+    los mismos filtros que ya tiene el resto de Reportes."""
+    detalle = calcular_detalle_semana(
+        desde, hasta, current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"],
+    )
+    fechas, fecha_cursor = [], desde
+    while fecha_cursor <= hasta:
+        fechas.append(fecha_cursor)
+        fecha_cursor += dt.timedelta(days=1)
+
+    personas, celdas = [], {}
+    if len(detalle):
+        for dni, grupo in detalle.groupby("dni"):
+            personas.append({
+                "dni": dni, "nombre": grupo["nombre"].iloc[0], "supervisor": grupo["supervisor"].iloc[0],
+                "ciudad": grupo["ciudad"].iloc[0], "region": grupo["region"].iloc[0],
+            })
+            for _, row in grupo.iterrows():
+                codigo, clase = _codigo_tareo(row["estado_base"], row["comentario"])
+                celdas[(dni, row["fecha"].date())] = {"codigo": codigo, "clase": clase, "titulo": row["estado"]}
+        personas.sort(key=lambda p: (p["nombre"] or "").title())
+    return personas, fechas, celdas
+
+
+@bp.get("/tareo")
+@login_required
+def tareo():
+    desde, hasta, mes_str = _mes_desde_query()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
+    return render_template(
+        "reportes_tareo.html", usuario=current_user, activo="tareo",
+        mes_str=mes_str, desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
+        leyenda_tareo=LEYENDA_TAREO,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
+        ciudades_disponibles=ciudades_disp,
+    )
+
+
+@bp.get("/tareo/exportar")
+@login_required
+def tareo_exportar():
+    desde, hasta, mes_str = _mes_desde_query()
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp = _filtros_admin()
+    personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tareo"
+    encabezado = ["DNI", "Nombre", "Ciudad", "Supervisor"] + [f.strftime("%d/%m") for f in fechas]
+    ws.append(encabezado)
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for p in personas:
+        fila = [p["dni"], p["nombre"], p["ciudad"], p["supervisor"]]
+        fila += [celdas.get((p["dni"], f), {}).get("codigo", "—") for f in fechas]
+        ws.append(fila)
+    for i in range(1, 5):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, as_attachment=True, download_name=f"Tareo_{mes_str}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @bp.get("/ficha/<dni>")
 @login_required
 def ficha(dni):

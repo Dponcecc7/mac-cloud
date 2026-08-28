@@ -11,9 +11,9 @@
     }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
-    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
     header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
-    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
     nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
@@ -28,36 +28,43 @@
     .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
 
     h1.title { font-size:20px; margin:0 0 14px; }
-    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; flex-wrap:wrap; }
     nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
     .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
-    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
-    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
-    .filtros-admin .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+    .filtros-admin select, .filtros-admin input[type=text] { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
 
-    .alerta { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
-    .alerta.falta { border-left-color:var(--bad); }
-    .alerta.tardanza, .alerta.salida_temprana, .alerta.visita_larga { border-left-color:var(--warn); }
-    .alerta.otro_canal, .alerta.punto_censo, .alerta.corregido_manual { border-left-color:var(--brand); }
-    .alerta .icono { font-size:20px; line-height:1; margin-top:2px; }
-    .alerta .cuerpo { flex:1; }
-    .alerta .nombre { font-weight:700; font-size:14px; }
-    .alerta .nombre a { color:inherit; text-decoration:none; }
-    .alerta .nombre a:hover { color:var(--brand); text-decoration:underline; }
-    .alerta .mensaje { font-size:13px; margin:2px 0 8px; }
-    .alerta.falta .mensaje { color:var(--bad); }
-    .alerta.tardanza .mensaje, .alerta.salida_temprana .mensaje, .alerta.visita_larga .mensaje { color:var(--warn); }
-    .alerta.otro_canal .mensaje, .alerta.punto_censo .mensaje, .alerta.corregido_manual .mensaje { color:var(--brand); }
-    .alerta .detalle { font-size:11.5px; color:var(--muted); }
-    .alerta .fechas { margin-top:4px; }
-    .alerta .nivel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:999px; background:var(--bg); color:var(--muted); flex-shrink:0; }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
 
-    .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
+    .table-wrap { overflow-x:auto; max-height:70vh; }
+    table { border-collapse:collapse; width:100%; font-size:12px; }
+    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
+    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:center; }
+    td.info { text-align:left; }
+    td.info a { color:var(--ink); text-decoration:none; font-weight:600; }
+    td.info a:hover { color:var(--brand); text-decoration:underline; }
+    th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
+    tr:last-child td { border-bottom:none; }
+    tr.oculto-nombre { display:none; }
+
+    .cod { display:inline-block; min-width:22px; padding:2px 5px; border-radius:5px; font-size:10.5px; font-weight:800; }
+    .cod.ok { background:var(--ok-bg); color:var(--ok); }
+    .cod.warn { background:var(--warn-bg); color:var(--warn); }
+    .cod.bad { background:var(--bad-bg); color:var(--bad); }
+    .cod.info { background:#dbeafe; color:#2563eb; }
+    .cod.muted { background:var(--line); color:var(--muted); }
+    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+
+    .leyenda { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; font-size:12px; color:var(--ink); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:14px; }
+    .leyenda .item { display:inline-flex; align-items:center; gap:6px; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -67,19 +74,16 @@
       .nav-user { order:2; padding-left:0; border-left:none; }
       .nav-pages { order:3; flex-basis:100%; width:100%; }
       .nav-pages a { padding:5px 9px; }
-
       nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
-
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
       .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
-
+      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
-      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
+      .filtros-admin select, .filtros-admin input[type=text] { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
-
-      .alerta { padding:12px 14px; gap:10px; }
-      .alerta .nivel { font-size:9px; padding:2px 6px; }
+      .panel { padding:12px !important; border-radius:12px; }
+      .leyenda { gap:8px 14px; font-size:11.5px; padding:9px 12px; }
     }
   </style>
 </head>
@@ -111,17 +115,17 @@
     <nav class="tabs">
       <a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
-      <a href="{{ url_for('reportes.alertas', mes=mes_str) }}" class="active">Alertas</a>
+      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
       <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
       <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
-      <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
+      <a href="{{ url_for('reportes.tareo', mes=mes_str) }}" class="active">Tareo</a>
     </nav>
 
     <div class="top-actions">
       <form method="get">
         <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
       </form>
-      <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
+      <a class="btn ghost" href="{{ url_for('reportes.tareo_exportar', mes=mes_str) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
@@ -144,30 +148,57 @@
           <option value="">Ciudad: todas</option>
           {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
-        <button class="btn" type="submit">Aplicar filtros</button>
+        <button class="btn primary" type="submit">Aplicar filtros</button>
       </form>
+      <input type="text" id="buscar-nombre" placeholder="Buscar mercaderista..." oninput="filtrarNombre(this.value)">
     </div>
     {% endif %}
 
-    {% if not alertas %}
-      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
-    {% else %}
-      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️'} %}
-      {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}">
-        <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
-        <div class="cuerpo">
-          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
-          <p class="mensaje">{{ a.mensaje }}</p>
-          <div class="detalle">
-            Fechas: {{ a.fechas|join(', ') }}
-            {% if a.motivos %}<div class="fechas">Motivos: {{ a.motivos|join(', ') }}</div>{% endif %}
-          </div>
-        </div>
-        <span class="nivel">Nivel {{ a.nivel }}</span>
+    <div class="panel">
+      {% if not personas %}
+        <p class="empty">Sin datos de clasificación en este periodo.</p>
+      {% else %}
+      <div class="leyenda">
+        {% for cod, clase, texto in leyenda_tareo %}
+        <span class="item"><span class="cod {{ clase }}">{{ cod }}</span>{{ texto }}</span>
+        {% endfor %}
       </div>
-      {% endfor %}
-    {% endif %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
+            {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
+          </tr>
+          {% for p in personas %}
+          <tr data-nombre="{{ (p.nombre or '')|lower }}">
+            <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
+            <td>{{ (p.ciudad or '—')|title }}</td>
+            <td>{{ (p.supervisor or '—')|title }}</td>
+            {% for f in fechas %}
+              {% set v = celdas.get((p.dni, f)) %}
+              {% if v is none %}
+                <td><span class="cod muted">—</span></td>
+              {% else %}
+                <td title="{{ f.strftime('%d/%m') }} — {{ v.titulo }}"><span class="cod {{ v.clase }}">{{ v.codigo }}</span></td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <p class="note">Un código por día = incidencia de esa persona (mismo vocabulario que "Tareo del mes" en la Ficha del trabajador). "—" = sin marcación ese día (no le tocaba trabajar, feriado, o todavía no se procesó).</p>
+      {% endif %}
+    </div>
   </div>
+  <script>
+    function filtrarNombre(texto) {
+      var q = texto.trim().toLowerCase();
+      document.querySelectorAll("tbody tr, table tr[data-nombre]").forEach(function (tr) {
+        var nombre = tr.getAttribute("data-nombre");
+        if (nombre === null) return;
+        tr.classList.toggle("oculto-nombre", q !== "" && nombre.indexOf(q) === -1);
+      });
+    }
+  </script>
 </body>
 </html>

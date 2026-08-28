@@ -108,6 +108,7 @@
       <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
       <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
       <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" class="active">Marcaciones</a>
+      <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
     </nav>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
