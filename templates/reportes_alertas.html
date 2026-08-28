@@ -33,8 +33,11 @@
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .top-actions input[type=month], .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
+    .stat-pill:empty { display:none; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
@@ -62,7 +65,7 @@
     .filtro-tipos { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
     .chip-tipo { cursor:pointer; font-size:12px; font-weight:700; padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); }
     .chip-tipo.activo { background:var(--brand); border-color:var(--brand); color:#fff; }
-    .alerta.oculto-tipo { display:none; }
+    .alerta.oculto-tipo, .alerta.oculto-dia { display:none; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -77,7 +80,8 @@
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
 
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions input[type=month], .top-actions input[type=date] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions .btn.ghost { min-height:44px; text-align:center; }
 
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
@@ -127,6 +131,9 @@
         <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
       </form>
       <span class="stat-pill">{{ alertas|length }} alerta{{ 's' if alertas|length != 1 else '' }} este mes</span>
+      <input type="date" id="filtro-dia" value="{{ hoy.isoformat() }}" title="Mostrar solo alertas con al menos una fecha este día">
+      <button type="button" class="btn ghost" id="btn-ver-mes" onclick="quitarFiltroDia()">Ver todo el mes</button>
+      <span class="stat-pill" id="contador-dia"></span>
     </div>
 
     {% if roles_disponibles %}
@@ -168,7 +175,7 @@
         {% endfor %}
       </div>
       {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}" data-tipo="{{ a.tipo }}">
+      <div class="alerta {{ a.tipo }}" data-tipo="{{ a.tipo }}" data-fechas="{{ a.fechas|join(',') }}">
         <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
@@ -184,16 +191,49 @@
     {% endif %}
   </div>
   <script>
+    // Foco en un día puntual (Davor, 2026-08-28: "debo tener el filtro por
+    // día, predeterminado el día actual, para darle foco a ello") -- las
+    // alertas son un acumulado del MES (ej. "18x este periodo"), así que
+    // filtrar por día no cambia qué alertas existen, sino cuáles tienen al
+    // menos una ocurrencia ESE día -- combinado con el filtro de tipo (chips)
+    // en el cliente, sin ida y vuelta al server.
+    var inputDia = document.getElementById("filtro-dia");
+    var contadorDia = document.getElementById("contador-dia");
+
+    function ddmmDe(valorFecha) {
+      if (!valorFecha) return null;
+      var partes = valorFecha.split("-"); // YYYY-MM-DD
+      return partes[2] + "/" + partes[1];
+    }
+
+    function aplicarFiltros() {
+      var ddmm = ddmmDe(inputDia.value);
+      var tipoActivo = document.querySelector("#filtro-tipos .chip-tipo.activo").getAttribute("data-tipo");
+      var visibles = 0;
+      document.querySelectorAll(".alerta").forEach(function (card) {
+        var ocultoTipo = tipoActivo !== "" && card.getAttribute("data-tipo") !== tipoActivo;
+        var fechas = card.getAttribute("data-fechas").split(",");
+        var ocultoDia = ddmm !== null && fechas.indexOf(ddmm) === -1;
+        card.classList.toggle("oculto-tipo", ocultoTipo);
+        card.classList.toggle("oculto-dia", ocultoDia);
+        if (!ocultoTipo && !ocultoDia) visibles++;
+      });
+      contadorDia.textContent = ddmm ? (visibles + " con ocurrencia el " + ddmm) : "";
+    }
+
     document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (chip) {
       chip.addEventListener("click", function () {
         document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (c) { c.classList.remove("activo"); });
         chip.classList.add("activo");
-        var tipo = chip.getAttribute("data-tipo");
-        document.querySelectorAll(".alerta").forEach(function (card) {
-          card.classList.toggle("oculto-tipo", tipo !== "" && card.getAttribute("data-tipo") !== tipo);
-        });
+        aplicarFiltros();
       });
     });
+    inputDia.addEventListener("change", aplicarFiltros);
+    function quitarFiltroDia() {
+      inputDia.value = "";
+      aplicarFiltros();
+    }
+    if (document.querySelector(".alerta")) aplicarFiltros();
   </script>
 </body>
 </html>

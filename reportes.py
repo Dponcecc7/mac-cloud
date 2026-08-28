@@ -207,7 +207,7 @@ def alertas():
     )
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
-        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista,
+        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, hoy=dt.date.today(),
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp,
