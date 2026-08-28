@@ -259,6 +259,26 @@
     </div>
 
     <div class="panel">
+      <p class="panel-title">Tendencia de cobertura (últimas 6 semanas)</p>
+      <p class="empty" style="margin:-6px 0 8px;">PDVs distintos visitados por semana (Punto Censo incluido) -- mismo cálculo que Reportes &gt; Cobertura.</p>
+      {% if not tendencia_cobertura or tendencia_cobertura|sum(attribute='total') == 0 %}
+        <p class="empty">Sin visitas GPS registradas en este periodo.</p>
+      {% else %}
+      <div>
+        {% for s in tendencia_cobertura %}
+        <div class="semana-row">
+          <span class="semana-lbl">{{ s.semana }}</span>
+          <div class="semana-barra-wrap">
+            <div class="semana-barra" style="width:{{ s.ancho_pct }}%; background:{{ s.color }};"></div>
+          </div>
+          <span class="semana-pct">{{ s.total }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
       <p class="panel-title">Detalle día a día — Semana {{ semana_vista_str.split('-W')[1] }} ({{ desde_v.strftime('%d/%m') }} al {{ hasta_v.strftime('%d/%m') }})</p>
       {% if not detalle_dias %}<p class="empty">Sin datos de clasificación esa semana.</p>
       {% else %}

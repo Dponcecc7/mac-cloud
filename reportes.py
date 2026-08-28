@@ -16,7 +16,7 @@ from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
 from asistencia import _homologar_motivo
-from cobertura import marcaciones_del_dia, matriz_cobertura
+from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
@@ -621,6 +621,33 @@ def ficha(dni):
             "desde": desde_s, "pct": None if pct is None or pd.isna(pct) else pct,
         })
 
+    # Tendencia de cobertura, últimas 6 semanas ISO -- mismo cálculo que
+    # Reportes > Cobertura (PDVs distintos por día, Punto Censo aparte, ver
+    # cobertura.matriz_cobertura), pero sumado por semana para UNA sola
+    # persona, mismo estilo visual que "Cumplimiento semanal" de al lado
+    # (Davor, 2026-08-28: "que aparezca tambien el tendencial de cobertura").
+    tendencia_cobertura = []
+    for i in range(5, -1, -1):
+        fecha_ref = hoy - dt.timedelta(weeks=i)
+        anio_s, num_s, _ = fecha_ref.isocalendar()
+        desde_s, hasta_s = semana_iso(anio_s, num_s)
+        v_s = _cargar_visitas(desde_s, hasta_s, None, dni_filtro=dni)
+        if len(v_s):
+            v_normal = v_s[v_s["geofence_ok"] & ~v_s["es_censo"]]
+            n_normal = int(v_normal.groupby("fecha_inicio")["punto_venta_id"].nunique().sum())
+            n_censo = int(v_s[v_s["es_censo"]].groupby("fecha_inicio").size().sum())
+            total = n_normal + n_censo
+        else:
+            total = 0
+        tendencia_cobertura.append({"semana": f"S{num_s}", "total": total})
+    max_cobertura = max((s["total"] for s in tendencia_cobertura), default=0)
+    prom_cobertura = (sum(s["total"] for s in tendencia_cobertura) / 6) if tendencia_cobertura else 0
+    for s in tendencia_cobertura:
+        s["ancho_pct"] = round(s["total"] / max_cobertura * 100) if max_cobertura else 0
+        s["color"] = "var(--line)" if s["total"] == 0 else (
+            "var(--bad)" if prom_cobertura > 0 and s["total"] < prom_cobertura * 0.5 else "var(--ok)"
+        )
+
     # Detalle día a día -- para ver DÓNDE está el cuello de botella detrás
     # de un % bajo (Davor, 2026-08-23), no solo el número agregado. Semana
     # seleccionable igual que Horas semanales (?semana=2026-W34); si no se
@@ -713,7 +740,7 @@ def ficha(dni):
         "reportes_ficha.html", usuario=current_user, activo="ficha",
         persona=persona, nombre_supervisor=nombre_supervisor,
         indicador_mes=indicador_mes, tareo_mes=tareo_mes, viajes_vacaciones=viajes_vacaciones,
-        descansos=descansos, cumplimiento_semanal=cumplimiento_semanal,
+        descansos=descansos, cumplimiento_semanal=cumplimiento_semanal, tendencia_cobertura=tendencia_cobertura,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
