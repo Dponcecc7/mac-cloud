@@ -173,8 +173,8 @@
     {% if not alertas %}
       <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
     {% else %}
-      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️'} %}
-      {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano'} %}
+      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️', 'jornada_critica': '🚨'} %}
+      {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano', 'jornada_critica': 'Jornada casi nula'} %}
       {% set tipos_presentes = alertas | map(attribute='tipo') | unique | list %}
       <div class="filtro-tipos" id="filtro-tipos">
         <span class="chip-tipo activo" data-tipo="" data-label="Todos">Todos ({{ alertas|length }})</span>
@@ -190,7 +190,7 @@
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
           <p class="mensaje">{{ a.mensaje }}</p>
           <div class="detalle">
-            {% if a.tipo == 'salida_temprana' %}
+            {% if a.tipo in ('salida_temprana', 'jornada_critica') %}
               <ul class="motivos-lista">{% for m in a.motivos %}<li>{{ m }}</li>{% endfor %}</ul>
             {% else %}
               Fechas: {{ a.fechas|join(', ') }}
