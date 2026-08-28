@@ -18,6 +18,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Font
 
 from dimension_models import Persona, PatronRecurrente, get_session
+from github_actions import disparar_workflow
 from parseo_headcount import (
     COLUMNAS_MAESTRO_ESPERADAS, COLUMNAS_PATRON_ESPERADAS,
     parsear_maestro, parsear_patron, validar_columnas,
@@ -319,12 +320,27 @@ def headcount_submit():
     finally:
         session.close()
 
-    flash(
+    mensaje = (
         f"Carga completa: {len(nuevas)} personas nuevas, {len(actualizadas)} actualizadas, "
         f"{len(compartidos)} compartidas con otro canal (se fusionó su Patrón, sin tocar sus datos base), "
-        f"{len(conflictos)} en conflicto, {n_patron} filas de Patrón agregadas.",
-        "ok" if not conflictos else "error",
+        f"{len(conflictos)} en conflicto, {n_patron} filas de Patrón agregadas."
     )
+    # El motor de clasificación lee el Excel Maestro/Patrón (exportado desde
+    # Postgres cada 15 min por exportar_dimensiones.yml), no Postgres
+    # directo -- sin este disparo, lo recién cargado quedaba invisible en
+    # Asistencia diaria hasta el próximo ciclo del cron (Davor, 2026-08-28:
+    # "Diego ya cargó su headcount, pero no le parece en asistencia" -- sus
+    # 12 personas nunca habían sido clasificadas ni una vez, porque este
+    # endpoint nunca disparaba el export, a diferencia de "Agregar
+    # headcount"/"Agregar reemplazo" que sí lo hacen).
+    if nuevas or actualizadas or compartidos:
+        ok_disparo, _ = disparar_workflow("exportar_dimensiones.yml")
+        mensaje += (
+            " Se va a reflejar en Asistencia diaria en unos minutos."
+            if ok_disparo else
+            " No se pudo iniciar la actualización automática -- probá \"Actualizar ahora\" desde Asistencia diaria en unos minutos."
+        )
+    flash(mensaje, "ok" if not conflictos else "error")
     return render_template(
         "cargas_headcount.html", usuario=current_user, resultado=True,
         nuevas=nuevas, actualizadas=actualizadas, conflictos=conflictos, compartidos=compartidos, n_patron=n_patron,
