@@ -59,6 +59,11 @@
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
 
+    .filtro-tipos { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+    .chip-tipo { cursor:pointer; font-size:12px; font-weight:700; padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); }
+    .chip-tipo.activo { background:var(--brand); border-color:var(--brand); color:#fff; }
+    .alerta.oculto-tipo { display:none; }
+
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -153,8 +158,17 @@
       <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
     {% else %}
       {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️'} %}
+      {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano'} %}
+      {% set tipos_presentes = alertas | map(attribute='tipo') | unique | list %}
+      <div class="filtro-tipos" id="filtro-tipos">
+        <span class="chip-tipo activo" data-tipo="">Todos ({{ alertas|length }})</span>
+        {% for t in tipos_presentes %}
+        {% set n = alertas | selectattr('tipo', 'equalto', t) | list | length %}
+        <span class="chip-tipo" data-tipo="{{ t }}">{{ iconos.get(t, '') }} {{ etiquetas.get(t, t) }} ({{ n }})</span>
+        {% endfor %}
+      </div>
       {% for a in alertas %}
-      <div class="alerta {{ a.tipo }}">
+      <div class="alerta {{ a.tipo }}" data-tipo="{{ a.tipo }}">
         <div class="icono">{{ iconos.get(a.tipo, '⚠️') }}</div>
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
@@ -169,5 +183,17 @@
       {% endfor %}
     {% endif %}
   </div>
+  <script>
+    document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        document.querySelectorAll("#filtro-tipos .chip-tipo").forEach(function (c) { c.classList.remove("activo"); });
+        chip.classList.add("activo");
+        var tipo = chip.getAttribute("data-tipo");
+        document.querySelectorAll(".alerta").forEach(function (card) {
+          card.classList.toggle("oculto-tipo", tipo !== "" && card.getAttribute("data-tipo") !== tipo);
+        });
+      });
+    });
+  </script>
 </body>
 </html>

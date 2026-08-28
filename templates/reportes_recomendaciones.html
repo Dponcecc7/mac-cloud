@@ -57,6 +57,11 @@
 
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
 
+    .filtro-tipos { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+    .chip-tipo { cursor:pointer; font-size:12px; font-weight:700; padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); }
+    .chip-tipo.activo { background:var(--brand); border-color:var(--brand); color:#fff; }
+    .insight.oculto-tipo { display:none; }
+
     .subtitle { font-size:15px; font-weight:800; margin:26px 0 12px; }
     .perfil-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
     .perfil-card { background:var(--card); border-radius:12px; padding:14px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); border-left:4px solid var(--line); }
@@ -173,8 +178,17 @@
     {% if not insights %}
       <p class="empty">Sin señales por ahora.</p>
     {% else %}
+      {% set etiquetas_insight = {'tardanza_creciente': 'Tardanza creciente', 'cumplimiento_bajando': 'Cumplimiento bajando', 'cerca_alerta_tardanza': 'Cerca de alerta (tardanza)', 'cerca_alerta_falta': 'Cerca de alerta (falta)', 'riesgo_semana': 'Riesgo esta semana'} %}
+      {% set tipos_presentes_insight = insights | map(attribute='tipo') | unique | list %}
+      <div class="filtro-tipos" id="filtro-tipos-insight">
+        <span class="chip-tipo activo" data-tipo="">Todos ({{ insights|length }})</span>
+        {% for t in tipos_presentes_insight %}
+        {% set n = insights | selectattr('tipo', 'equalto', t) | list | length %}
+        <span class="chip-tipo" data-tipo="{{ t }}">{{ etiquetas_insight.get(t, t) }} ({{ n }})</span>
+        {% endfor %}
+      </div>
       {% for i in insights %}
-      <div class="insight {{ i.severidad }}">
+      <div class="insight {{ i.severidad }}" data-tipo="{{ i.tipo }}">
         <div class="icono">{{ i.icono }}</div>
         <div class="cuerpo">
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=i.dni) }}">{{ i.nombre|title }}</a></div>
@@ -214,5 +228,17 @@
     </div>
     {% endif %}
   </div>
+  <script>
+    document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (c) { c.classList.remove("activo"); });
+        chip.classList.add("activo");
+        var tipo = chip.getAttribute("data-tipo");
+        document.querySelectorAll(".insight").forEach(function (card) {
+          card.classList.toggle("oculto-tipo", tipo !== "" && card.getAttribute("data-tipo") !== tipo);
+        });
+      });
+    });
+  </script>
 </body>
 </html>
