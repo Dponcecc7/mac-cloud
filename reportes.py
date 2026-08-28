@@ -11,7 +11,7 @@ import openpyxl
 import pandas as pd
 from flask import Blueprint, flash, redirect, request, render_template, send_file, url_for
 from flask_login import current_user, login_required
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
@@ -449,6 +449,16 @@ def tareo():
     )
 
 
+# Mismos colores que .cod.<clase> en reportes_tareo.html -- Davor, 2026-08-28:
+# "que el exportar salgo con... los colores de celdas, letras centradas y
+# visuales" (el Excel salía en texto plano, sin nada del color/vocabulario
+# visual que ya tiene la vista web).
+_COLOR_TAREO = {
+    "ok": ("DCFCE7", "16A34A"), "warn": ("FEF3C7", "D97706"), "bad": ("FEE2E2", "DC2626"),
+    "info": ("DBEAFE", "2563EB"), "muted": ("D7E3EF", "5B7186"),
+}
+
+
 @bp.get("/tareo/exportar")
 @login_required
 def tareo_exportar():
@@ -459,14 +469,29 @@ def tareo_exportar():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Tareo"
+    ws.sheet_view.zoomScale = 80
+    ws.freeze_panes = "E2"
+    centrado = Alignment(horizontal="center", vertical="center")
+
     encabezado = ["DNI", "Nombre", "Ciudad", "Supervisor"] + [f.strftime("%d/%m") for f in fechas]
     ws.append(encabezado)
     for celda in ws[1]:
         celda.font = Font(bold=True)
+        celda.alignment = centrado
+    N_COLS_FIJAS = 4
     for p in personas:
         fila = [p["dni"], p["nombre"], p["ciudad"], p["supervisor"]]
         fila += [celdas.get((p["dni"], f), {}).get("codigo", "—") for f in fechas]
         ws.append(fila)
+        fila_excel = ws.max_row
+        for i, f in enumerate(fechas):
+            info = celdas.get((p["dni"], f))
+            clase = info["clase"] if info else "muted"
+            fill_hex, font_hex = _COLOR_TAREO[clase]
+            celda = ws.cell(row=fila_excel, column=N_COLS_FIJAS + 1 + i)
+            celda.fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type="solid")
+            celda.font = Font(bold=True, color=font_hex)
+            celda.alignment = centrado
     for i in range(1, 5):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
 
