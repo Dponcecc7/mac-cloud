@@ -4,7 +4,12 @@ on:
   schedule:
     # 7:30am-4:30pm hora Peru (UTC-5) aprox = 12:00-21:55 UTC, cada 5 min, Lun-Sab
     - cron: "*/5 12-21 * * 1-6"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dias_visitas:
+        description: "Días hacia atrás a re-sincronizar a Postgres (normal = 10; usar más solo para un re-sync manual amplio, ej. tras corregir una regla de clasificación)"
+        required: false
+        default: "10"
 
 jobs:
   pipeline:
@@ -29,4 +34,5 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           ATHENA_S3_STAGING: ${{ secrets.ATHENA_S3_STAGING }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          VENTANA_DIAS_VISITAS: ${{ github.event.inputs.dias_visitas || '10' }}
         run: python pipeline/pipeline_completo.py

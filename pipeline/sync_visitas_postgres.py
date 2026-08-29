@@ -31,7 +31,11 @@ COLUMNAS_ACTUALIZABLES = ["punto_venta", "tipo_negocio", "distancia_metros_inici
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import get_engine, Visita  # noqa: E402
 
-VENTANA_DIAS = 10
+# Override opcional (Davor, 2026-08-29) -- para un re-sync manual más ancho
+# después de corregir una regla de clasificación (ver athena_client.py,
+# fix de campana_id por visita) que afecta visitas más viejas que la
+# ventana normal. Sin la variable de entorno, comportamiento sin cambios.
+VENTANA_DIAS = int(os.environ.get("VENTANA_DIAS_VISITAS", "10"))
 TAMANO_LOTE = 2000  # bien debajo del límite de 65535 parámetros por sentencia de Postgres (10 columnas x 2000 = 20000)
 
 COLUMNAS = [
