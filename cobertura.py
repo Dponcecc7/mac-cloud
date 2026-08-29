@@ -97,10 +97,13 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
     aparte (cada relevo es 1, no tiene ubicación real que colapsar), mismo
     criterio que analisis_visitas_planning.py. Devuelve
     (personas, fechas, celdas, categorias) -- celdas: {(dni, fecha): cantidad},
-    categorias: {(dni, fecha): ["au"|"farma"|"censo", ...]} para marcar en qué
-    canal(es) trabajó ese día (Davor, 2026-08-23: "resaltar cuando son PDVs
-    de AU, de Farma, o día de Punto Censo" -- Tradicional queda sin marca por
-    ser el canal base/esperado de la mayoría)."""
+    categorias: {(dni, fecha): ["au"|"farma"|"tradicional"|"censo", ...]} para
+    marcar en qué canal(es) trabajó ese día (Davor, 2026-08-23: "resaltar
+    cuando son PDVs de AU, de Farma, o día de Punto Censo"; 2026-08-29:
+    "que aparezca una T cuando le toca canal tradicional, si visitó 2
+    canales el mismo día que también aparezca ahí" -- un día puede traer
+    varios tags a la vez, ej. alguien MULTICANAL que visitó Tradicional Y
+    Autoservicio el mismo día sale con ambos)."""
     v = _cargar_visitas(desde, hasta, usuario_actual,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
                         ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro)
@@ -115,6 +118,7 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
 
     dias_au = set(v_normal[v_normal["tipo_negocio"] == "AUTOSERVICIOS"].groupby(["dni", "fecha_inicio"]).groups.keys())
     dias_farma = set(v_normal[v_normal["tipo_negocio"] == "FARMACIA"].groupby(["dni", "fecha_inicio"]).groups.keys())
+    dias_tradicional = set(v_normal[v_normal["tipo_negocio"] == "TRADICIONAL"].groupby(["dni", "fecha_inicio"]).groups.keys())
     dias_censo = set(censo.index)
 
     info_persona = v.drop_duplicates("dni").set_index("dni")[["nombre", "ciudad", "supervisor"]]
@@ -132,6 +136,8 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
             tags.append("au")
         if clave in dias_farma:
             tags.append("farma")
+        if clave in dias_tradicional:
+            tags.append("tradicional")
         if clave in dias_censo:
             tags.append("censo")
         if tags:
