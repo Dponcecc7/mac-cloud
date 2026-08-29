@@ -216,6 +216,28 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         dnis_marcados_hoy = {
             dni for (dni,) in session.query(CorreccionWeb.dni).filter(CorreccionWeb.fecha == fecha).all()
         }
+        # Motivo/comentario recién guardado -- MISMO gap que dnis_marcados_hoy
+        # pero para el TEXTO del motivo, no solo si ya se marcó (Davor,
+        # 2026-08-29: "colocó los motivos de asistencia, aparecen todos falta
+        # y luego de un rato recién aparece el motivo... cuando Diego
+        # registra sus motivos, se demora en aparecerme"). guardar() escribe
+        # esta tabla AL INSTANTE (antes incluso de subir a Tabla 3), así que
+        # se puede mostrar de una en vez de esperar la próxima corrida del
+        # motor -- mismo texto que el motor va a terminar guardando en
+        # clasificacion_diaria.comentario_supervisor de todos modos, ya que
+        # ambos salen de la misma fila que guardar() sube a Tabla 3.
+        override_entrada, override_salida = {}, {}
+        correcciones_recientes = (
+            session.query(CorreccionWeb)
+            .filter(CorreccionWeb.dni.in_(personas.keys()), CorreccionWeb.fecha.in_([fecha, ayer]))
+            .order_by(CorreccionWeb.fecha_registro.desc())
+            .all()
+        )
+        for corr in correcciones_recientes:
+            if corr.fecha == fecha and corr.comentario_entrada and corr.dni not in override_entrada:
+                override_entrada[corr.dni] = corr.comentario_entrada
+            if corr.fecha == ayer and corr.comentario_salida and corr.dni not in override_salida:
+                override_salida[corr.dni] = corr.comentario_salida
     finally:
         session.close()
 
@@ -247,13 +269,13 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             # _homologar_motivo() saca el prefijo redundante "Falta" (el
             # badge de Estado ya dice "Falta"), tolerando variantes de
             # formato -- ver docstring de la función.
-            "comentario_entrada": _homologar_motivo(c.comentario_supervisor) or "",
+            "comentario_entrada": _homologar_motivo(override_entrada.get(c.dni, c.comentario_supervisor)) or "",
             "salida_prog": ayer_c.salida_esperada if ayer_c else None,
             "salida_real": ayer_c.salida_real if ayer_c else None,
             "salida_corregida": bool(ayer_c and ayer_c.fuente_dato == "Corregido manualmente (Tabla 3)"),
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
-            "comentario_salida": (_homologar_motivo(ayer_c.comentario_supervisor) or "") if ayer_c else "",
+            "comentario_salida": _homologar_motivo(override_salida.get(c.dni, ayer_c.comentario_supervisor if ayer_c else None)) or "",
             "entrada_pendiente": (
                 MARCADOR_PENDIENTE in (c.comentario_supervisor or "")
                 or (
