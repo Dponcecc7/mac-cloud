@@ -23,7 +23,7 @@ import pandas as pd
 from alertas import _tiene_sustento
 from dimension_models import Feriado, Persona, PatronRecurrente, get_session
 from fact_models import ClasificacionDiaria
-from scoping import aplicar_filtros_extra, condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -118,7 +118,14 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         if not filas:
             return pd.DataFrame()
 
+        # Override de supervisor por canal (Davor, 2026-08-29) -- ver
+        # scoping.overrides_supervisor_canal(). Se calcula con el
+        # usuario_actual real (aun en el caso dni_filtro, donde no se aplica
+        # condicion_scope() porque el acceso ya se validó aparte) para que
+        # la Ficha de UNA persona también respete el canal de quien mira.
+        overrides_sup = overrides_supervisor_canal(session, [f.dni for f in filas], usuario_actual)
         dnis_supervisores = {f.supervisor_dni for f in filas if f.supervisor_dni}
+        dnis_supervisores |= set(overrides_sup.values())
         nombre_supervisor = {}
         if dnis_supervisores:
             nombre_supervisor = dict(
@@ -142,7 +149,8 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     ])
     r["fecha"] = pd.to_datetime(r["fecha"])
     r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
-    r["supervisor"] = r["supervisor_dni"].map(nombre_supervisor)
+    r["supervisor_dni_efectivo"] = r["dni"].map(overrides_sup).fillna(r["supervisor_dni"])
+    r["supervisor"] = r["supervisor_dni_efectivo"].map(nombre_supervisor)
     r["motivo_falta"] = r.apply(
         lambda row: _motivo_falta(row["estado_base"], row["estado"], row["comentario"]), axis=1
     )

@@ -34,7 +34,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
-from scoping import aplicar_filtros_extra, condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 from sqlalchemy.orm import aliased
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -180,7 +180,14 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         # TAMBIÉN esté en su mismo scope para mostrar el nombre (Davor,
         # 2026-08-29: "No le aparece supervisor asignado, pero si les cargó
         # en el archivo headcount").
+        # Override de supervisor por canal (Davor, 2026-08-29) -- caso
+        # puntual: un mercaderista compartido entre canales puede tener un
+        # supervisor real distinto por Tradicional que por Farmacia/AU, fijo
+        # por canal (no varía según qué canal le toque trabajar ese día
+        # puntual). Ver scoping.overrides_supervisor_canal().
+        overrides_sup = overrides_supervisor_canal(session, list(personas.keys()), usuario_actual)
         dnis_supervisores = {p.supervisor_dni for p in personas.values() if p.supervisor_dni}
+        dnis_supervisores |= set(overrides_sup.values())
         nombre_supervisor_de = {}
         if dnis_supervisores:
             nombre_supervisor_de = dict(
@@ -218,7 +225,8 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     for c in filas_hoy:
         p = personas.get(c.dni)
         ayer_c = filas_ayer.get(c.dni)
-        supervisor_nombre = nombre_supervisor_de.get(p.supervisor_dni) if p else None
+        supervisor_dni_efectivo = overrides_sup.get(c.dni, p.supervisor_dni) if p else None
+        supervisor_nombre = nombre_supervisor_de.get(supervisor_dni_efectivo) if supervisor_dni_efectivo else None
         salida_anticipada = ayer_c.salida_anticipada_min if ayer_c else None
         filas.append({
             "dni": c.dni,

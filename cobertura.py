@@ -14,7 +14,7 @@ import pandas as pd
 
 from dimension_models import Persona, PatronRecurrente, Visita, get_session
 from fact_models import ClasificacionDiaria
-from scoping import aplicar_filtros_extra, condicion_scope
+from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -65,7 +65,11 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
         if not filas:
             return pd.DataFrame()
 
+        # Override de supervisor por canal (Davor, 2026-08-29) -- ver
+        # scoping.overrides_supervisor_canal().
+        overrides_sup = overrides_supervisor_canal(session, [f.dni for f in filas], usuario_actual)
         dnis_sup = {f.supervisor_dni for f in filas if f.supervisor_dni}
+        dnis_sup |= set(overrides_sup.values())
         nombre_sup = {}
         if dnis_sup:
             nombre_sup = dict(
@@ -78,7 +82,8 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
         "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta", "tipo_negocio",
         "fecha_inicio", "hora_inicio", "hora_fin", "distancia_metros_inicio",
     ])
-    v["supervisor"] = v["supervisor_dni"].map(nombre_sup)
+    v["supervisor_dni_efectivo"] = v["dni"].map(overrides_sup).fillna(v["supervisor_dni"])
+    v["supervisor"] = v["supervisor_dni_efectivo"].map(nombre_sup)
     v["fecha_inicio"] = pd.to_datetime(v["fecha_inicio"])
     v["hora_inicio_td"] = pd.to_timedelta(v["hora_inicio"].astype(str), errors="coerce")
     v["hora_fin_td"] = pd.to_timedelta(v["hora_fin"].astype(str), errors="coerce")

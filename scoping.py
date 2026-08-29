@@ -23,7 +23,7 @@ todavía también ve todo -- para no romper accesos existentes en silencio;
 asignale un cliente_id_athena/dni_asociado en Usuarios para acotarlo."""
 from sqlalchemy import func, select
 
-from dimension_models import PatronRecurrente
+from dimension_models import PatronRecurrente, PersonaSupervisorCanal
 from models import Usuario
 
 
@@ -57,6 +57,30 @@ def condicion_scope(persona_model, usuario_actual):
         ]
         return persona_model.analista_propietario.in_(correos)
     return None
+
+
+def overrides_supervisor_canal(session, dnis, usuario_actual):
+    """{dni: supervisor_dni} para las Personas de `dnis` que tengan un
+    supervisor DISTINTO para el canal_asignado de `usuario_actual` -- caso
+    puntual (Davor, 2026-08-29): un mercaderista compartido entre canales
+    puede tener un supervisor real distinto por Tradicional que por
+    Farmacia/AU, fijo por canal (no varía según qué canal le toque
+    trabajar ese día puntual, por eso no es PatronRecurrente). {} si el
+    usuario no tiene canal_asignado o no hay `dnis` que consultar -- la
+    inmensa mayoría de personas nunca tiene fila en persona_supervisor_canal,
+    así que en ese caso simplemente seguí usando Persona.supervisor_dni."""
+    canal_asignado = getattr(usuario_actual, "canal_asignado", None) if usuario_actual else None
+    if not canal_asignado or not dnis:
+        return {}
+    filas = (
+        session.query(PersonaSupervisorCanal.dni, PersonaSupervisorCanal.supervisor_dni)
+        .filter(
+            PersonaSupervisorCanal.dni.in_(dnis),
+            func.upper(PersonaSupervisorCanal.canal) == canal_asignado.strip().upper(),
+        )
+        .all()
+    )
+    return dict(filas)
 
 
 def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):

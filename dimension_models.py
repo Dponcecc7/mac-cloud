@@ -89,6 +89,26 @@ class PatronRecurrente(Base):
     __table_args__ = (UniqueConstraint("dni", "dia_semana", name="uq_patron_dni_dia"),)
 
 
+class PersonaSupervisorCanal(Base):
+    """Override de supervisor_dni por CANAL (no por día de la semana, ver
+    scoping.py::resolver_supervisor_dni) -- caso puntual (Davor, 2026-08-29):
+    un mercaderista compartido entre canales puede tener un supervisor real
+    distinto según el canal ("por Tradicional 1, por Farmacia y AU tiene
+    otro"), y ese supervisor NO cambia según qué canal le toque trabajar
+    ESE día puntual -- es fijo por canal, así que PatronRecurrente
+    (variación por día) no sirve para esto. Sin fila acá = sin override,
+    sigue valiendo Persona.supervisor_dni como hasta ahora (la inmensa
+    mayoría de personas nunca tiene una fila en esta tabla)."""
+    __tablename__ = "persona_supervisor_canal"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+    canal = Column(String(50), nullable=False)
+    supervisor_dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+
+    __table_args__ = (UniqueConstraint("dni", "canal", name="uq_persona_supervisor_canal"),)
+
+
 class VacanteSeguimiento(Base):
     """Solo los 2 campos que hoy se pierden en cada corrida de
     update_vacantes.py (Prioridad, Estado de cobertura) -- el resto de una

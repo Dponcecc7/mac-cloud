@@ -22,7 +22,7 @@ from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from recomendaciones import insights_equipo, resumen_perfil_equipo
-from scoping import condicion_scope
+from scoping import condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
 
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
@@ -535,9 +535,14 @@ def ficha(dni):
         persona = query.first()
 
         nombre_supervisor = None
-        if persona and persona.supervisor_dni:
-            sup = session.query(Persona.nombre_completo).filter(Persona.dni == persona.supervisor_dni).first()
-            nombre_supervisor = sup[0] if sup else None
+        if persona:
+            # Override de supervisor por canal (Davor, 2026-08-29) -- ver
+            # scoping.overrides_supervisor_canal().
+            overrides_sup = overrides_supervisor_canal(session, [dni], current_user)
+            supervisor_dni_efectivo = overrides_sup.get(dni, persona.supervisor_dni)
+            if supervisor_dni_efectivo:
+                sup = session.query(Persona.nombre_completo).filter(Persona.dni == supervisor_dni_efectivo).first()
+                nombre_supervisor = sup[0] if sup else None
     finally:
         session.close()
 
@@ -553,7 +558,7 @@ def ficha(dni):
     # Indicador de asistencia del mes -- misma regla de horas ya validada
     # (Horas semanales), aplicada al rango de un mes completo en vez de una
     # semana, para UNA sola persona.
-    detalle_mes = calcular_detalle_semana(mes_desde, mes_hasta, None, dni_filtro=dni)
+    detalle_mes = calcular_detalle_semana(mes_desde, mes_hasta, current_user, dni_filtro=dni)
     resumen_mes = resumen_por_persona(detalle_mes)
     indicador_mes = resumen_mes.iloc[0].to_dict() if len(resumen_mes) else None
 
@@ -629,7 +634,7 @@ def ficha(dni):
         fecha_ref = hoy - dt.timedelta(weeks=i)
         anio_s, num_s, _ = fecha_ref.isocalendar()
         desde_s, hasta_s = semana_iso(anio_s, num_s)
-        detalle_s = calcular_detalle_semana(desde_s, hasta_s, None, dni_filtro=dni)
+        detalle_s = calcular_detalle_semana(desde_s, hasta_s, current_user, dni_filtro=dni)
         resumen_s = resumen_por_persona(detalle_s)
         pct = resumen_s.iloc[0]["pct_cumplimiento_sin_faltas"] if len(resumen_s) else None
         cumplimiento_semanal.append({
@@ -678,7 +683,7 @@ def ficha(dni):
     else:
         anio_v, num_v = anio_actual, num_actual
     desde_v, hasta_v = semana_iso(anio_v, num_v)
-    detalle_semana_vista = calcular_detalle_semana(desde_v, hasta_v, None, dni_filtro=dni)
+    detalle_semana_vista = calcular_detalle_semana(desde_v, hasta_v, current_user, dni_filtro=dni)
     detalle_dias = []
     if len(detalle_semana_vista):
         for _, row in detalle_semana_vista.sort_values("fecha").iterrows():
