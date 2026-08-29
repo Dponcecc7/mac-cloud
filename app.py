@@ -65,7 +65,10 @@ def _motivo_limpio(comentario):
     # Homologaciones -- mismo motivo real, tipeado distinto por cada
     # supervisor. Se agregan acá a medida que se detectan (ver "Tráfico /
     # clima" == "Paro / clima": ambos son transito cortado por el clima).
-    HOMOLOGACIONES = {"tráfico / clima": "Paro / clima", "trafico / clima": "Paro / clima"}
+    HOMOLOGACIONES = {
+        "tráfico / clima": "Paro / clima", "trafico / clima": "Paro / clima",
+        "feriado regional": "Feriado",
+    }
     return HOMOLOGACIONES.get(texto.lower(), texto)
 
 
