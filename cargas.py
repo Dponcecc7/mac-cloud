@@ -16,8 +16,9 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from openpyxl.styles import Font
+from sqlalchemy import func
 
-from dimension_models import Persona, PatronRecurrente, get_session
+from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
 from github_actions import disparar_workflow
 from parseo_headcount import (
     COLUMNAS_MAESTRO_ESPERADAS, COLUMNAS_PATRON_ESPERADAS,
@@ -66,6 +67,34 @@ def _si_no_a_bool(valor):
 
 def _hora(valor):
     return valor if pd.notna(valor) else None
+
+
+# Columnas OPCIONALES del Maestro Headcount (Davor, 2026-08-29) -- para
+# mercaderistas compartidos entre canales con un supervisor real distinto
+# por Tradicional que por Farmacia/AU (fijo por canal, no varía según qué
+# canal_dia le toque trabajar ese día puntual -- ver
+# scoping.overrides_supervisor_canal() y dimension_models.PersonaSupervisorCanal).
+# No están en COLUMNAS_MAESTRO_ESPERADAS a propósito -- son opcionales,
+# el resto de los analistas sigue subiendo su Excel de siempre sin esto.
+COL_SUP_FARMACIA_AU = "Supervisor Farmacia/AU"
+COL_SUP_TRADICIONAL = "Supervisor Tradicional"
+
+
+def _resolver_supervisor_por_nombre(session, nombre):
+    """Busca un supervisor por nombre en TODA la tabla de personas, no solo
+    las del analista que sube el archivo -- a diferencia de
+    `supervisores_propios` (Supervisor asignado, columna base), acá el caso
+    de uso es justamente referenciar a un supervisor de OTRO canal/analista
+    (ej. Diego, Farmacia, apuntando al supervisor de Tradicional de un
+    mercaderista compartido)."""
+    if not nombre:
+        return None
+    fila = (
+        session.query(Persona.dni)
+        .filter(func.upper(Persona.nombre_completo) == nombre.strip().upper(), Persona.rol == "SUPERVISORES")
+        .first()
+    )
+    return fila[0] if fila else None
 
 
 def crear_persona_individual(
@@ -239,6 +268,8 @@ def headcount_submit():
                 supervisores_propios[nombre_sup.strip().upper()] = dni_sup
 
         pendientes_supervisor = []  # [(dni, supervisor_dni), ...] -- ver comentario mas abajo
+        overrides_canal = []  # [(dni, canal, supervisor_dni), ...] -- ver COL_SUP_FARMACIA_AU/TRADICIONAL
+        supervisores_no_encontrados = set()
         for _, row in m.iterrows():
             dni = _dni(row["DNI"])
             existente = session.get(Persona, dni)
@@ -260,6 +291,24 @@ def headcount_submit():
                     "dueño_actual": existente.analista_propietario,
                 })
                 continue
+
+            # Overrides de supervisor por canal -- columnas opcionales del
+            # Excel (Davor, 2026-08-29). Se procesan para cualquier fila que
+            # no sea un conflicto real (propia o compartida) porque es
+            # justamente en los mercaderistas compartidos entre canales
+            # donde hace falta un supervisor distinto por canal.
+            for columna, canales in ((COL_SUP_FARMACIA_AU, ("FARMACIA", "AUTOSERVICIO")), (COL_SUP_TRADICIONAL, ("TRADICIONAL",))):
+                if columna not in m.columns:
+                    continue
+                nombre_sup = _texto(row[columna])
+                if not nombre_sup:
+                    continue
+                dni_sup = _resolver_supervisor_por_nombre(session, nombre_sup)
+                if dni_sup:
+                    overrides_canal.extend((dni, canal, dni_sup) for canal in canales)
+                else:
+                    supervisores_no_encontrados.add(nombre_sup)
+
             if es_compartido:
                 compartidos.append(dni)
                 continue
@@ -317,6 +366,15 @@ def headcount_submit():
         for dni, supervisor_dni in pendientes_supervisor:
             session.get(Persona, dni).supervisor_dni = supervisor_dni
 
+        n_overrides = 0
+        for dni, canal, supervisor_dni in overrides_canal:
+            existente_ov = session.query(PersonaSupervisorCanal).filter_by(dni=dni, canal=canal).first()
+            if existente_ov:
+                existente_ov.supervisor_dni = supervisor_dni
+            else:
+                session.add(PersonaSupervisorCanal(dni=dni, canal=canal, supervisor_dni=supervisor_dni))
+            n_overrides += 1
+
         n_patron = 0
         if p is not None:
             dnis_propios = set(nuevas) | set(actualizadas) | set(compartidos)
@@ -355,6 +413,13 @@ def headcount_submit():
         f"{len(compartidos)} compartidas con otro canal (se fusionó su Patrón, sin tocar sus datos base), "
         f"{len(conflictos)} en conflicto, {n_patron} filas de Patrón agregadas."
     )
+    if n_overrides:
+        mensaje += f" {n_overrides} overrides de supervisor por canal guardados."
+    if supervisores_no_encontrados:
+        mensaje += (
+            f" ADVERTENCIA: no se encontró ningún supervisor (Rol=SUPERVISORES) con el nombre exacto: "
+            f"{', '.join(sorted(supervisores_no_encontrados))}."
+        )
     # El motor de clasificación lee el Excel Maestro/Patrón (exportado desde
     # Postgres cada 15 min por exportar_dimensiones.yml), no Postgres
     # directo -- sin este disparo, lo recién cargado quedaba invisible en
