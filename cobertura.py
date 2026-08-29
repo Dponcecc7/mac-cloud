@@ -21,11 +21,28 @@ sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 
 GEOFENCE_MAX_M = 200
-UMBRAL_VISITA_LARGA_MIN = 60
+# Reglas de "Visita larga" por canal (Davor, 2026-08-29) -- antes 60 min
+# parejo para cualquier canal, lo que marcaba como sospechosas visitas
+# normales a Autoservicio (tiendas grandes, un mercaderista puede pasar el
+# día entero ahí reponiendo/mercadeando) y castigaba a Farmacia/Tradicional
+# con un umbral demasiado bajo para una visita real:
+#   - Autoservicio: SIN límite -- se excluye directo, ver v_ok más abajo.
+#   - Farmacia y Tradicional: 3 horas por PDV.
+#   - Tradicional además excluye Almacén/Punto Censo (ver PUNTOS_EXCLUIDOS)
+#     -- son paradas largas legítimas, no un PDV real de venta.
+UMBRAL_VISITA_LARGA_MIN = 180
 UMBRAL_DIAS_CENSO = 3
 UMBRAL_DURACION_CENSO_MIN = 120
 CIERRE_AUTOMATICO_TD = pd.Timedelta(hours=23, minutes=30, seconds=0)
-PUNTOS_EXCLUIDOS = ("AMOF", "OVERALL", "PUNTO CENSO", "PUNTO_ANALISIS", "PUNTO ANALISIS")
+PUNTOS_EXCLUIDOS = (
+    "AMOF", "OVERALL", "PUNTO CENSO", "PUNTO_ANALISIS", "PUNTO ANALISIS", "ALMACEN", "ALMACÉN",
+    # "ALM. 10 CHICLAYO", "ALM . 2.COLLIQUE" -- convención real de nombres
+    # de almacén (Davor, 2026-08-29), con espaciado inconsistente antes del
+    # punto. Regex (no literal) a propósito -- NO debe matchear "ALMANZA"
+    # (apellido real que aparece como nombre de punto en los datos), que
+    # tiene "ALM" pero sin punto después.
+    r"ALM\s*\.",
+)
 WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
 
 
@@ -226,11 +243,12 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
 
 def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
                        rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
-    """Visita larga (última visita del día > 60 min y antes de la hora de
-    salida programada) + abuso de Punto Censo -- mismo cálculo que ya hacía
-    (y descartaba) pipeline/alerta_visita_larga.py, ahora contra Postgres.
-    Mismo shape de dict que alertas.py::alertas_periodo() para poder
-    mezclarse en la misma lista."""
+    """Visita larga (última visita del día > UMBRAL_VISITA_LARGA_MIN y antes
+    de la hora de salida programada -- Autoservicio exento, ver comentario
+    en UMBRAL_VISITA_LARGA_MIN) + abuso de Punto Censo -- mismo cálculo que
+    ya hacía (y descartaba) pipeline/alerta_visita_larga.py, ahora contra
+    Postgres. Mismo shape de dict que alertas.py::alertas_periodo() para
+    poder mezclarse en la misma lista."""
     v = _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=dni_filtro,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
                         ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro)
@@ -255,6 +273,7 @@ def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
     patron_excluido = "|".join(PUNTOS_EXCLUIDOS)
     v_ok = v[
         v["geofence_ok"] & (v["hora_fin_td"] != CIERRE_AUTOMATICO_TD)
+        & (v["tipo_negocio"] != "AUTOSERVICIOS")
         & ~v["punto_venta"].astype(str).str.upper().str.contains(patron_excluido, na=False)
     ].copy()
     if len(v_ok):
