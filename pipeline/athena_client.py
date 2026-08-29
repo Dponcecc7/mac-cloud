@@ -36,6 +36,22 @@ CADENAS_FARMACIA = {
 }
 DEFAULT_TIPO_NEGOCIO = "TRADICIONAL"
 
+# Ubicaciones administrativas/de auditoría (oficinas, Punto Censo, Punto de
+# Análisis) -- NO son un PDV real de un solo negocio, sino un punto
+# compartido que visitan mercaderistas de campañas distintas. El join contra
+# dim_lf_general_campana_pdv (más abajo) solo puede resolver UN campana_id
+# "vigente" por punto_venta_id, así que a un punto compartido como este le
+# termina asignando SIEMPRE el mismo canal (el de la campaña más reciente
+# ahí), sin importar bajo qué campaña haya sido esa visita puntual -- bug
+# real (Davor, 2026-08-29): "PUNTO_ANALISIS" salía Tradicional en el reporte
+# aunque la visita real fue bajo la campaña Farmacia (255) de esa persona.
+# Mismos nombres que ya excluye cobertura.py::PUNTOS_EXCLUIDOS (por texto,
+# no por tipo_negocio) para "visita larga" -- acá se corrige en el origen
+# para que tampoco salga con un canal de negocio inventado en Marcaciones/
+# Cobertura.
+UBICACIONES_ADMINISTRATIVAS = ("AMOF", "OVERALL", "PUNTO CENSO", "PUNTO_ANALISIS", "PUNTO ANALISIS")
+TIPO_NEGOCIO_ADMINISTRATIVO = "ADMINISTRATIVO"
+
 # Mapeo directo campana_id -> tipo_negocio (Davor, 2026-08-26) -- más
 # confiable que adivinar por nombre de cadena (cadena_a_tipo_negocio() abajo),
 # que sirve como respaldo solo para campañas fuera de este mapeo.
@@ -173,6 +189,14 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
     df.loc[sin_campana_conocida, "tipo_negocio"] = (
         df.loc[sin_campana_conocida, "cadena_personalizada"].map(cadena_a_tipo_negocio)
     )
+
+    # Ubicación administrativa/compartida -- pisa lo que haya resuelto el
+    # join de campana_id de arriba (siempre va a ser "algún" canal real,
+    # pero no necesariamente el de ESTA visita puntual, ver comentario en
+    # UBICACIONES_ADMINISTRATIVAS).
+    patron_admin = "|".join(UBICACIONES_ADMINISTRATIVAS)
+    es_administrativo = df["nombre_personalizado"].astype(str).str.upper().str.contains(patron_admin, na=False)
+    df.loc[es_administrativo, "tipo_negocio"] = TIPO_NEGOCIO_ADMINISTRATIVO
 
     if es_diaria:
         hora_inicio_dt = pd.to_datetime(df["hora_inicio_raw"], errors="coerce")

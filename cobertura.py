@@ -25,7 +25,7 @@ UMBRAL_VISITA_LARGA_MIN = 60
 UMBRAL_DIAS_CENSO = 3
 UMBRAL_DURACION_CENSO_MIN = 120
 CIERRE_AUTOMATICO_TD = pd.Timedelta(hours=23, minutes=30, seconds=0)
-PUNTOS_EXCLUIDOS = ("AMOF", "OVERALL", "PUNTO CENSO")
+PUNTOS_EXCLUIDOS = ("AMOF", "OVERALL", "PUNTO CENSO", "PUNTO_ANALISIS", "PUNTO ANALISIS")
 WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
 
 
