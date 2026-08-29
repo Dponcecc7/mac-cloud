@@ -225,7 +225,20 @@ def headcount_submit():
             per.nombre_completo.strip().upper(): per.dni
             for per in session.query(Persona).filter_by(analista_propietario=propietario, rol="SUPERVISORES").all()
         }
+        # Los supervisores de ESTE MISMO archivo se resuelven antes del loop
+        # principal, sin importar en qué fila aparezcan -- antes, si el Excel
+        # listaba a los supervisores DESPUÉS de sus mercaderistas (orden
+        # común: armar la planilla por equipo y agregar el supervisor al
+        # final), esas filas quedaban con supervisor_dni=None porque el
+        # supervisor todavía no se había "visto" en el loop (Davor,
+        # 2026-08-29: "le colocó supervisor pero no se visualiza" -- Diego
+        # cargó a Chuchon y María como filas SUPERVISORES al final).
+        for _, fila_sup in m[m["Rol"].astype(str).str.strip().str.upper() == "SUPERVISORES"].iterrows():
+            nombre_sup, dni_sup = _texto(fila_sup["Nombre completo"]), _dni(fila_sup["DNI"])
+            if nombre_sup and dni_sup:
+                supervisores_propios[nombre_sup.strip().upper()] = dni_sup
 
+        pendientes_supervisor = []  # [(dni, supervisor_dni), ...] -- ver comentario mas abajo
         for _, row in m.iterrows():
             dni = _dni(row["DNI"])
             existente = session.get(Persona, dni)
@@ -267,7 +280,17 @@ def headcount_submit():
             datos = dict(
                 nombre_completo=nombre, rol=rol, canal=canal, region=_texto(row["Región"]),
                 ciudad=_texto(row["Ciudad / Mercado"]), zona=_texto(row["Zona / Ruta asignada"]),
-                supervisor_dni=supervisor_dni, correo=_texto(row["Correo corporativo"]),
+                # supervisor_dni se aplica DESPUÉS del flush de abajo, no
+                # acá -- si el supervisor está en ESTE MISMO archivo pero en
+                # una fila posterior (caso real, Davor 2026-08-29: Diego
+                # cargó a sus mercaderistas primero y a Chuchon/María como
+                # SUPERVISORES al final), insertar la fila del mercaderista
+                # con supervisor_dni ya apuntando a un DNI que TODAVÍA no
+                # existe como fila en la tabla revienta la FK
+                # (personas_supervisor_dni_fkey) -- SQLAlchemy no sabe
+                # reordenar el INSERT porque supervisor_dni es un DNI suelto,
+                # no una relationship() que le indique la dependencia.
+                supervisor_dni=None, correo=_texto(row["Correo corporativo"]),
                 fecha_ingreso=_fecha(row["Fecha de ingreso"]), fecha_baja=_fecha(row["Fecha de baja"]),
                 estado=(_texto(row["Estado"]) or "Inactivo"),
                 es_reingreso=_si_no_a_bool(row["Es reingreso (Sí/No)"]),
@@ -282,10 +305,17 @@ def headcount_submit():
             else:
                 session.add(Persona(dni=dni, **datos))
                 nuevas.append(dni)
-            if rol == "SUPERVISORES":
-                supervisores_propios[nombre.strip().upper()] = dni
+            if supervisor_dni:
+                pendientes_supervisor.append((dni, supervisor_dni))
 
-        session.flush()  # las personas nuevas ya deben existir en la sesion antes de tocar Patron (FK)
+        session.flush()  # las personas nuevas ya deben existir en la sesion antes de aplicar supervisor_dni/tocar Patron (FK)
+
+        # Ahora sí -- toda fila de este archivo ya existe como fila real en
+        # la tabla, así que apuntar supervisor_dni a cualquiera de ellas
+        # (sin importar el orden en que aparecían en el Excel) ya no puede
+        # violar la FK.
+        for dni, supervisor_dni in pendientes_supervisor:
+            session.get(Persona, dni).supervisor_dni = supervisor_dni
 
         n_patron = 0
         if p is not None:
