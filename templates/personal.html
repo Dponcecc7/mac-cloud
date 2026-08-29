@@ -44,6 +44,12 @@
     a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
     .top-actions select { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .btn-descargar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--card); color:var(--brand); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+    .btn-descargar:hover { background:var(--brand); color:#fff; }
+    .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
+    td .subcanal-select { font:inherit; font-size:12px; padding:3px 6px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -86,21 +92,27 @@
   <div class="wrap">
     <h1 class="title">Personal</h1>
     <p class="sub">{{ personas|length }} personas — datos en vivo desde Postgres.</p>
-    {% if canales_disponibles %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
     <div class="top-actions">
+      {% if canales_disponibles %}
       <form method="get">
         <select name="canal" onchange="this.form.submit()" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
           <option value="">Canal: todos</option>
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if canal_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
       </form>
+      {% endif %}
+      <a class="btn-descargar" href="{{ url_for('personal_exportar', canal=canal_filtro) }}">⬇ Descargar Excel</a>
     </div>
-    {% endif %}
     <div class="panel">
       <div class="table-wrap">
       <table>
         <tr>
-          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Fecha de baja</th><th>Rol</th><th>Canal</th>
+          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Fecha de baja</th><th>Rol</th><th>Canal</th><th>Subcanal</th>
           <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
         </tr>
         {% for p in personas %}
@@ -115,6 +127,20 @@
           <td>{{ p.fecha_baja.strftime("%d/%m/%Y") if p.fecha_baja else "—" }}</td>
           <td>{{ (p.rol or "—")|title }}</td>
           <td>{{ (p.canal or "—")|title }}</td>
+          <td>
+            {% if puede_editar_subcanal %}
+            <form method="post" action="{{ url_for('personal_subcanal', canal=canal_filtro) }}" style="margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="dni" value="{{ p.dni }}">
+              <select name="subcanal" class="subcanal-select" onchange="this.form.submit()">
+                <option value="" {{ 'selected' if not p.subcanal else '' }}>—</option>
+                {% for s in subcanales %}<option value="{{ s }}" {{ 'selected' if p.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
+              </select>
+            </form>
+            {% else %}
+            {{ p.subcanal or "—" }}
+            {% endif %}
+          </td>
           <td>{{ (p.region or "—")|title }}</td>
           <td>{{ (p.ciudad or "—")|title }}</td>
           <td>{{ (p.zona or "—")|title }}</td>

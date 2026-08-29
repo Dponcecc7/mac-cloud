@@ -7,14 +7,17 @@ lo existente todavía. Por ahora solo resuelve login/roles/multiusuario --
 el reporte diario real llega en fases futuras (2 y 3 del roadmap).
 """
 import datetime as dt
+import io
 import os
 import re
 from zoneinfo import ZoneInfo
 
+import openpyxl
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from openpyxl.styles import Font
 from sqlalchemy import text
 from sqlalchemy.orm import aliased
 
@@ -22,7 +25,7 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 from extensions import csrf, db, limiter, login_manager
 from models import Usuario
-from dimension_models import Feriado, Persona
+from dimension_models import Feriado, Persona, SUBCANALES
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
@@ -503,9 +506,88 @@ def create_app():
         finally:
             dim_session.close()
         canales_disponibles = CANALES_FILTRABLES if es_admin else []
+        puede_editar_subcanal = current_user.rol in ("admin", "analista")
         return render_template(
             "personal.html", usuario=current_user, personas=personas,
             canal_filtro=canal_filtro, canales_disponibles=canales_disponibles,
+            subcanales=SUBCANALES, puede_editar_subcanal=puede_editar_subcanal,
+        )
+
+    @app.post("/personal/subcanal")
+    @login_required
+    def personal_subcanal():
+        # Edición inline (Davor, 2026-08-29) -- "quiero agregar una columna
+        # que es subcanal, puedo editarla en esta plataforma mismo?". Un
+        # select por fila en personal.html hace auto-submit acá. Se reusa
+        # condicion_scope() para que un analista solo pueda tocar DNIs de su
+        # propio equipo, no cualquiera (mismo control que ya limita qué ve).
+        if current_user.rol not in ("admin", "analista"):
+            flash("No tenés permiso para editar el Subcanal.", "error")
+            return redirect(url_for("personal"))
+        dni = request.form.get("dni", "")
+        subcanal = (request.form.get("subcanal") or "").strip()
+        if subcanal and subcanal not in SUBCANALES:
+            flash("Subcanal inválido.", "error")
+            return redirect(url_for("personal"))
+        dim_session = get_dim_session()
+        try:
+            query = dim_session.query(Persona).filter(Persona.dni == dni)
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
+            persona = query.first()
+            if persona is None:
+                flash("No se encontró a esa persona en tu equipo.", "error")
+                return redirect(url_for("personal"))
+            persona.subcanal = subcanal or None
+            dim_session.commit()
+        finally:
+            dim_session.close()
+        return redirect(url_for("personal", canal=request.args.get("canal", "")))
+
+    @app.get("/personal/exportar")
+    @login_required
+    def personal_exportar():
+        es_admin = current_user.rol == "admin"
+        canal_filtro = (request.args.get("canal") or "") if es_admin else ""
+
+        dim_session = get_dim_session()
+        try:
+            query = dim_session.query(Persona)
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
+            if canal_filtro:
+                query = query.filter(condicion_canal(Persona, canal_filtro))
+            personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
+        finally:
+            dim_session.close()
+
+        columnas = [
+            ("dni", "DNI"), ("nombre_completo", "Nombre"), ("estado", "Estado"),
+            ("fecha_baja", "Fecha de baja"), ("rol", "Rol"), ("canal", "Canal"),
+            ("subcanal", "Subcanal"), ("region", "Región"), ("ciudad", "Ciudad"),
+            ("zona", "Zona"), ("supervisor_dni", "Supervisor"), ("correo", "Correo"),
+            ("analista_propietario", "Analista"),
+        ]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Personal"
+        ws.append([titulo for _clave, titulo in columnas])
+        for celda in ws[1]:
+            celda.font = Font(bold=True)
+        for p in personas:
+            ws.append([getattr(p, clave) for clave, _titulo in columnas])
+        for i, (_clave, titulo) in enumerate(columnas, start=1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(titulo) + 2)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        hoy = dt.datetime.now(PERU_TZ).strftime("%Y-%m-%d")
+        return send_file(
+            buf, as_attachment=True, download_name=f"Personal_{hoy}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     return app

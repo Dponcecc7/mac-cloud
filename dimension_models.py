@@ -52,6 +52,7 @@ class Persona(Base):
     nombre_completo = Column(String(150), nullable=False)
     rol = Column(String(50))
     canal = Column(String(50))
+    subcanal = Column(String(50))
     region = Column(String(50))
     ciudad = Column(String(80))
     zona = Column(String(100))
@@ -73,6 +74,12 @@ class Persona(Base):
     __table_args__ = (
         CheckConstraint("estado IN ('Activo','Inactivo','Vacante')", name="ck_personas_estado"),
     )
+
+
+# Lista fija (Davor, 2026-08-29) -- editable desde la pantalla Personal, sin
+# vinculo con `canal` (un mercaderista Farmacia puede ser Minorista o
+# Mayorista igual que uno Tradicional).
+SUBCANALES = ["Minorista", "Mayorista", "Autoservicio", "Farmacia"]
 
 
 class PatronRecurrente(Base):
