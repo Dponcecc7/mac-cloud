@@ -112,12 +112,24 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
     # tuvo alguna vez (cliente_id/campana_id son particiones -- es un
     # snapshot por campaña, no un maestro con una fila por PDV), asi que un
     # JOIN directo por punto_venta_id multiplica cada visita en N filas (un
-    # PDV real llegó a tener 6 campañas distintas) y el dedup posterior por
-    # claves de visita se quedaba con una AL AZAR -- bug real encontrado
-    # 2026-08-26 (Davor: "GF_BOTICA NORTE FARMA" salía Farmacia, la campaña
-    # real vigente ahí es Tradicional/998). Se resuelve quedandose con la
-    # fila de campaña actualizada mas recientemente (updated_at) por PDV,
-    # que es la que de verdad esta operando ese punto de venta hoy.
+    # PDV real llegó a tener 6 campañas distintas) -- este CTE sigue
+    # resolviendo ESO (quedarse con una sola fila por PDV, la actualizada
+    # más recientemente) para poder traer latitud/longitud sin duplicar
+    # filas.
+    #
+    # OJO -- campana_id de ACÁ (p.campana_id) YA NO se usa para decidir el
+    # canal: era un bug real. Un mismo PDV puede estar activo bajo VARIAS
+    # campañas a la vez (Davor, 2026-08-29, verificado en Athena: el mismo
+    # punto_venta_id de dim_lf_general_campana_pdv sale con campana_id=255
+    # "ESSITY-FARMACIA" en una fila y campana_id=1147 "FRENTE A HOSPITALES"
+    # en otra), así que "la más recientemente actualizada" no es
+    # necesariamente la que aplicó a ESTA visita puntual -- eso fue lo que
+    # rompía UNIVERSAL-*, METRO-OVALO PAPAL, PUNTO_ANALISIS, etc. La propia
+    # tabla de visitas (dim_lf_general_visitas) YA trae su campana_id
+    # correcto por fila ("cuando se genera la visita, hay una columna que
+    # indica el canal donde salió la visita" -- directriz explícita de
+    # Davor), así que el canal se resuelve con v.campana_id más abajo, no
+    # con el de este join.
     campana_vigente_cte = f"""
         WITH campana_vigente AS (
             SELECT *, ROW_NUMBER() OVER (PARTITION BY punto_venta_id ORDER BY updated_at DESC) AS rn
@@ -151,7 +163,7 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    v.posicion_inicio, v.posicion_fin, v.visita_efectiva,
                    v.bateria_inicio, v.bateria_fin, v.motivo_visita,
                    v.nombre_personalizado, v.cadena_personalizada, v.empresa_personalizada,
-                   v.departamento, v.provincia, v.distrito, p.latitud, p.longitud, p.campana_id
+                   v.departamento, v.provincia, v.distrito, p.latitud, p.longitud, v.campana_id
             FROM livetradebi.{tabla} v
             LEFT JOIN campana_vigente p
               ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id AND p.rn = 1
