@@ -652,32 +652,52 @@ def ficha(dni):
             "desde": desde_s, "pct": None if pct is None or pd.isna(pct) else pct,
         })
 
-    # Tendencia de cobertura, últimas 6 semanas ISO -- mismo cálculo que
-    # Reportes > Cobertura (PDVs distintos por día, Punto Censo aparte, ver
-    # cobertura.matriz_cobertura), pero sumado por semana para UNA sola
-    # persona, mismo estilo visual que "Cumplimiento semanal" de al lado
-    # (Davor, 2026-08-28: "que aparezca tambien el tendencial de cobertura").
+    # Tendencia de cobertura, últimas 6 semanas, día por día -- mismo
+    # cálculo que Reportes > Cobertura (PDVs distintos por día, Punto Censo
+    # aparte, ver cobertura.matriz_cobertura) y mismos símbolos T/A/F/C de
+    # ahí, pero en tira diaria como "Tareo del mes" en vez de barras
+    # semanales (Davor, 2026-08-29: "que sea asi como el tareo, de forma
+    # diaria... la cantidad de PDVs visitados, con su simbolo").
+    cobertura_desde = hoy - dt.timedelta(days=41)
+    v_cob = _cargar_visitas(cobertura_desde, hoy, None, dni_filtro=dni)
+    if len(v_cob):
+        v_normal = v_cob[v_cob["geofence_ok"] & ~v_cob["es_censo"]]
+        total_normal = v_normal.groupby("fecha_inicio")["punto_venta_id"].nunique()
+        v_censo = v_cob[v_cob["es_censo"]]
+        total_censo = v_censo.groupby("fecha_inicio").size()
+        total_por_dia = total_normal.add(total_censo, fill_value=0)
+        dias_au = set(v_normal[v_normal["tipo_negocio"] == "AUTOSERVICIOS"]["fecha_inicio"].dt.date)
+        dias_farma = set(v_normal[v_normal["tipo_negocio"] == "FARMACIA"]["fecha_inicio"].dt.date)
+        dias_tradicional = set(v_normal[v_normal["tipo_negocio"] == "TRADICIONAL"]["fecha_inicio"].dt.date)
+        dias_censo = set(total_censo.index.date) if len(total_censo) else set()
+    else:
+        total_por_dia = pd.Series(dtype=float)
+        dias_au = dias_farma = dias_tradicional = dias_censo = set()
+
+    valores_no_cero = [int(v) for v in total_por_dia if v > 0]
+    prom_cobertura = (sum(valores_no_cero) / len(valores_no_cero)) if valores_no_cero else 0
+
     tendencia_cobertura = []
-    for i in range(5, -1, -1):
-        fecha_ref = hoy - dt.timedelta(weeks=i)
-        anio_s, num_s, _ = fecha_ref.isocalendar()
-        desde_s, hasta_s = semana_iso(anio_s, num_s)
-        v_s = _cargar_visitas(desde_s, hasta_s, None, dni_filtro=dni)
-        if len(v_s):
-            v_normal = v_s[v_s["geofence_ok"] & ~v_s["es_censo"]]
-            n_normal = int(v_normal.groupby("fecha_inicio")["punto_venta_id"].nunique().sum())
-            n_censo = int(v_s[v_s["es_censo"]].groupby("fecha_inicio").size().sum())
-            total = n_normal + n_censo
-        else:
-            total = 0
-        tendencia_cobertura.append({"semana": f"S{num_s}", "total": total})
-    max_cobertura = max((s["total"] for s in tendencia_cobertura), default=0)
-    prom_cobertura = (sum(s["total"] for s in tendencia_cobertura) / 6) if tendencia_cobertura else 0
-    for s in tendencia_cobertura:
-        s["ancho_pct"] = round(s["total"] / max_cobertura * 100) if max_cobertura else 0
-        s["color"] = "var(--line)" if s["total"] == 0 else (
-            "var(--bad)" if prom_cobertura > 0 and s["total"] < prom_cobertura * 0.5 else "var(--ok)"
+    fecha_cursor = cobertura_desde
+    while fecha_cursor <= hoy:
+        total = int(total_por_dia.get(pd.Timestamp(fecha_cursor), 0))
+        tags = []
+        if fecha_cursor in dias_tradicional:
+            tags.append("tradicional")
+        if fecha_cursor in dias_au:
+            tags.append("au")
+        if fecha_cursor in dias_farma:
+            tags.append("farma")
+        if fecha_cursor in dias_censo:
+            tags.append("censo")
+        clase = "muted" if total == 0 else (
+            "bad" if prom_cobertura > 0 and total < prom_cobertura * 0.5 else "ok"
         )
+        tendencia_cobertura.append({
+            "fecha": fecha_cursor, "dia": fecha_cursor.day, "dia_semana": DIAS_ES[fecha_cursor.weekday()][:2],
+            "total": total, "clase": clase, "tags": tags,
+        })
+        fecha_cursor += dt.timedelta(days=1)
 
     # Detalle día a día -- para ver DÓNDE está el cuello de botella detrás
     # de un % bajo (Davor, 2026-08-23), no solo el número agregado. Semana

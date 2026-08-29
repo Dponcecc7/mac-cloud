@@ -80,6 +80,16 @@
     .tareo-dia .cod.muted { background:var(--line); color:var(--muted); }
     .tareo-leyenda { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:11px; color:var(--muted); margin-top:10px; }
     .tareo-leyenda .cod { display:inline-block; width:16px; height:16px; border-radius:4px; text-align:center; line-height:16px; font-size:9px; font-weight:800; margin-right:4px; vertical-align:middle; }
+    .tareo-leyenda .chip { margin-right:4px; }
+
+    /* Chips de canal (T/A/F/C) -- mismos colores que reportes_cobertura.html,
+       reusados acá en la tira diaria de "Tendencia de cobertura". */
+    .chips-mini { display:flex; gap:1px; justify-content:center; flex-wrap:wrap; margin-top:2px; }
+    .chip { width:13px; height:13px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:7.5px; font-weight:800; color:#fff; line-height:1; }
+    .chip.au { background:#2c6e91; }
+    .chip.farma { background:var(--ok); }
+    .chip.tradicional { background:var(--warn); }
+    .chip.censo { background:var(--brand); }
 
     .table-wrap { overflow-x:auto; }
     table { border-collapse:collapse; width:100%; font-size:12px; }
@@ -260,20 +270,27 @@
 
     <div class="panel">
       <p class="panel-title">Tendencia de cobertura (últimas 6 semanas)</p>
-      <p class="empty" style="margin:-6px 0 8px;">PDVs distintos visitados por semana (Punto Censo incluido) -- mismo cálculo que Reportes &gt; Cobertura.</p>
+      <p class="empty" style="margin:-6px 0 8px;">PDVs distintos visitados por día (Punto Censo incluido) -- mismo cálculo que Reportes &gt; Cobertura.</p>
       {% if not tendencia_cobertura or tendencia_cobertura|sum(attribute='total') == 0 %}
         <p class="empty">Sin visitas GPS registradas en este periodo.</p>
       {% else %}
-      <div>
-        {% for s in tendencia_cobertura %}
-        <div class="semana-row">
-          <span class="semana-lbl">{{ s.semana }}</span>
-          <div class="semana-barra-wrap">
-            <div class="semana-barra" style="width:{{ s.ancho_pct }}%; background:{{ s.color }};"></div>
-          </div>
-          <span class="semana-pct">{{ s.total }}</span>
+      <div class="tareo-strip">
+        {% for d in tendencia_cobertura %}
+        <div class="tareo-dia" title="{{ d.dia_semana }} {{ d.fecha.strftime('%d/%m') }} — {{ d.total }} PDV{{ 's' if d.total != 1 else '' }} visitado{{ 's' if d.total != 1 else '' }}">
+          <span class="num">{{ d.dia }}</span>
+          <span class="dow">{{ d.dia_semana }}</span>
+          <span class="cod {{ d.clase }}">{{ d.total }}</span>
+          {% if d.tags %}
+          <span class="chips-mini">{% for t in d.tags %}<span class="chip {{ t }}">{{ t[0]|upper }}</span>{% endfor %}</span>
+          {% endif %}
         </div>
         {% endfor %}
+      </div>
+      <div class="tareo-leyenda">
+        <span><span class="chip tradicional">T</span>Tradicional</span>
+        <span><span class="chip au">A</span>Autoservicio</span>
+        <span><span class="chip farma">F</span>Farmacia</span>
+        <span><span class="chip censo">C</span>Punto Censo</span>
       </div>
       {% endif %}
     </div>
