@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Reportes</title>
@@ -101,6 +104,7 @@
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
     }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <header class="top">
@@ -117,6 +121,7 @@
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
           <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
@@ -182,7 +187,10 @@
     <span class="stat-pill">{{ insights|length }} señal{{ 'es' if insights|length != 1 else '' }} esta semana</span>
 
     {% if not insights %}
-      <p class="empty">Sin señales por ahora.</p>
+      <div class="empty-state">
+        <span class="empty-icon">💡</span>
+        <span class="empty-title">Sin señales por ahora</span>
+      </div>
     {% else %}
       {% set etiquetas_insight = {'tardanza_creciente': 'Tardanza creciente', 'cumplimiento_bajando': 'Cumplimiento bajando', 'cerca_alerta_tardanza': 'Cerca de alerta (tardanza)', 'cerca_alerta_falta': 'Cerca de alerta (falta)', 'riesgo_semana': 'Riesgo esta semana'} %}
       {% set tipos_presentes_insight = insights | map(attribute='tipo') | unique | list %}
@@ -214,7 +222,10 @@
     <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} en el periodo</h2>
     <p class="note">Puntaje = promedio ponderado de 4 métricas del periodo elegido ({{ desde.strftime('%d/%m') }} al {{ hasta.strftime('%d/%m') }}): Cumplimiento de horas (35%), Faltas sin descanso médico/licencia/feriado regional (35%), Tardanzas (15%) y Salidas antes de hora (15%), todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
     {% if not perfiles %}
-      <p class="empty">Sin datos de clasificación en ese periodo todavía.</p>
+      <div class="empty-state">
+        <span class="empty-icon">📈</span>
+        <span class="empty-title">Sin datos de clasificación en ese periodo todavía</span>
+      </div>
     {% else %}
     <div class="perfil-grid">
       {% for p in perfiles %}

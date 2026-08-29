@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Reportes</title>
@@ -96,6 +99,7 @@
       .alerta .nivel { font-size:9px; padding:2px 6px; }
     }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <header class="top">
@@ -112,6 +116,7 @@
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
           <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
@@ -177,7 +182,11 @@
     </form>
 
     {% if not alertas %}
-      <p class="empty">Sin alertas en {{ mes_str }} — nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</p>
+      <div class="empty-state">
+        <span class="empty-icon">✅</span>
+        <span class="empty-title">Sin alertas en {{ mes_str }}</span>
+        <span class="empty-hint">Nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</span>
+      </div>
     {% else %}
       {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️', 'jornada_critica': '🚨'} %}
       {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano', 'jornada_critica': 'Jornada casi nula'} %}

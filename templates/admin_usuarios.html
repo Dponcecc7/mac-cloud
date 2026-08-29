@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Usuarios</title>
@@ -63,6 +66,7 @@
       .btn-crear { width:100%; min-height:44px; }
     }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <header class="top">
@@ -79,6 +83,7 @@
           <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
         </div>
         <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
           <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>

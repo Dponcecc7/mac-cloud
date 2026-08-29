@@ -1,0 +1,136 @@
+/* Proyecto MAC -- hoja compartida (Davor, 2026-08-29): "estados
+   hover/active/disabled, feedback visual, loading states/skeleton
+   screens, empty states, dark mode" para TODA la app.
+
+   Cada template ya define su propio bloque `:root { --bg:...; --card:...;
+   ... }` con el mismo vocabulario de variables (--bg, --card, --ink,
+   --muted, --line, --brand, --ok/--ok-bg, --warn/--warn-bg, --bad/--bad-bg,
+   y algunas paginas suman --brand-dark, --brand-bg, --accent2/--accent2-bg).
+   Este archivo NO toca esos bloques (evita reescribir 19 templates) --
+   en vez de eso redefine las mismas variables bajo un selector MAS
+   especifico (":root:not([data-theme=light])" / ":root[data-theme=dark]",
+   ambos con especificidad (0,2,0) contra la (0,1,0) de un ":root" simple),
+   asi que gana sin importar el orden de <link>/<style> en el <head>. El
+   resto del CSS de cada pagina ya usa var(--bg) etc, asi que cambia de
+   tema solo con esto. */
+
+*, *::before, *::after { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0f1720; --card:#1a2532; --ink:#e6edf5; --muted:#90a4b7; --line:#2a3b4d;
+    --brand:#5b9bd9; --brand-dark:#3d7ab5; --brand-bg:#1c3350;
+    --ok:#4ade80; --ok-bg:#113322; --warn:#fbbf24; --warn-bg:#3a2a0a; --bad:#f87171; --bad-bg:#3a1414;
+    --accent2:#a78bfa; --accent2-bg:#2e1f57;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0f1720; --card:#1a2532; --ink:#e6edf5; --muted:#90a4b7; --line:#2a3b4d;
+  --brand:#5b9bd9; --brand-dark:#3d7ab5; --brand-bg:#1c3350;
+  --ok:#4ade80; --ok-bg:#113322; --warn:#fbbf24; --warn-bg:#3a2a0a; --bad:#f87171; --bad-bg:#3a1414;
+  --accent2:#a78bfa; --accent2-bg:#2e1f57;
+}
+
+/* ---- Toggle de tema (boton en el nav de cada pagina) ------------------ */
+.theme-toggle {
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); color:#eaf3fb;
+  width:30px; height:30px; border-radius:8px; font-size:15px; line-height:1; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; padding:0;
+}
+.theme-toggle:hover { background:rgba(255,255,255,.24); }
+.theme-toggle:active { transform:translateY(1px); }
+
+/* ---- Estados hover/active/disabled, generalizados ---------------------
+   Cubre elementos genericos (button, select, input, a con clase de boton)
+   sin obligar a renombrar clases ya existentes en cada template. */
+button, .btn, input[type="submit"] {
+  cursor:pointer;
+}
+button:not(:disabled):hover, .btn:not(:disabled):hover, input[type="submit"]:not(:disabled):hover {
+  filter:brightness(1.08);
+}
+button:not(:disabled):active, .btn:not(:disabled):active, input[type="submit"]:not(:disabled):active {
+  transform:translateY(1px);
+  filter:brightness(0.97);
+}
+button:disabled, .btn:disabled, input[type="submit"]:disabled,
+select:disabled, input:disabled, textarea:disabled {
+  opacity:.55; cursor:not-allowed; filter:none; transform:none;
+}
+select:not(:disabled):hover, input:not(:disabled):hover, textarea:not(:disabled):hover {
+  border-color:var(--brand);
+}
+button:focus-visible, .btn:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline:2px solid var(--brand); outline-offset:2px;
+}
+a[href]:hover { opacity:.85; }
+
+/* Filas de tabla: feedback visual de "esto es interactivo / esto cambio" */
+table tbody tr:hover td { background:color-mix(in srgb, var(--brand) 6%, transparent); }
+tr.fila-guardada td { animation: destello-guardado 1.1s ease; }
+@keyframes destello-guardado {
+  0% { background:color-mix(in srgb, var(--ok) 22%, transparent); }
+  100% { background:transparent; }
+}
+
+/* ---- Feedback visual: mensajes flash con icono + entrada animada ------ */
+.flash {
+  display:flex; align-items:center; gap:8px; animation: flash-in .2s ease;
+}
+.flash::before { font-weight:700; flex-shrink:0; }
+.flash.ok::before { content:"✓"; }
+.flash.error::before { content:"✕"; }
+@keyframes flash-in {
+  from { opacity:0; transform:translateY(-4px); }
+  to { opacity:1; transform:translateY(0); }
+}
+.flash.flash-saliendo { animation: flash-out .3s ease forwards; }
+@keyframes flash-out {
+  to { opacity:0; transform:translateY(-4px); max-height:0; padding-top:0; padding-bottom:0; margin-bottom:0; }
+}
+
+/* ---- Loading states ----------------------------------------------------
+   1) Barra fina arriba de la pagina en cualquier navegacion/submit.
+   2) Boton que dispara el submit queda deshabilitado + con spinner, para
+      feedback inmediato y evitar doble click (ej. "Guardar" de Personal). */
+#mac-progress {
+  position:fixed; top:0; left:0; height:3px; width:0%; z-index:9999;
+  background:var(--brand); box-shadow:0 0 8px var(--brand);
+  transition:width .3s ease, opacity .2s ease; opacity:0; pointer-events:none;
+}
+#mac-progress.activa { opacity:1; width:75%; }
+
+.is-guardando { position:relative; color:transparent !important; pointer-events:none; }
+.is-guardando::after {
+  content:""; position:absolute; inset:0; margin:auto; width:14px; height:14px;
+  border-radius:50%; border:2px solid rgba(255,255,255,.5); border-top-color:#fff;
+  animation:girar .6s linear infinite;
+}
+/* Botones con fondo claro (ej. btn-descargar, btn-guardar) -- el spinner
+   necesita contraste con SU fondo, no con blanco fijo. */
+.btn-guardar.is-guardando::after, .btn-descargar.is-guardando::after {
+  border-color:color-mix(in srgb, var(--ink) 25%, transparent); border-top-color:var(--ink);
+}
+@keyframes girar { to { transform:rotate(360deg); } }
+
+/* Skeleton screens -- para listas/tablas que carguen por AJAX a futuro;
+   aplicar .skeleton a un contenedor y .skeleton-line a cada placeholder. */
+.skeleton-line {
+  background:linear-gradient(90deg, var(--line) 25%, color-mix(in srgb, var(--line) 50%, var(--card)) 37%, var(--line) 63%);
+  background-size:400% 100%; animation:brillo-skeleton 1.4s ease infinite;
+  border-radius:6px; height:14px;
+}
+@keyframes brillo-skeleton {
+  0% { background-position:100% 50%; }
+  100% { background-position:0% 50%; }
+}
+
+/* ---- Empty states ------------------------------------------------------
+   Componente compartido: icono + mensaje + (opcional) sugerencia chica. */
+.empty-state {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; padding:44px 20px; color:var(--muted); text-align:center;
+}
+.empty-state .empty-icon { font-size:32px; opacity:.6; margin-bottom:4px; }
+.empty-state .empty-title { font-weight:700; font-size:14px; color:var(--ink); }
+.empty-state .empty-hint { font-size:12.5px; max-width:360px; }

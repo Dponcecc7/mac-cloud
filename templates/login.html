@@ -1,27 +1,34 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Iniciar sesión</title>
   <style>
+    :root { --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef; --brand:#2f6fb0; --ok:#16a34a; --ok-bg:#dcfce7; --bad:#dc2626; --bad-bg:#fee2e2; }
     * { box-sizing:border-box; }
-    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#eef4fa; color:#1e2a3a; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:16px; }
-    .card { background:#fff; border:1px solid #d7e3ef; border-radius:10px; padding:32px; width:100%; max-width:340px; box-shadow:0 8px 24px -12px rgba(33,28,22,.2); }
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:32px; width:100%; max-width:340px; box-shadow:0 8px 24px -12px rgba(33,28,22,.2); position:relative; }
+    .theme-toggle { position:absolute; top:14px; right:14px; background:var(--bg); border:1px solid var(--line); color:var(--ink); }
     h1 { font-size:18px; margin:0 0 20px; }
-    label { display:block; font-size:13px; font-weight:600; color:#5b7186; margin-bottom:5px; }
+    label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin-bottom:5px; }
     /* font-size:16px en los inputs evita que iOS Safari haga zoom automatico
        al enfocarlos (pasa si el tamano de letra es menor a 16px) -- min-height
        44px es el target tactil minimo recomendado para dedo en celular. */
-    input { width:100%; padding:11px 12px; margin-bottom:16px; border:1px solid #d7e3ef; border-radius:8px; font:inherit; font-size:16px; min-height:44px; }
-    button { width:100%; padding:13px; min-height:46px; background:#2f6fb0; color:#fff; border:none; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; }
+    input { width:100%; padding:11px 12px; margin-bottom:16px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:16px; min-height:44px; background:var(--card); color:var(--ink); }
+    button { width:100%; padding:13px; min-height:46px; background:var(--brand); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; }
     .flash { padding:8px 10px; border-radius:6px; margin-bottom:14px; font-size:13px; }
-    .flash.error { background:#fee2e2; color:#dc2626; }
-    .flash.ok { background:#dcfce7; color:#16a34a; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <div class="card">
+    <button type="button" class="theme-toggle">🌙</button>
     <h1>MAC — Iniciar sesión</h1>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}

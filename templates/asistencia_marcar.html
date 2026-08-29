@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Asistencia diaria</title>
@@ -158,6 +161,7 @@
       .marcaron-editar .btn.sm { min-height:44px; width:100%; }
     }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <header class="top">
@@ -174,6 +178,7 @@
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
           <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
@@ -255,18 +260,25 @@
 
     {% if not resumen and not pendientes %}
       <div class="panel">
-        <p>No hay datos de clasificación para <b>{{ fecha_str }}</b> todavía.</p>
-        {% if fecha_reciente %}
-        <p style="margin:8px 0 0; font-size:13px; color:var(--muted);">¿Buscabas marcar un día anterior?
-          <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_reciente) }}" style="color:var(--brand); font-weight:700; text-decoration:none;">
-            Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
-          </a>
-        </p>
-        {% endif %}
+        <div class="empty-state">
+          <span class="empty-icon">📋</span>
+          <span class="empty-title">No hay datos de clasificación para {{ fecha_str }} todavía</span>
+          {% if fecha_reciente %}
+          <span class="empty-hint">¿Buscabas marcar un día anterior?
+            <a href="{{ url_for('asistencia.marcar_vista', fecha=fecha_reciente) }}">
+              Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
+            </a>
+          </span>
+          {% endif %}
+        </div>
       </div>
     {% elif not pendientes %}
       <div class="panel">
-        <p>No hay nadie pendiente de marcar para <b>{{ fecha_str }}</b> — todas las faltas/vacantes ya tienen un motivo cargado.</p>
+        <div class="empty-state">
+          <span class="empty-icon">✅</span>
+          <span class="empty-title">No hay nadie pendiente de marcar para {{ fecha_str }}</span>
+          <span class="empty-hint">Todas las faltas/vacantes ya tienen un motivo cargado.</span>
+        </div>
       </div>
     {% else %}
     <div class="panel" style="padding:14px 16px;">

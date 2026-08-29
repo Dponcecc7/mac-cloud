@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Asistencia diaria</title>
@@ -21,6 +24,7 @@
     .progress-fill.fallo { animation:none; width:100%; background:var(--bad); }
     @keyframes mover { 0% { margin-left:-35%; } 100% { margin-left:100%; } }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <div class="wrap">

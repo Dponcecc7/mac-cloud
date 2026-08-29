@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Reportes</title>
@@ -86,6 +89,7 @@
       .leyenda { gap:8px 14px; font-size:11.5px; padding:9px 12px; }
     }
   </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <header class="top">
@@ -102,6 +106,7 @@
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
           <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
           <span class="pill">{{ usuario.rol }}</span>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
@@ -162,7 +167,10 @@
 
     <div class="panel">
       {% if not personas %}
-        <p class="empty">Sin datos de clasificación en este periodo.</p>
+        <div class="empty-state">
+          <span class="empty-icon">🗓️</span>
+          <span class="empty-title">Sin datos de clasificación en este periodo</span>
+        </div>
       {% else %}
       <div class="leyenda">
         {% for cod, clase, texto in leyenda_tareo %}
