@@ -171,6 +171,22 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
         personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
+        # Nombre del SUPERVISOR -- consulta aparte, sin condicion_scope().
+        # Antes se resolvía contra nombre_de (ya acotado al scope del
+        # visor), así que un supervisor de OTRO canal/cliente (el
+        # supervisor real de alguien "compartido" entre canales, ej.
+        # MULTICANAL) salía en blanco -- el visor tiene acceso a ver a ESA
+        # persona (ya pasó el scope), no hace falta que su supervisor
+        # TAMBIÉN esté en su mismo scope para mostrar el nombre (Davor,
+        # 2026-08-29: "No le aparece supervisor asignado, pero si les cargó
+        # en el archivo headcount").
+        dnis_supervisores = {p.supervisor_dni for p in personas.values() if p.supervisor_dni}
+        nombre_supervisor_de = {}
+        if dnis_supervisores:
+            nombre_supervisor_de = dict(
+                session.query(Persona.dni, Persona.nombre_completo)
+                .filter(Persona.dni.in_(dnis_supervisores)).all()
+            )
 
         filas_hoy = (
             session.query(ClasificacionDiaria)
@@ -202,7 +218,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     for c in filas_hoy:
         p = personas.get(c.dni)
         ayer_c = filas_ayer.get(c.dni)
-        supervisor_nombre = nombre_de.get(p.supervisor_dni) if p else None
+        supervisor_nombre = nombre_supervisor_de.get(p.supervisor_dni) if p else None
         salida_anticipada = ayer_c.salida_anticipada_min if ayer_c else None
         filas.append({
             "dni": c.dni,
