@@ -25,6 +25,7 @@ from models import Usuario
 from dimension_models import Feriado, Persona
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
+from github_actions import disparar_workflow
 from scoping import CANALES_FILTRABLES, condicion_canal, condicion_scope
 from vacaciones import calcular_viajes_vacaciones
 
@@ -155,6 +156,32 @@ def create_app():
             return jsonify({"status": "ok", "db": True}), 200
         except Exception as e:
             return jsonify({"status": "error", "db": False, "detalle": str(e)}), 500
+
+    @app.get("/cron/pipeline")
+    def cron_disparar_pipeline():
+        """Disparador externo confiable para pipeline_completo.yml (Davor,
+        2026-08-29) -- el `schedule` nativo de GitHub Actions resultó no ser
+        confiable para esto (37 de las últimas 40 corridas fueron
+        workflow_dispatch, casi nada por el cron de cada 5 min; se detectó
+        un hueco real de 92 min sin ninguna corrida). Pensado para que un
+        servicio externo (cron-job.org o similar) le pegue cada 5 min.
+
+        Protegido por token en la URL (?token=...) -- sin login, porque un
+        servicio de cron externo no tiene cómo autenticarse con nuestra
+        sesión. Sin CRON_TRIGGER_TOKEN configurado en el entorno, este
+        endpoint queda deshabilitado (404) en vez de aceptar cualquier
+        pedido sin token. Es seguro pegarle más seguido de lo necesario --
+        pipeline_completo.py ya tiene su propio candado (db_lock) y no
+        corre dos veces en paralelo aunque este disparo coincida con uno
+        manual o del cron nativo (que sigue activo, esto es un respaldo, no
+        un reemplazo)."""
+        token_esperado = os.environ.get("CRON_TRIGGER_TOKEN")
+        if not token_esperado:
+            return jsonify({"error": "CRON_TRIGGER_TOKEN no configurado"}), 404
+        if request.args.get("token") != token_esperado:
+            return jsonify({"error": "token inválido"}), 403
+        ok, mensaje = disparar_workflow("pipeline_completo.yml")
+        return jsonify({"ok": ok, "mensaje": mensaje}), (200 if ok else 502)
 
     @app.get("/")
     @login_required
