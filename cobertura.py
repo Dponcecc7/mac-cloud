@@ -106,6 +106,21 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
     v["hora_fin_td"] = pd.to_timedelta(v["hora_fin"].astype(str), errors="coerce")
     v["geofence_ok"] = v["distancia_metros_inicio"].fillna(99999) <= GEOFENCE_MAX_M
     v["es_censo"] = v["punto_venta"].astype(str).str.upper().str.contains("PUNTO CENSO", na=False)
+
+    # Athena entrega la MISMA visita dos veces mientras está en curso -- una
+    # fila apenas empieza (hora_fin literalmente el texto "NaN", no NULL,
+    # con lo que estaba resuelto el canal ANTES de que la visita cerrara) y
+    # otra cuando cierra, con la hora y (desde 2026-08-29) el tipo_negocio
+    # ya corregidos. Antes esto solo se dedupaba dentro de
+    # marcaciones_del_dia() -- matriz_cobertura() veía las dos filas sueltas
+    # y terminaba mostrando el canal viejo Y el nuevo juntos para el mismo
+    # día (caso real: "UNIVERSAL-LOS OLIVOS" salía Farmacia Y Tradicional el
+    # mismo día para la misma persona). Se dedupea acá, de una vez para
+    # todos los consumidores de _cargar_visitas().
+    v["_hora_fin_valida"] = v["hora_fin"].where(v["hora_fin"].notna() & (v["hora_fin"] != "NaN"))
+    v = v.sort_values(["dni", "punto_venta_id", "hora_inicio", "_hora_fin_valida"], na_position="first")
+    v = v.drop_duplicates(subset=["dni", "punto_venta_id", "fecha_inicio", "hora_inicio"], keep="last")
+    v = v.drop(columns=["_hora_fin_valida"])
     return v
 
 
@@ -179,16 +194,13 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
     if not len(v):
         return []
 
-    # Athena entrega la MISMA visita dos veces mientras está en curso -- una
-    # fila apenas empieza (hora_fin literalmente el texto "NaN", no NULL) y
-    # otra cuando cierra, con la hora real. Como la unicidad de `visitas`
-    # incluye hora_fin, ambas se guardan (correcto para no perder historial),
-    # pero acá mostrar las dos duplicaría cada visita cerrada. Se prefiere la
-    # fila con hora_fin real; si todavía no cerró, se muestra como "en curso".
+    # El duplicado de "visita en curso" vs "visita cerrada" ya se resuelve
+    # dentro de _cargar_visitas() (se queda con la fila de hora_fin real) --
+    # acá solo se recalcula hora_fin_valida para mostrar "en curso" cuando
+    # corresponda (si nunca cerró, la única fila que sobrevive es la del
+    # "NaN").
     v = v.copy()
     v["hora_fin_valida"] = v["hora_fin"].where(v["hora_fin"].notna() & (v["hora_fin"] != "NaN"))
-    v = v.sort_values(["dni", "punto_venta_id", "hora_inicio", "hora_fin_valida"], na_position="first")
-    v = v.drop_duplicates(subset=["dni", "punto_venta_id", "fecha_inicio", "hora_inicio"], keep="last")
 
     # Si además hay una corrección manual cargada ese día (Tabla 3, vía
     # "Marcar asistencia"), se muestra como nota -- para no olvidar que ese
