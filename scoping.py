@@ -99,7 +99,28 @@ def overrides_supervisor_canal(session, dnis, usuario_actual):
     return dict(filas)
 
 
-def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+def todos_overrides_supervisor_canal(session, dnis):
+    """{dni: [(canal, supervisor_dni), ...]} SIN filtrar por el canal del
+    usuario que mira -- a diferencia de overrides_supervisor_canal() (pensada
+    para pintar UN reporte ya acotado a un canal), esto es para la pantalla
+    Personal (Davor, 2026-08-29: "que aparezca el nombre y también si hay 2
+    supers para ese mercaderista"), donde admin/analista necesitan ver TODOS
+    los supervisores por canal de un compartido de un vistazo, no solo el
+    que aplicaría a su propio canal_asignado."""
+    if not dnis:
+        return {}
+    filas = (
+        session.query(PersonaSupervisorCanal.dni, PersonaSupervisorCanal.canal, PersonaSupervisorCanal.supervisor_dni)
+        .filter(PersonaSupervisorCanal.dni.in_(dnis))
+        .all()
+    )
+    resultado = {}
+    for dni, canal, supervisor_dni in filas:
+        resultado.setdefault(dni, []).append((canal, supervisor_dni))
+    return resultado
+
+
+def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, subcanal_filtro=None):
     """Filtros de Rol/Región/Supervisor/Ciudad de Reportes y Marcar
     asistencia (Davor, 2026-08-24/25) -- encima del scope de acceso
     (condicion_scope), no en vez de. Solo admin/analista le pasan valores
@@ -120,4 +141,6 @@ def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=N
         query = query.filter(persona_model.ciudad == ciudad_filtro)
     if canal_filtro:
         query = query.filter(condicion_canal(persona_model, canal_filtro))
+    if subcanal_filtro:
+        query = query.filter(persona_model.subcanal == subcanal_filtro)
     return query

@@ -29,7 +29,10 @@ from dimension_models import Feriado, Persona, SUBCANALES
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
-from scoping import CANALES_FILTRABLES, condicion_canal, condicion_scope
+from scoping import (
+    CANALES_FILTRABLES, aplicar_filtros_extra, condicion_canal, condicion_scope,
+    todos_overrides_supervisor_canal,
+)
 from vacaciones import calcular_viajes_vacaciones
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
@@ -481,6 +484,73 @@ def create_app():
             canales_disponibles=canales_disponibles,
         )
 
+    def _filtros_personal(dim_session):
+        # Región/Ciudad/Subcanal (Davor, 2026-08-29: "agregar filtro,
+        # región, ciudad, canal y subcanal") -- mismo criterio que
+        # reportes.py::_filtros_admin(): admin y analista sí filtran,
+        # supervisor no (ya está acotado a su equipo, filtrar no le sirve).
+        # Canal sigue siendo SOLO admin (un analista de canal ya está
+        # acotado por condicion_scope()).
+        puede_filtrar = current_user.rol in ("admin", "analista")
+        es_admin = current_user.rol == "admin"
+        filtro_args = {
+            "region": (request.args.get("region") or "") if puede_filtrar else "",
+            "ciudad": (request.args.get("ciudad") or "") if puede_filtrar else "",
+            "canal": (request.args.get("canal") or "") if es_admin else "",
+            "subcanal": (request.args.get("subcanal") or "") if puede_filtrar else "",
+        }
+        if not puede_filtrar:
+            return filtro_args, [], [], [], []
+        cond_scope = condicion_scope(Persona, current_user)
+
+        def _valores(columna):
+            q = dim_session.query(columna).filter(columna.isnot(None))
+            if cond_scope is not None:
+                q = q.filter(cond_scope)
+            return sorted({v for (v,) in q.distinct().all() if v})
+
+        regiones_disponibles = _valores(Persona.region)
+        ciudades_disponibles = _valores(Persona.ciudad)
+        canales_disponibles = CANALES_FILTRABLES if es_admin else []
+        return filtro_args, regiones_disponibles, ciudades_disponibles, canales_disponibles, SUBCANALES
+
+    def _consultar_personal(dim_session, filtro_args):
+        query = dim_session.query(Persona)
+        cond_scope = condicion_scope(Persona, current_user)
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        query = aplicar_filtros_extra(
+            query, Persona, region_filtro=filtro_args["region"], ciudad_filtro=filtro_args["ciudad"],
+            canal_filtro=filtro_args["canal"], subcanal_filtro=filtro_args["subcanal"],
+        )
+        return query.order_by(Persona.estado, Persona.nombre_completo).all()
+
+    def _resolver_supervisores(dim_session, personas):
+        """{dni: {"principal": nombre_o_None, "overrides": [(canal, nombre), ...]}}
+        (Davor, 2026-08-29: "que aparezca el nombre y también si hay 2
+        supers para ese mercaderista"). El nombre se busca SIN aplicar
+        condicion_scope() -- el supervisor "de otro canal" de un
+        compartido puede pertenecer a otro analista, y aun así hay que
+        poder mostrar su nombre acá (mismo criterio que ya usa
+        asistencia.py para este mismo problema)."""
+        overrides = todos_overrides_supervisor_canal(dim_session, [p.dni for p in personas])
+        dnis_necesarios = {p.supervisor_dni for p in personas if p.supervisor_dni}
+        for filas in overrides.values():
+            dnis_necesarios.update(sup_dni for _canal, sup_dni in filas)
+        nombre_de = dict(
+            dim_session.query(Persona.dni, Persona.nombre_completo).filter(Persona.dni.in_(dnis_necesarios)).all()
+        ) if dnis_necesarios else {}
+        resultado = {}
+        for p in personas:
+            resultado[p.dni] = {
+                "principal": (nombre_de.get(p.supervisor_dni) or p.supervisor_dni) if p.supervisor_dni else None,
+                "overrides": [
+                    (canal.title(), nombre_de.get(sup_dni) or sup_dni)
+                    for canal, sup_dni in overrides.get(p.dni, [])
+                ],
+            }
+        return resultado
+
     @app.get("/personal")
     @login_required
     def personal():
@@ -488,44 +558,37 @@ def create_app():
         # las mismas tablas que migrar_dimensiones_a_postgres.py pobló) --
         # solo lectura por ahora, el alta/baja/reemplazo sigue siendo
         # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
-        # Canal (Davor, 2026-08-29) -- SOLO admin: "debo tener un filtro
-        # para ver Tradicional, Farmacia y AU" -- un analista de canal ya
-        # está acotado por condicion_scope(), no lo necesita.
-        es_admin = current_user.rol == "admin"
-        canal_filtro = (request.args.get("canal") or "") if es_admin else ""
-
         dim_session = get_dim_session()
         try:
-            query = dim_session.query(Persona)
-            cond_scope = condicion_scope(Persona, current_user)
-            if cond_scope is not None:
-                query = query.filter(cond_scope)
-            if canal_filtro:
-                query = query.filter(condicion_canal(Persona, canal_filtro))
-            personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
+            filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp = _filtros_personal(dim_session)
+            personas = _consultar_personal(dim_session, filtro_args)
+            supervisores_por_dni = _resolver_supervisores(dim_session, personas)
         finally:
             dim_session.close()
-        canales_disponibles = CANALES_FILTRABLES if es_admin else []
-        puede_editar_subcanal = current_user.rol in ("admin", "analista")
+        puede_editar = current_user.rol in ("admin", "analista")
+        filtro_qs = {k: v for k, v in filtro_args.items() if v}
         return render_template(
             "personal.html", usuario=current_user, personas=personas,
-            canal_filtro=canal_filtro, canales_disponibles=canales_disponibles,
-            subcanales=SUBCANALES, puede_editar_subcanal=puede_editar_subcanal,
+            filtro_args=filtro_args, filtro_qs=filtro_qs, regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp,
+            canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp,
+            subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
         )
 
-    @app.post("/personal/subcanal")
+    @app.post("/personal/editar")
     @login_required
-    def personal_subcanal():
-        # Edición inline (Davor, 2026-08-29) -- "quiero agregar una columna
-        # que es subcanal, puedo editarla en esta plataforma mismo?". Un
-        # select por fila en personal.html hace auto-submit acá. Se reusa
-        # condicion_scope() para que un analista solo pueda tocar DNIs de su
-        # propio equipo, no cualquiera (mismo control que ya limita qué ve).
+    def personal_editar():
+        # Edición inline (Davor, 2026-08-29): Subcanal (lista fija) + Zona
+        # (texto libre) con un botón "Guardar" por fila -- antes Subcanal
+        # se guardaba solo con el cambio de select, pero al sumar Zona (un
+        # <input type=text> no dispara onchange de forma útil) hace falta
+        # un submit explícito. Se reusa condicion_scope() para que un
+        # analista solo pueda tocar DNIs de su propio equipo.
         if current_user.rol not in ("admin", "analista"):
-            flash("No tenés permiso para editar el Subcanal.", "error")
+            flash("No tenés permiso para editar Personal.", "error")
             return redirect(url_for("personal"))
         dni = request.form.get("dni", "")
         subcanal = (request.form.get("subcanal") or "").strip()
+        zona = (request.form.get("zona") or "").strip()
         if subcanal and subcanal not in SUBCANALES:
             flash("Subcanal inválido.", "error")
             return redirect(url_for("personal"))
@@ -540,45 +603,44 @@ def create_app():
                 flash("No se encontró a esa persona en tu equipo.", "error")
                 return redirect(url_for("personal"))
             persona.subcanal = subcanal or None
+            persona.zona = zona or None
             dim_session.commit()
+            flash(f"{persona.nombre_completo.title()} actualizado.", "ok")
         finally:
             dim_session.close()
-        return redirect(url_for("personal", canal=request.args.get("canal", "")))
+        return redirect(url_for("personal", **request.args))
 
     @app.get("/personal/exportar")
     @login_required
     def personal_exportar():
-        es_admin = current_user.rol == "admin"
-        canal_filtro = (request.args.get("canal") or "") if es_admin else ""
-
         dim_session = get_dim_session()
         try:
-            query = dim_session.query(Persona)
-            cond_scope = condicion_scope(Persona, current_user)
-            if cond_scope is not None:
-                query = query.filter(cond_scope)
-            if canal_filtro:
-                query = query.filter(condicion_canal(Persona, canal_filtro))
-            personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
+            filtro_args, _regiones_disp, _ciudades_disp, _canales_disp, _subcanales_disp = _filtros_personal(dim_session)
+            personas = _consultar_personal(dim_session, filtro_args)
+            supervisores_por_dni = _resolver_supervisores(dim_session, personas)
         finally:
             dim_session.close()
 
         columnas = [
-            ("dni", "DNI"), ("nombre_completo", "Nombre"), ("estado", "Estado"),
-            ("fecha_baja", "Fecha de baja"), ("rol", "Rol"), ("canal", "Canal"),
-            ("subcanal", "Subcanal"), ("region", "Región"), ("ciudad", "Ciudad"),
-            ("zona", "Zona"), ("supervisor_dni", "Supervisor"), ("correo", "Correo"),
-            ("analista_propietario", "Analista"),
+            "DNI", "Nombre", "Estado", "Fecha de baja", "Rol", "Canal", "Subcanal",
+            "Región", "Ciudad", "Zona", "Supervisor", "Supervisores adicionales",
+            "Correo", "Analista",
         ]
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Personal"
-        ws.append([titulo for _clave, titulo in columnas])
+        ws.append(columnas)
         for celda in ws[1]:
             celda.font = Font(bold=True)
         for p in personas:
-            ws.append([getattr(p, clave) for clave, _titulo in columnas])
-        for i, (_clave, titulo) in enumerate(columnas, start=1):
+            sup = supervisores_por_dni.get(p.dni, {"principal": None, "overrides": []})
+            adicionales = ", ".join(f"{c}: {n}" for c, n in sup["overrides"])
+            ws.append([
+                p.dni, p.nombre_completo, p.estado, p.fecha_baja, p.rol, p.canal, p.subcanal,
+                p.region, p.ciudad, p.zona, sup["principal"], adicionales,
+                p.correo, p.analista_propietario,
+            ])
+        for i, titulo in enumerate(columnas, start=1):
             ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(titulo) + 2)
 
         buf = io.BytesIO()

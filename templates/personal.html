@@ -49,7 +49,12 @@
     .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
     .flash.error { background:var(--bad-bg); color:var(--bad); }
     .flash.ok { background:var(--ok-bg); color:var(--ok); }
-    td .subcanal-select { font:inherit; font-size:12px; padding:3px 6px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    td .subcanal-select, td .zona-input { font:inherit; font-size:12px; padding:3px 6px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    td .zona-input { width:150px; }
+    td .btn-guardar { font:inherit; font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:6px; border:1px solid var(--ok); background:var(--ok-bg); color:var(--ok); cursor:pointer; }
+    td .btn-guardar:hover { background:var(--ok); color:#fff; }
+    .sup-principal { font-weight:600; }
+    .sup-extra { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -98,15 +103,35 @@
       {% endfor %}
     {% endwith %}
     <div class="top-actions">
-      {% if canales_disponibles %}
+      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles %}
       <form method="get">
+        {% if regiones_disponibles %}
+        <select name="region" onchange="this.form.submit()">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        {% if ciudades_disponibles %}
+        <select name="ciudad" onchange="this.form.submit()">
+          <option value="">Ciudad: todas</option>
+          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        {% if canales_disponibles %}
         <select name="canal" onchange="this.form.submit()" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
           <option value="">Canal: todos</option>
-          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if canal_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
+          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
+        {% endif %}
+        {% if subcanales_disponibles %}
+        <select name="subcanal" onchange="this.form.submit()">
+          <option value="">Subcanal: todos</option>
+          {% for s in subcanales_disponibles %}<option value="{{ s }}" {{ 'selected' if filtro_args.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
+        </select>
+        {% endif %}
       </form>
       {% endif %}
-      <a class="btn-descargar" href="{{ url_for('personal_exportar', canal=canal_filtro) }}">⬇ Descargar Excel</a>
+      <a class="btn-descargar" href="{{ url_for('personal_exportar', **filtro_qs) }}">⬇ Descargar Excel</a>
     </div>
     <div class="panel">
       <div class="table-wrap">
@@ -114,8 +139,10 @@
         <tr>
           <th>DNI</th><th>Nombre</th><th>Estado</th><th>Fecha de baja</th><th>Rol</th><th>Canal</th><th>Subcanal</th>
           <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
+          {% if puede_editar %}<th>Acciones</th>{% endif %}
         </tr>
         {% for p in personas %}
+        {% set sup = supervisores_por_dni.get(p.dni, {"principal": None, "overrides": []}) %}
         <tr>
           <td>{{ p.dni }}</td>
           <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
@@ -128,25 +155,39 @@
           <td>{{ (p.rol or "—")|title }}</td>
           <td>{{ (p.canal or "—")|title }}</td>
           <td>
-            {% if puede_editar_subcanal %}
-            <form method="post" action="{{ url_for('personal_subcanal', canal=canal_filtro) }}" style="margin:0;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="dni" value="{{ p.dni }}">
-              <select name="subcanal" class="subcanal-select" onchange="this.form.submit()">
-                <option value="" {{ 'selected' if not p.subcanal else '' }}>—</option>
-                {% for s in subcanales %}<option value="{{ s }}" {{ 'selected' if p.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
-              </select>
-            </form>
+            {% if puede_editar %}
+            <select name="subcanal" class="subcanal-select" form="form-{{ p.dni }}">
+              <option value="" {{ 'selected' if not p.subcanal else '' }}>—</option>
+              {% for s in subcanales %}<option value="{{ s }}" {{ 'selected' if p.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
+            </select>
             {% else %}
             {{ p.subcanal or "—" }}
             {% endif %}
           </td>
           <td>{{ (p.region or "—")|title }}</td>
           <td>{{ (p.ciudad or "—")|title }}</td>
-          <td>{{ (p.zona or "—")|title }}</td>
-          <td>{{ p.supervisor_dni or "—" }}</td>
+          <td>
+            {% if puede_editar %}
+            <input type="text" name="zona" class="zona-input" form="form-{{ p.dni }}" value="{{ p.zona or '' }}">
+            {% else %}
+            {{ (p.zona or "—")|title }}
+            {% endif %}
+          </td>
+          <td>
+            <span class="sup-principal">{{ (sup.principal or "—")|title }}</span>
+            {% for canal, nombre in sup.overrides %}<span class="sup-extra">{{ canal }}: {{ nombre|title }}</span>{% endfor %}
+          </td>
           <td>{{ p.correo or "—" }}</td>
           <td>{{ p.analista_propietario or "—" }}</td>
+          {% if puede_editar %}
+          <td>
+            <form id="form-{{ p.dni }}" method="post" action="{{ url_for('personal_editar', **filtro_qs) }}" style="margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="dni" value="{{ p.dni }}">
+              <button type="submit" class="btn-guardar">Guardar</button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </table>
