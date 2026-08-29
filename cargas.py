@@ -192,10 +192,10 @@ def plantilla_maestro():
     # descarta filas cuyo DNI no es numérico, así que si alguien sube el
     # archivo sin borrar la fila de ejemplo, no crea una persona fantasma.
     buf = _plantilla_excel(
-        "Maestro Headcount", "Maestro Headcount", COLUMNAS_MAESTRO_ESPERADAS,
+        "Maestro Headcount", "Maestro Headcount", COLUMNAS_MAESTRO_ESPERADAS + [COL_SUP_FARMACIA_AU, COL_SUP_TRADICIONAL],
         ["EJEMPLO", "APELLIDOS NOMBRES", dt.date.today(), None, "Activo", None, "No",
          "MERCADERISTAS", "FARMACIA", "LIMA", "LIMA", "NOMBRE DE ZONA", "NOMBRE DEL SUPERVISOR",
-         None, None, "Analista MAC", dt.date.today()],
+         None, None, "Analista MAC", dt.date.today(), None, None],
     )
     return send_file(buf, as_attachment=True, download_name="Plantilla_Maestro_Headcount.xlsx",
                       mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
