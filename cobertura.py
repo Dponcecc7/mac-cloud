@@ -39,7 +39,7 @@ def _sin_acentos(s):
 
 
 def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
-                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Visitas [desde, hasta] con nombre/región/ciudad ya unidos, acotadas al
     scope de `usuario_actual` (o a un solo `dni_filtro`). Devuelve un
     DataFrame vacío (sin columnas) si no hay nada."""
@@ -60,7 +60,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
-            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
+            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
         filas = query.all()
         if not filas:
             return pd.DataFrame()
@@ -92,7 +92,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
     return v
 
 
-def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """PDVs distintos visitados por persona y día -- Punto Censo se cuenta
     aparte (cada relevo es 1, no tiene ubicación real que colapsar), mismo
     criterio que analisis_visitas_planning.py. Devuelve
@@ -103,7 +103,7 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
     ser el canal base/esperado de la mayoría)."""
     v = _cargar_visitas(desde, hasta, usuario_actual,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-                        ciudad_filtro=ciudad_filtro)
+                        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro)
     if not len(v):
         return [], [], {}, {}
 
@@ -139,7 +139,7 @@ def matriz_cobertura(desde, hasta, usuario_actual, rol_filtro=None, region_filtr
     return personas, fechas, celdas, categorias
 
 
-def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Detalle fila por fila de cada marcación GPS (visita a PDV) de un día
     puntual -- a diferencia de matriz_cobertura() (resumen agregado, un
     número por día), esto es la bitácora cruda: hora de inicio/fin, PDV,
@@ -152,7 +152,7 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
     volumen por persona/día es de unas pocas visitas, no miles."""
     v = _cargar_visitas(fecha, fecha, usuario_actual, dni_filtro=dni_filtro,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-                        ciudad_filtro=ciudad_filtro)
+                        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro)
     if not len(v):
         return []
 
@@ -219,7 +219,7 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
 
 
 def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
-                       rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+                       rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Visita larga (última visita del día > 60 min y antes de la hora de
     salida programada) + abuso de Punto Censo -- mismo cálculo que ya hacía
     (y descartaba) pipeline/alerta_visita_larga.py, ahora contra Postgres.
@@ -227,7 +227,7 @@ def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
     mezclarse en la misma lista."""
     v = _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=dni_filtro,
                         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-                        ciudad_filtro=ciudad_filtro)
+                        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro)
     if not len(v):
         return []
 

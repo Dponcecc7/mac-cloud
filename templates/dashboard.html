@@ -188,9 +188,9 @@
     <div class="top-row">
       <h1 class="title">Asistencia</h1>
       <form class="periodo-form" method="get">
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['7d'].desde and periodo_args.hasta == presets['7d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">7 días</a>
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['30d'].desde and periodo_args.hasta == presets['30d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">30 días</a>
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['mes'].desde and periodo_args.hasta == presets['mes'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor) }}">Este mes</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['7d'].desde and periodo_args.hasta == presets['7d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">7 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['30d'].desde and periodo_args.hasta == presets['30d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">30 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['mes'].desde and periodo_args.hasta == presets['mes'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">Este mes</a>
         <input type="date" name="desde" value="{{ periodo_args.desde }}">
         <span style="color:var(--muted);">→</span>
         <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
@@ -206,6 +206,12 @@
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
         </select>
+        {% if canales_disponibles %}
+        <select name="canal" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+          <option value="">Canal: todos</option>
+          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        {% endif %}
         <button class="aplicar" type="submit">Aplicar</button>
       </form>
     </div>

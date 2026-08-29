@@ -25,7 +25,7 @@ from models import Usuario
 from dimension_models import Feriado, Persona
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
-from scoping import condicion_scope
+from scoping import CANALES_FILTRABLES, condicion_canal, condicion_scope
 from vacaciones import calcular_viajes_vacaciones
 
 load_dotenv()  # lee .env en local; en PythonAnywhere las variables se cargan desde su panel, no de este archivo
@@ -195,6 +195,11 @@ def create_app():
         rol_filtro = request.args.get("rol") or None
         region_filtro = request.args.get("region") or None
         supervisor_filtro = request.args.get("supervisor") or None
+        # Canal (Davor, 2026-08-29) -- SOLO admin: "debo tener un filtro
+        # para ver Tradicional, Farmacia y AU" -- un analista de canal ya
+        # está acotado por condicion_scope(), no lo necesita.
+        es_admin = current_user.rol == "admin"
+        canal_filtro = (request.args.get("canal") or None) if es_admin else None
 
         dim_session = get_dim_session()
         try:
@@ -207,6 +212,8 @@ def create_app():
                     q = q.filter(Persona.region == region_filtro)
                 if supervisor_filtro:
                     q = q.filter(Persona.supervisor_dni == supervisor_filtro)
+                if canal_filtro:
+                    q = q.filter(condicion_canal(Persona, canal_filtro))
                 return q
 
             query = (
@@ -258,7 +265,11 @@ def create_app():
             dim_session.close()
 
         periodo_args = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
-        filtro_args = {"rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or ""}
+        filtro_args = {
+            "rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or "",
+            "canal": canal_filtro or "",
+        }
+        canales_disponibles = CANALES_FILTRABLES if es_admin else []
 
         if not filas:
             return render_template(
@@ -266,6 +277,7 @@ def create_app():
                 periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
                 filtro_args=filtro_args, roles_disponibles=roles_disponibles,
                 regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
+                canales_disponibles=canales_disponibles,
             )
 
         r = pd.DataFrame(filas, columns=[
@@ -436,6 +448,7 @@ def create_app():
             periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
             filtro_args=filtro_args, roles_disponibles=roles_disponibles,
             regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
+            canales_disponibles=canales_disponibles,
         )
 
     @app.get("/personal")
@@ -445,16 +458,28 @@ def create_app():
         # las mismas tablas que migrar_dimensiones_a_postgres.py pobló) --
         # solo lectura por ahora, el alta/baja/reemplazo sigue siendo
         # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
+        # Canal (Davor, 2026-08-29) -- SOLO admin: "debo tener un filtro
+        # para ver Tradicional, Farmacia y AU" -- un analista de canal ya
+        # está acotado por condicion_scope(), no lo necesita.
+        es_admin = current_user.rol == "admin"
+        canal_filtro = (request.args.get("canal") or "") if es_admin else ""
+
         dim_session = get_dim_session()
         try:
             query = dim_session.query(Persona)
             cond_scope = condicion_scope(Persona, current_user)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
+            if canal_filtro:
+                query = query.filter(condicion_canal(Persona, canal_filtro))
             personas = query.order_by(Persona.estado, Persona.nombre_completo).all()
         finally:
             dim_session.close()
-        return render_template("personal.html", usuario=current_user, personas=personas)
+        canales_disponibles = CANALES_FILTRABLES if es_admin else []
+        return render_template(
+            "personal.html", usuario=current_user, personas=personas,
+            canal_filtro=canal_filtro, canales_disponibles=canales_disponibles,
+        )
 
     return app
 

@@ -22,7 +22,7 @@ from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from recomendaciones import insights_equipo, resumen_perfil_equipo
-from scoping import condicion_scope, overrides_supervisor_canal
+from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
 
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
@@ -74,15 +74,24 @@ def _filtros_admin():
     sin esto, un analista vería nombres de supervisores/regiones de OTROS
     clientes en el desplegable aunque elegirlos no devolviera nada.
     Devuelve (filtro_args, roles_disponibles, regiones_disponibles,
-    supervisores_disponibles, ciudades_disponibles)."""
-    if current_user.rol == "supervisor":
-        return {"rol": "", "region": "", "supervisor": "", "ciudad": ""}, [], [], [], []
+    supervisores_disponibles, ciudades_disponibles, canales_disponibles).
 
+    `canal` (Davor, 2026-08-29) -- SOLO para admin: "en mi caso que soy
+    admin, debo tener un filtro para ver Tradicional, Farmacia y AU". Un
+    analista de canal ya está acotado a su canal_asignado por
+    condicion_scope(), no tiene sentido que además elija -- por eso
+    `canales_disponibles` viene vacío para cualquiera que no sea admin
+    (mismo criterio que ya oculta la barra entera para supervisor)."""
+    if current_user.rol == "supervisor":
+        return {"rol": "", "region": "", "supervisor": "", "ciudad": "", "canal": ""}, [], [], [], [], []
+
+    es_admin = current_user.rol == "admin"
     filtro_args = {
         "rol": request.args.get("rol") or "",
         "region": request.args.get("region") or "",
         "supervisor": request.args.get("supervisor") or "",
         "ciudad": request.args.get("ciudad") or "",
+        "canal": (request.args.get("canal") or "") if es_admin else "",
     }
     session = get_session()
     try:
@@ -109,7 +118,8 @@ def _filtros_admin():
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
-    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles
+    canales_disponibles = CANALES_FILTRABLES if es_admin else []
+    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles
 
 
 def _semana_desde_query():
@@ -133,11 +143,11 @@ def _semana_desde_query():
 @login_required
 def horas():
     desde, hasta, semana_str = _semana_desde_query()
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     resumen = resumen_por_persona(detalle)
     filas = resumen.to_dict("records") if len(resumen) else []
@@ -146,7 +156,7 @@ def horas():
         semana_str=semana_str, desde=desde, hasta=hasta, filas=filas,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -154,11 +164,11 @@ def horas():
 @login_required
 def horas_exportar():
     desde, hasta, semana_str = _semana_desde_query()
-    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp = _filtros_admin()
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     resumen = resumen_por_persona(detalle)
 
@@ -215,18 +225,18 @@ def _dia_foco_desde_query():
 def alertas():
     desde, hasta, mes_str = _mes_desde_query()
     dia_foco = _dia_foco_desde_query()
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     lista = alertas_periodo(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
         mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -256,23 +266,23 @@ def _rango_mes_actual_por_defecto():
 @login_required
 def recomendaciones():
     desde, hasta = _rango_mes_actual_por_defecto()
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     lista = insights_equipo(
         current_user, desde=desde, hasta=hasta,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     perfiles = resumen_perfil_equipo(
         current_user, desde=desde, hasta=hasta,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
         insights=lista, perfiles=perfiles, desde=desde, hasta=hasta,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -297,11 +307,11 @@ def _rango_desde_query(dias_por_defecto=21):
 @login_required
 def cobertura():
     desde, hasta = _rango_desde_query()
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     personas, fechas, celdas, categorias = matriz_cobertura(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
 
     # Resaltado simple: celda por debajo de la mitad del promedio de ESA
@@ -318,7 +328,7 @@ def cobertura():
         categorias=categorias, promedios=promedios,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -326,11 +336,11 @@ def cobertura():
 @login_required
 def cobertura_exportar():
     desde, hasta = _rango_desde_query()
-    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp = _filtros_admin()
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     personas, fechas, celdas, _categorias = matriz_cobertura(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
 
     wb = openpyxl.Workbook()
@@ -396,18 +406,18 @@ def marcaciones():
             flash("No se encontró a esa persona o no tenés acceso a su ruta.", "error")
             dni_foco = None
 
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     personas = marcaciones_del_dia(
         fecha, current_user, dni_filtro=dni_foco,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     return render_template(
         "reportes_marcaciones.html", usuario=current_user, activo="marcaciones",
         fecha=fecha, fecha_str=fecha_str, personas=personas, dni_foco=dni_foco, nombre_foco=nombre_foco,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -428,7 +438,7 @@ def _matriz_tareo(desde, hasta, filtro_args):
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     fechas, fecha_cursor = [], desde
     while fecha_cursor <= hasta:
@@ -453,7 +463,7 @@ def _matriz_tareo(desde, hasta, filtro_args):
 @login_required
 def tareo():
     desde, hasta, mes_str = _mes_desde_query()
-    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp = _filtros_admin()
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
     return render_template(
         "reportes_tareo.html", usuario=current_user, activo="tareo",
@@ -461,7 +471,7 @@ def tareo():
         leyenda_tareo=LEYENDA_TAREO,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
-        ciudades_disponibles=ciudades_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
 
 
@@ -479,7 +489,7 @@ _COLOR_TAREO = {
 @login_required
 def tareo_exportar():
     desde, hasta, mes_str = _mes_desde_query()
-    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp = _filtros_admin()
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
 
     wb = openpyxl.Workbook()

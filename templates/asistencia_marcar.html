@@ -231,6 +231,12 @@
           <option value="">Ciudad: todas</option>
           {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
+        {% if canales_disponibles %}
+        <select name="canal" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+          <option value="">Canal: todos</option>
+          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        {% endif %}
         <button class="btn primary" type="submit">Aplicar filtros</button>
       </form>
     </div>

@@ -36,7 +36,7 @@
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .top-actions input[type=date], .top-actions select { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; }
     .btn.primary { background:var(--brand); color:#fff; }
@@ -119,6 +119,15 @@
 
     <div class="top-actions">
       <form method="get"><input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()"></form>
+      {% if canales_disponibles %}
+      <form method="get">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}">
+        <select name="canal" onchange="this.form.submit()" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+          <option value="">Canal: todos</option>
+          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if canal_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
       {% if resumen %}
       <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
       {% endif %}

@@ -34,7 +34,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
-from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
+from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 from sqlalchemy.orm import aliased
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -148,7 +148,7 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
@@ -158,7 +158,9 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     en vez de solo el suyo. `rol_filtro`/`region_filtro`/`supervisor_filtro`/
     `ciudad_filtro`: filtros adicionales de Marcar asistencia (solo
     admin/analista, ver _filtros_marcar()), encima del scope de acceso, no
-    en vez de."""
+    en vez de. `canal_filtro` (Davor, 2026-08-29) -- SOLO admin: "debo
+    tener un filtro para ver Tradicional, Farmacia y AU" -- un analista de
+    canal ya está acotado por condicion_scope(), no lo necesita."""
     feriados = _cargar_feriados()
     ayer = _dia_habil_anterior(fecha, feriados)
 
@@ -168,7 +170,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
         if cond_scope is not None:
             query_personas = query_personas.filter(cond_scope)
-        query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
+        query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
         personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
         # Nombre del SUPERVISOR -- consulta aparte, sin condicion_scope().
@@ -429,12 +431,14 @@ def _filtros_marcar():
     está acotado a su propio cliente por condicion_scope(), así que los
     desplegables igual solo muestran lo suyo."""
     if current_user.rol == "supervisor":
-        return {"rol": "", "region": "", "supervisor": "", "ciudad": ""}, [], [], [], []
+        return {"rol": "", "region": "", "supervisor": "", "ciudad": "", "canal": ""}, [], [], [], [], []
+    es_admin = current_user.rol == "admin"
     filtro_args = {
         "rol": request.args.get("rol") or "",
         "region": request.args.get("region") or "",
         "supervisor": request.args.get("supervisor") or "",
         "ciudad": request.args.get("ciudad") or "",
+        "canal": (request.args.get("canal") or "") if es_admin else "",
     }
     session = get_session()
     try:
@@ -461,7 +465,8 @@ def _filtros_marcar():
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
-    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles
+    canales_disponibles = CANALES_FILTRABLES if es_admin else []
+    return filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles
 
 
 def _vista_reporte(fecha_str, vista):
@@ -473,7 +478,14 @@ def _vista_reporte(fecha_str, vista):
         fecha = dt.date.today()
         fecha_str = fecha.isoformat()
 
-    resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user)
+    # Canal (Davor, 2026-08-29) -- SOLO admin: "debo tener un filtro para
+    # ver Tradicional, Farmacia y AU" -- un analista de canal ya está
+    # acotado por condicion_scope(), no lo necesita.
+    es_admin = current_user.rol == "admin"
+    canal_filtro = (request.args.get("canal") or "") if es_admin else ""
+    canales_disponibles = CANALES_FILTRABLES if es_admin else []
+
+    resumen, filas, frescura = _cargar_reporte(fecha, usuario_actual=current_user, canal_filtro=canal_filtro)
     # Si no hay datos para la fecha pedida (ej. hoy, si el pipeline todavia
     # no corrio), sugerir la fecha mas reciente que si tiene -- para poder
     # seguir corrigiendo el pasado sin quedar en un callejon sin salida.
@@ -482,6 +494,7 @@ def _vista_reporte(fecha_str, vista):
         "asistencia.html", usuario=current_user, activo=vista, vista=vista,
         fecha_reciente=fecha_reciente,
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura,
+        canal_filtro=canal_filtro, canales_disponibles=canales_disponibles,
     )
 
 
@@ -499,11 +512,11 @@ def marcar_vista():
         fecha = dt.date.today()
         fecha_str = fecha.isoformat()
 
-    filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles = _filtros_marcar()
+    filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles = _filtros_marcar()
     resumen, filas, frescura = _cargar_reporte(
         fecha, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
@@ -525,7 +538,7 @@ def marcar_vista():
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
         regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
-        ciudades_disponibles=ciudades_disponibles,
+        ciudades_disponibles=ciudades_disponibles, canales_disponibles=canales_disponibles,
     )
 
 

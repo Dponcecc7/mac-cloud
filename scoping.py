@@ -48,15 +48,31 @@ def condicion_scope(persona_model, usuario_actual):
         # "no tendria sentido").
         return (persona_model.supervisor_dni == dni_normalizado) & (persona_model.dni != dni_normalizado)
     if getattr(usuario_actual, "canal_asignado", None):
-        canal_norm = usuario_actual.canal_asignado.strip().upper()
-        dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia) == canal_norm)
-        return (func.upper(persona_model.canal) == canal_norm) | persona_model.dni.in_(dnis_con_ese_canal)
+        return condicion_canal(persona_model, usuario_actual.canal_asignado)
     if usuario_actual.cliente_id_athena is not None:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
         ]
         return persona_model.analista_propietario.in_(correos)
     return None
+
+
+# Canales asignables/filtrables -- mismo vocabulario que admin.py::CANALES_ASIGNABLES
+# (canal_asignado de Usuario) y Persona.canal. Compartido acá porque tanto
+# scoping como el nuevo filtro de canal para admin (2026-08-29, Davor: "en
+# mi caso que soy admin, debo tener un filtro para ver Tradicional,
+# Farmacia y AU") necesitan la misma lista.
+CANALES_FILTRABLES = ["FARMACIA", "AUTOSERVICIO", "TRADICIONAL"]
+
+
+def condicion_canal(persona_model, canal):
+    """Misma condición que el branch de canal_asignado en condicion_scope(),
+    factorizada para reusar en el filtro de canal de admin (aplicar_filtros_extra) --
+    ve una Persona si su canal principal coincide O si tiene algún día de
+    PatronRecurrente en ese canal (mercaderistas compartidos entre canales)."""
+    canal_norm = canal.strip().upper()
+    dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia) == canal_norm)
+    return (func.upper(persona_model.canal) == canal_norm) | persona_model.dni.in_(dnis_con_ese_canal)
 
 
 def overrides_supervisor_canal(session, dnis, usuario_actual):
@@ -83,12 +99,17 @@ def overrides_supervisor_canal(session, dnis, usuario_actual):
     return dict(filas)
 
 
-def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Filtros de Rol/Región/Supervisor/Ciudad de Reportes y Marcar
     asistencia (Davor, 2026-08-24/25) -- encima del scope de acceso
     (condicion_scope), no en vez de. Solo admin/analista le pasan valores
     acá ("para supervisor no debería aparecer filtros"); para supervisor
-    estos argumentos quedan en None y esta función no hace nada."""
+    estos argumentos quedan en None y esta función no hace nada.
+
+    `canal_filtro` (Davor, 2026-08-29) -- SOLO para admin: un analista de
+    canal ya está acotado a su canal_asignado por condicion_scope(), no
+    necesita elegir; el admin ve todo por defecto y con esto puede acotarse
+    a un canal puntual para revisar, igual que ya podía por Rol/Región/etc."""
     if rol_filtro:
         query = query.filter(persona_model.rol == rol_filtro)
     if region_filtro:
@@ -97,4 +118,6 @@ def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=N
         query = query.filter(persona_model.supervisor_dni == supervisor_filtro)
     if ciudad_filtro:
         query = query.filter(persona_model.ciudad == ciudad_filtro)
+    if canal_filtro:
+        query = query.filter(condicion_canal(persona_model, canal_filtro))
     return query

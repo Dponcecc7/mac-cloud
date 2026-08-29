@@ -106,7 +106,7 @@ def _tiene_sustento(comentario):
 
 
 def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
-                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None):
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """Devuelve la lista de alertas (tardanza y falta) para el rango
     [desde, hasta], acotada al scope de `usuario_actual` -- o a un solo
     `dni_filtro` si se pasa (el acceso ya se valida aparte, ver
@@ -132,7 +132,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
-            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro)
+            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
         filas = query.all()
         # Para el % de jornada casi nula (25% de las horas NETAS de
         # refrigerio) -- mismo patrón que horas_semanales.py: patrón base +
@@ -287,7 +287,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
     alertas.extend(alertas_cobertura(
         desde, hasta, usuario_actual, dni_filtro=dni_filtro,
         rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-        ciudad_filtro=ciudad_filtro,
+        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
     ))
 
     # "Jornada casi nula" primero que nada -- no importa el nivel/cantidad
