@@ -846,3 +846,29 @@ def historico():
         supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
         canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
     )
+
+
+@bp.get("/perfil")
+@login_required
+def perfil():
+    """Punto de entrada para abrir la Ficha de un mercaderista puntual sin
+    tener que encontrarlo antes en otra lista y hacerle clic al nombre
+    (Davor, 2026-08-29: "esta vista del mercaderista no hay una parte
+    donde visualizarla, solo cuando damos click... deberia haber en
+    reportes una pestaña... donde pongo el mercaderista y se activa toda
+    esa ventana"). Mismo scope que el resto del sitio -- un supervisor solo
+    ve su propio equipo en el desplegable, igual que ya le pasa en
+    cualquier otra lista."""
+    session = get_session()
+    try:
+        query = session.query(Persona.dni, Persona.nombre_completo)
+        cond_scope = condicion_scope(Persona, current_user)
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        personas_disponibles = sorted(query.all(), key=lambda p: (p[1] or "").title())
+    finally:
+        session.close()
+    return render_template(
+        "reportes_perfil.html", usuario=current_user, activo="perfil",
+        personas_disponibles=personas_disponibles,
+    )

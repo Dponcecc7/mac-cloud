@@ -32,6 +32,9 @@
 
     .volver { display:inline-block; font-size:12.5px; color:var(--muted); text-decoration:none; margin-bottom:8px; }
     .volver:hover { color:var(--brand); }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:16px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
     h1.title { font-size:22px; margin:0 0 2px; }
     .subtitulo { color:var(--muted); font-size:13px; margin:0 0 18px; }
 
@@ -173,6 +176,16 @@
 
   <div class="wrap">
     <a class="volver" href="{{ url_for('reportes.recomendaciones') }}">← Volver a Reportes</a>
+    <nav class="tabs">
+      <a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>
+      <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
+      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
+      <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
+      <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
+      <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
+      <a href="{{ url_for('reportes.perfil') }}" class="active">Perfil mercaderista</a>
+    </nav>
     <h1 class="title">{{ persona.nombre_completo|title }}</h1>
     <p class="subtitulo">{{ (persona.rol or '—')|title }} · {{ (persona.ciudad or '—')|title }} · DNI {{ persona.dni }}</p>
 

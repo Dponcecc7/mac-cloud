@@ -135,6 +135,7 @@
       <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
       <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
+      <a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>
     </nav>
 
     {# Un solo <form> para mes/día/filtros admin -- antes eran 2 <form>
