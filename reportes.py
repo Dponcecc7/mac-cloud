@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
-from asistencia import _cargar_reporte, _fecha_mas_reciente_con_datos, _homologar_motivo
+from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
@@ -828,11 +828,21 @@ def historico():
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
         salida_mismo_dia=True,
     )
-    fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
+    hay_datos_del_dia = bool(filas)
+    # "Solo tardanzas y salidas antes de hora" (Davor, 2026-08-29) --
+    # checkbox sobre las filas ya cargadas, no un filtro de _cargar_reporte()
+    # (no acota qué se trae de la base, solo qué se muestra) -- el resumen
+    # de arriba (asistio/tardanza/falta) sigue mostrando el total del día
+    # completo, sin importar el check.
+    solo_incidencias = request.args.get("solo_incidencias") == "1"
+    if solo_incidencias and filas:
+        filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
+    fecha_reciente = None if hay_datos_del_dia else _fecha_mas_reciente_con_datos()
     return render_template(
         "reportes_historico.html", usuario=current_user, activo="historico",
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura, fecha_reciente=fecha_reciente,
+        hay_datos_del_dia=hay_datos_del_dia,
         filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
         supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
-        canales_disponibles=canales_disponibles,
+        canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
     )

@@ -44,6 +44,9 @@
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .chk-incidencias { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink); cursor:pointer; }
+    .chk-incidencias input { width:auto; margin:0; }
+    td.temprana { background:var(--bad-bg); color:var(--bad); font-weight:700; }
 
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
     .note b { color:var(--ink); }
@@ -144,6 +147,7 @@
         <input type="hidden" name="rol" value="{{ filtro_args.rol }}"><input type="hidden" name="region" value="{{ filtro_args.region }}">
         <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}"><input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
         <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+        <input type="hidden" name="solo_incidencias" value="{{ '1' if solo_incidencias else '' }}">
         <input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()">
       </form>
       {% if resumen %}
@@ -180,6 +184,10 @@
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
         {% endif %}
+        <label class="chk-incidencias">
+          <input type="checkbox" name="solo_incidencias" value="1" {{ 'checked' if solo_incidencias else '' }}>
+          Solo tardanzas y salidas antes de hora
+        </label>
         <button class="btn primary" type="submit">Aplicar filtros</button>
       </form>
     </div>
@@ -188,6 +196,11 @@
     {% if not filas %}
       <div class="panel">
         <div class="empty-state">
+          {% if hay_datos_del_dia %}
+          <span class="empty-icon">✅</span>
+          <span class="empty-title">Nadie con tardanza ni salida antes de hora el {{ fecha_str }}</span>
+          <span class="empty-hint">Destildá el check de arriba para ver a todos.</span>
+          {% else %}
           <span class="empty-icon">📋</span>
           <span class="empty-title">No hay datos de clasificación para {{ fecha_str }} todavía</span>
           {% if fecha_reciente %}
@@ -196,6 +209,7 @@
               Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
             </a>
           </span>
+          {% endif %}
           {% endif %}
         </div>
       </div>
@@ -253,7 +267,7 @@
               </form>
             </details>
           </td>
-          <td>{{ f.salida_real or '—' }}</td>
+          <td class="{{ 'temprana' if f.salida_temprana else '' }}">{{ f.salida_real or '—' }}{% if f.salida_temprana %} ⚠{% endif %}</td>
           <td>{{ f.comentario_salida or '—' }}</td>
         </tr>
         {% endfor %}
