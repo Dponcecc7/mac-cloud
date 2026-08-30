@@ -22,7 +22,6 @@ import io
 import os
 import re
 import sys
-from functools import wraps
 from zoneinfo import ZoneInfo
 
 import openpyxl
@@ -34,7 +33,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
-from permisos import requiere_pagina
+from permisos import requiere_analista_admin, requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 from sqlalchemy.orm import aliased
 
@@ -45,20 +44,11 @@ import reporte_diario_9am as r9am  # noqa: E402 -- reusa reemplazos_pendientes()
 
 bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
 
-
-def _analista_requerido(f):
-    """Igual que cargas.py::_analista_requerido -- "Agregar reemplazo" da de
-    baja/alta gente de verdad en Postgres (no es solo ver o marcar
-    asistencia), asi que queda reservado a analista/admin, no cualquier
-    rol logueado."""
-    @wraps(f)
-    @login_required
-    def wrapper(*args, **kwargs):
-        if current_user.rol not in ("analista", "admin"):
-            flash("Esta sección es solo para analistas.", "error")
-            return redirect(url_for("asistencia.reporte"))
-        return f(*args, **kwargs)
-    return wrapper
+# "Agregar reemplazo"/"Agregar headcount"/"Dar de baja" dan de alta/baja
+# gente de verdad en Postgres (no es solo ver o marcar asistencia), asi
+# que quedan reservadas a analista/admin -- ver permisos.py para el
+# porque de redirigir_a en vez del default "dashboard".
+_analista_requerido = requiere_analista_admin(redirigir_a="asistencia.reporte")
 
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"

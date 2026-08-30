@@ -16,16 +16,15 @@ fila, sin frenar toda la carga por una fila mal completada.
 """
 import datetime as dt
 import io
-from functools import wraps
 
 import openpyxl
 import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
-from flask_login import current_user, login_required
+from flask_login import current_user
 from openpyxl.styles import Font
 
 from dimension_models import HistorialCambio, Persona, get_session
-from permisos import requiere_pagina
+from permisos import requiere_analista_admin, requiere_pagina
 from scoping import condicion_scope
 
 bp = Blueprint("historial", __name__, url_prefix="/historial")
@@ -62,18 +61,10 @@ COLUMNAS_HISTORIAL_ESPERADAS = [
 ]
 
 
-def _analista_requerido(f):
-    """Mismo criterio de acceso que "Cargar Headcount" (cargas.py) -- un
-    override de Historial es tan sensible como subir Headcount nuevo, así
-    que se abre a analista+admin, no solo admin."""
-    @wraps(f)
-    @login_required
-    def wrapper(*args, **kwargs):
-        if current_user.rol not in ("analista", "admin"):
-            flash("Esta sección es solo para analistas.", "error")
-            return redirect(url_for("dashboard"))
-        return f(*args, **kwargs)
-    return wrapper
+# Mismo criterio que "Cargar Headcount" (cargas.py) -- un override de
+# Historial es tan sensible como subir Headcount nuevo, así que se abre a
+# analista+admin, no solo admin.
+_analista_requerido = requiere_analista_admin()
 
 
 def _persona_en_scope(session, dni):

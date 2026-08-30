@@ -118,3 +118,32 @@ def requiere_pagina(clave):
             return f(*args, **kwargs)
         return wrapper
     return decorador
+
+
+def requiere_analista_admin(redirigir_a="dashboard"):
+    """Decorator factory para acciones de ESCRITURA reservadas a
+    analista/admin (crear/editar Historial de cambios, Agregar reemplazo,
+    dar de alta/baja gente de verdad en Postgres) -- a propósito NO usa el
+    sistema de permisos por página de arriba: ese controla qué pestañas
+    navega cada usuario, esto es un piso de rol fijo para escrituras
+    sensibles que no debería aflojarse solo por darle a alguien la vista
+    de una pestaña (ver docstring del módulo).
+
+    `redirigir_a`: endpoint al que mandar a quien no califica -- por
+    defecto "dashboard" (igual que historial.py); asistencia.py usaba
+    "asistencia.reporte" en su copia (que a su vez manda a un supervisor a
+    "Marcar asistencia"), así que queda como parámetro en vez de fijo,
+    para no cambiarle el comportamiento a nadie al centralizar. Antes
+    estaba copiado byte por byte en asistencia.py e historial.py
+    (2026-08-24, hallazgo de revisión de código) -- centralizado acá
+    2026-08-30."""
+    def decorador(f):
+        @wraps(f)
+        @login_required
+        def wrapper(*args, **kwargs):
+            if current_user.rol not in ("analista", "admin"):
+                flash("Esta sección es solo para analistas.", "error")
+                return redirect(url_for(redirigir_a))
+            return f(*args, **kwargs)
+        return wrapper
+    return decorador
