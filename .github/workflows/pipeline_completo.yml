@@ -1,9 +1,12 @@
 name: Pipeline completo (nube, Fase 6)
 
 on:
-  schedule:
-    # 7:30am-4:30pm hora Peru (UTC-5) aprox = 12:00-21:55 UTC, cada 5 min, Lun-Sab
-    - cron: "*/5 12-21 * * 1-6"
+  # El "schedule:" nativo de GitHub Actions se sacó (Davor, 2026-08-29) --
+  # era poco confiable (huecos de silencio de hasta 92 min, ver
+  # project_mac_cloud_pendientes) y desde que existe el disparador externo
+  # (cron-job.org -> GET /cron/pipeline cada 5 min) quedaba disparando en
+  # paralelo con él, duplicando ejecuciones en el historial de Actions sin
+  # aportar nada (la que llega segunda se frena sola por el db_lock).
   workflow_dispatch:
     inputs:
       dias_visitas:
