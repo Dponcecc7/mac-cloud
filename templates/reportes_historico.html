@@ -47,6 +47,7 @@
     .chk-incidencias { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink); cursor:pointer; }
     .chk-incidencias input { width:auto; margin:0; }
     td.temprana { background:var(--bad-bg); color:var(--bad); font-weight:700; }
+    td.tarde { background:var(--warn-bg); color:var(--warn); font-weight:700; }
 
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
     .note b { color:var(--ink); }
@@ -248,7 +249,7 @@
               </form>
             </details>
           </td>
-          <td>{{ f.entrada_real or '—' }}</td>
+          <td class="{{ 'tarde' if eb == 'TARDANZA' else '' }}">{{ f.entrada_real or '—' }}{% if eb == 'TARDANZA' %} ⚠{% endif %}</td>
           <td><span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span></td>
           <td>{{ f.comentario_entrada or '—' }}</td>
           <td>
