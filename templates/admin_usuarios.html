@@ -49,24 +49,22 @@
     .estado-pill.si { background:var(--ok-bg); color:var(--ok); }
     .estado-pill.no { background:var(--bad-bg); color:var(--bad); }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 14px; }
-    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative; }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
-    /* Permisos por pestaña/subpestaña -- panel flotante, mismo patron que
-       el ".ms-panel" de los filtros multiselect de Asistencia diaria. */
-    .permisos-celda { position:relative; }
+    /* Permisos por pestaña/subpestaña -- seccion aparte DEBAJO de la tabla
+       (Davor, 2026-08-30: un panel flotante quedaba cortado por el scroll
+       de la tabla y tapaba otras filas) en vez de un dropdown flotante. */
     .btn-permisos { padding:4px 10px; font-size:11.5px; background:var(--card); border:1px solid var(--line); color:var(--ink); }
-    .permisos-panel {
-      display:none; position:absolute; top:calc(100% + 4px); right:0; z-index:40;
-      background:var(--card); border:1px solid var(--line); border-radius:10px;
-      box-shadow:0 10px 28px rgba(35,25,10,.22); padding:14px; width:280px;
-      white-space:normal;
-    }
-    .permisos-panel.abierto { display:block; }
+    .permisos-panel { display:none; }
+    .permisos-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    .permisos-header .correo-editando { font-weight:700; color:var(--ink); font-size:13.5px; }
+    .permisos-columnas { display:grid; grid-template-columns:1fr 1fr; gap:8px 28px; }
     .permisos-grupo-title { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; margin:10px 0 6px; }
     .permisos-grupo-title:first-child { margin-top:0; }
-    .permiso-chk { display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:400; padding:3px 0; cursor:pointer; }
+    .permiso-chk { display:flex; align-items:center; gap:7px; font-size:13px; font-weight:400; padding:3px 0; cursor:pointer; }
     .permiso-chk input { width:auto; margin:0; }
-    .btn-guardar-permisos { width:100%; margin-top:10px; font-size:12px; padding:8px; }
+    .btn-guardar-permisos { margin-top:16px; font-size:12.5px; padding:9px 18px; }
+    #permisos-vacio { color:var(--muted); font-size:12.5px; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -81,6 +79,8 @@
       table { font-size:12px; }
       th, td { padding:7px 8px; white-space:nowrap; }
       .btn-crear { width:100%; min-height:44px; }
+      .permisos-columnas { grid-template-columns:1fr; gap:0; }
+      .permisos-header { flex-direction:column; align-items:flex-start; gap:8px; }
     }
   </style>
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
@@ -145,28 +145,13 @@
             <button class="ghost" type="submit" form="acceso-{{ u.id }}" style="padding:4px 10px; font-size:11.5px;">Guardar acceso</button>
             <form id="acceso-{{ u.id }}" class="inline" method="post" action="{{ url_for('admin.set_acceso_usuario', usuario_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
           </td>
-          <td class="permisos-celda">
+          <td>
             {% if u.rol == "admin" %}
             <span title="Admin siempre ve todo, no es configurable">Todo (admin)</span>
             {% else %}
-            {% set habilitadas = permisos_de(u) %}
             <button type="button" class="ghost btn-permisos" onclick="togglePermisos({{ u.id }})">
               {{ "Personalizado" if u.paginas_permitidas is not none else "Por rol" }}
             </button>
-            <div class="permisos-panel" id="permisos-panel-{{ u.id }}">
-              <form id="permisos-{{ u.id }}" method="post" action="{{ url_for('admin.guardar_permisos', usuario_id=u.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <p class="permisos-grupo-title">Pestañas generales</p>
-                {% for clave, etiqueta in paginas_top %}
-                <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
-                {% endfor %}
-                <p class="permisos-grupo-title">Reportes -- subpestañas (tildar alguna habilita "Reportes" solo)</p>
-                {% for clave, etiqueta in paginas_reportes %}
-                <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
-                {% endfor %}
-                <button type="submit" class="btn-guardar-permisos">Guardar permisos</button>
-              </form>
-            </div>
             {% endif %}
           </td>
           <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
@@ -181,6 +166,40 @@
         {% endfor %}
       </table>
       </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Permisos</p>
+      <p id="permisos-vacio">Elegí "Personalizado"/"Por rol" en la tabla de arriba para editar los permisos de un usuario.</p>
+      {% for u in usuarios %}
+      {% if u.rol != "admin" %}
+      {% set habilitadas = permisos_de(u) %}
+      <div class="permisos-panel" id="permisos-panel-{{ u.id }}">
+        <div class="permisos-header">
+          <span class="correo-editando">Editando permisos de: {{ u.email }}</span>
+          <button type="button" class="ghost" onclick="cerrarPermisos()">Cerrar</button>
+        </div>
+        <form id="permisos-{{ u.id }}" method="post" action="{{ url_for('admin.guardar_permisos', usuario_id=u.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="permisos-columnas">
+            <div>
+              <p class="permisos-grupo-title">Pestañas generales</p>
+              {% for clave, etiqueta in paginas_top %}
+              <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
+              {% endfor %}
+            </div>
+            <div>
+              <p class="permisos-grupo-title">Reportes -- subpestañas (tildar alguna habilita "Reportes" solo)</p>
+              {% for clave, etiqueta in paginas_reportes %}
+              <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
+              {% endfor %}
+            </div>
+          </div>
+          <button type="submit" class="btn-guardar-permisos">Guardar permisos</button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
     </div>
 
     <div class="panel" style="max-width:420px;">
@@ -206,16 +225,27 @@
   </div>
 
   <script>
+    var permisoAbiertoId = null;
+
     function togglePermisos(id) {
+      document.querySelectorAll(".permisos-panel").forEach(function (p) { p.style.display = "none"; });
+      if (permisoAbiertoId === id) {
+        permisoAbiertoId = null;
+        document.getElementById("permisos-vacio").style.display = "block";
+        return;
+      }
+      document.getElementById("permisos-vacio").style.display = "none";
       var panel = document.getElementById("permisos-panel-" + id);
-      var yaAbierto = panel.classList.contains("abierto");
-      document.querySelectorAll(".permisos-panel.abierto").forEach(function (p) { p.classList.remove("abierto"); });
-      if (!yaAbierto) panel.classList.add("abierto");
+      panel.style.display = "block";
+      permisoAbiertoId = id;
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-    document.addEventListener("click", function (ev) {
-      if (ev.target.closest(".permisos-celda")) return;
-      document.querySelectorAll(".permisos-panel.abierto").forEach(function (p) { p.classList.remove("abierto"); });
-    });
+
+    function cerrarPermisos() {
+      document.querySelectorAll(".permisos-panel").forEach(function (p) { p.style.display = "none"; });
+      document.getElementById("permisos-vacio").style.display = "block";
+      permisoAbiertoId = null;
+    }
   </script>
 </body>
 </html>
