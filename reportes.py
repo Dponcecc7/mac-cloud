@@ -15,11 +15,11 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
-from asistencia import _homologar_motivo
+from asistencia import _cargar_reporte, _fecha_mas_reciente_con_datos, _homologar_motivo
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
-from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
+from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL, _analista_requerido
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
@@ -796,4 +796,43 @@ def ficha(dni):
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
         historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
+    )
+
+
+@bp.get("/historico")
+@_analista_requerido
+def historico():
+    """"Histórico de asistencia diaria" (Davor, 2026-08-29) -- copia de
+    "Reporte diario" (asistencia.py) pero viviendo en Reportes, con dos
+    diferencias a propósito: la Salida es del MISMO día que la entrada
+    (ver _cargar_reporte(..., salida_mismo_dia=True) -- "Reporte diario"
+    usa la de ayer porque se manda al cliente a media tarde, antes de que
+    el turno de hoy cierre; acá se mira un día puntual del pasado, así que
+    hace falta ver SU PROPIA salida), y se puede editar la Hora entrada/
+    salida PROGRAMADA para ese día puntual con un boton chico ("solo un
+    boton que salga editar y abajo se escriba la nueva hora, algo mas
+    pequeño") -- postea directo a historial.crear(), mismo motor que ya
+    usa "Historial de cambios" para forzar un horario distinto al Maestro/
+    Patrón, sin duplicar esa lógica acá."""
+    fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
+    try:
+        fecha = dt.date.fromisoformat(fecha_str)
+    except ValueError:
+        fecha = dt.date.today()
+        fecha_str = fecha.isoformat()
+
+    filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles = _filtros_admin()
+    resumen, filas, frescura = _cargar_reporte(
+        fecha, usuario_actual=current_user,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+        salida_mismo_dia=True,
+    )
+    fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
+    return render_template(
+        "reportes_historico.html", usuario=current_user, activo="historico",
+        fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura, fecha_reciente=fecha_reciente,
+        filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
+        supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
+        canales_disponibles=canales_disponibles,
     )

@@ -148,7 +148,7 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
@@ -160,7 +160,19 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     admin/analista, ver _filtros_marcar()), encima del scope de acceso, no
     en vez de. `canal_filtro` (Davor, 2026-08-29) -- SOLO admin: "debo
     tener un filtro para ver Tradicional, Farmacia y AU" -- un analista de
-    canal ya está acotado por condicion_scope(), no lo necesita."""
+    canal ya está acotado por condicion_scope(), no lo necesita.
+
+    `salida_mismo_dia` (Davor, 2026-08-29) -- False (default, sin cambios
+    de comportamiento): la Salida prog./real que se arma es la de AYER a
+    propósito -- "Reporte diario"/"Marcar asistencia" se generan a media
+    tarde, ANTES de que el turno de hoy cierre, entonces la salida de HOY
+    todavía estaría vacía; se completa la fila con la salida YA CERRADA de
+    ayer para que el reporte que se manda al cliente nunca tenga una
+    columna en blanco. True: usa la salida del MISMO día que la entrada --
+    para "Histórico de asistencia diaria" (Reportes), que mira un día
+    puntual del pasado y necesita ver SU PROPIA salida, no la de ayer
+    (Davor: "ahi me saldrá la información del día seleccionado su hora
+    entrada y salida, no como esta vista que la salida es del día anterior")."""
     feriados = _cargar_feriados()
     ayer = _dia_habil_anterior(fecha, feriados)
 
@@ -227,16 +239,17 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         # clasificacion_diaria.comentario_supervisor de todos modos, ya que
         # ambos salen de la misma fila que guardar() sube a Tabla 3.
         override_entrada, override_salida = {}, {}
+        fecha_fuente_salida = fecha if salida_mismo_dia else ayer
         correcciones_recientes = (
             session.query(CorreccionWeb)
-            .filter(CorreccionWeb.dni.in_(personas.keys()), CorreccionWeb.fecha.in_([fecha, ayer]))
+            .filter(CorreccionWeb.dni.in_(personas.keys()), CorreccionWeb.fecha.in_([fecha, fecha_fuente_salida]))
             .order_by(CorreccionWeb.fecha_registro.desc())
             .all()
         )
         for corr in correcciones_recientes:
             if corr.fecha == fecha and corr.comentario_entrada and corr.dni not in override_entrada:
                 override_entrada[corr.dni] = corr.comentario_entrada
-            if corr.fecha == ayer and corr.comentario_salida and corr.dni not in override_salida:
+            if corr.fecha == fecha_fuente_salida and corr.comentario_salida and corr.dni not in override_salida:
                 override_salida[corr.dni] = corr.comentario_salida
     finally:
         session.close()
@@ -249,9 +262,10 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     for c in filas_hoy:
         p = personas.get(c.dni)
         ayer_c = filas_ayer.get(c.dni)
+        fuente_salida = c if salida_mismo_dia else ayer_c
         supervisor_dni_efectivo = overrides_sup.get(c.dni, p.supervisor_dni) if p else None
         supervisor_nombre = nombre_supervisor_de.get(supervisor_dni_efectivo) if supervisor_dni_efectivo else None
-        salida_anticipada = ayer_c.salida_anticipada_min if ayer_c else None
+        salida_anticipada = fuente_salida.salida_anticipada_min if fuente_salida else None
         filas.append({
             "dni": c.dni,
             "mercaderista": nombre_de.get(c.dni, c.dni),
@@ -270,12 +284,12 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             # badge de Estado ya dice "Falta"), tolerando variantes de
             # formato -- ver docstring de la función.
             "comentario_entrada": _homologar_motivo(override_entrada.get(c.dni, c.comentario_supervisor)) or "",
-            "salida_prog": ayer_c.salida_esperada if ayer_c else None,
-            "salida_real": ayer_c.salida_real if ayer_c else None,
-            "salida_corregida": bool(ayer_c and ayer_c.fuente_dato == "Corregido manualmente (Tabla 3)"),
+            "salida_prog": fuente_salida.salida_esperada if fuente_salida else None,
+            "salida_real": fuente_salida.salida_real if fuente_salida else None,
+            "salida_corregida": bool(fuente_salida and fuente_salida.fuente_dato == "Corregido manualmente (Tabla 3)"),
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
             "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
-            "comentario_salida": _homologar_motivo(override_salida.get(c.dni, ayer_c.comentario_supervisor if ayer_c else None)) or "",
+            "comentario_salida": _homologar_motivo(override_salida.get(c.dni, fuente_salida.comentario_supervisor if fuente_salida else None)) or "",
             "entrada_pendiente": (
                 MARCADOR_PENDIENTE in (c.comentario_supervisor or "")
                 or (
@@ -284,10 +298,10 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
                 )
             ),
             "salida_pendiente": (
-                MARCADOR_PENDIENTE in ((ayer_c.comentario_supervisor or "") if ayer_c else "")
+                MARCADOR_PENDIENTE in ((fuente_salida.comentario_supervisor or "") if fuente_salida else "")
                 or (
-                    MARCADOR_SIN_APP in ((ayer_c.estado or "") if ayer_c else "")
-                    and _estado_base(ayer_c.estado if ayer_c else None) in _ESTADOS_CON_HORA_PENDIENTE
+                    MARCADOR_SIN_APP in ((fuente_salida.estado or "") if fuente_salida else "")
+                    and _estado_base(fuente_salida.estado if fuente_salida else None) in _ESTADOS_CON_HORA_PENDIENTE
                 )
             ),
             "marcado_web": c.dni in dnis_marcados_hoy,

@@ -6,7 +6,7 @@
 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MAC — Reportes</title>
+  <title>MAC — Histórico de asistencia diaria</title>
   <style>
     :root {
       --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef;
@@ -14,9 +14,9 @@
     }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
-    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
+    .wrap { max-width:1500px; margin:0 auto; padding:0 24px 60px; }
     header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
-    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .inner { max-width:1500px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
     header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
     header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
     nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
@@ -31,12 +31,13 @@
     .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
 
     h1.title { font-size:20px; margin:0 0 14px; }
-    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; flex-wrap:wrap; }
     nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
     .top-actions input[type=date] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .stat-pill { padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; background:var(--card); box-shadow:0 1px 2px rgba(35,25,10,.08); }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
     .btn.primary { background:var(--brand); color:#fff; }
     .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
@@ -44,22 +45,37 @@
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
 
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .note b { color:var(--ink); }
+    .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
+
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
-    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
 
-    .table-wrap { overflow-x:auto; max-height:70vh; }
-    table { border-collapse:collapse; width:100%; font-size:12px; }
-    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
-    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
-    td.info a { color:var(--ink); text-decoration:none; font-weight:600; }
-    td.info a:hover { color:var(--brand); text-decoration:underline; }
-    th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
-    tr:last-child td { border-bottom:none; }
-    tr.persona-primera td { border-top:2px solid var(--line); }
+    .table-wrap { overflow-x:auto; }
+    table { border-collapse:collapse; width:100%; font-size:11.5px; }
+    th { text-align:left; padding:8px 6px; font-size:10.5px; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
+    td { padding:6px; border-bottom:1px solid var(--line); vertical-align:top; }
+    .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; color:#fff; }
+    .badge.ok { background:var(--ok); }
+    .badge.warn { background:var(--warn); }
+    .badge.bad { background:var(--bad); }
+    .badge.neutro { background:var(--line); color:var(--muted); }
 
-    .badge { padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
-    .badge.bad { background:var(--bad-bg); color:var(--bad); }
-    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+    /* Editar hora programada -- boton chico que despliega un input solo,
+       sin el formulario completo de Historial de cambios (Davor,
+       2026-08-29: "solo un boton que salga editar y abajo se escriba la
+       nueva hora, algo mas pequeño"). Postea directo a historial.crear --
+       mismo motor que ya lee el pipeline, sin nada nuevo que mantener. */
+    details.edit-hora { margin-top:3px; }
+    details.edit-hora summary { list-style:none; cursor:pointer; font-size:10px; color:var(--brand); font-weight:700; }
+    details.edit-hora summary::-webkit-details-marker { display:none; }
+    details.edit-hora[open] summary { margin-bottom:4px; }
+    details.edit-hora form { display:flex; gap:4px; align-items:center; }
+    details.edit-hora input[type=time] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:78px; }
+    details.edit-hora button { font-size:10px; font-weight:700; padding:3px 8px; border-radius:5px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -72,10 +88,8 @@
       nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions input[type=date] { width:100%; min-height:44px; font-size:15px; }
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
-      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
-      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .filtros-admin select, .filtros-admin .btn { width:100%; min-height:44px; }
       .panel { padding:12px !important; border-radius:12px; }
     }
   </style>
@@ -106,41 +120,41 @@
   </header>
 
   <div class="wrap">
-    <h1 class="title">Reportes</h1>
+    <h1 class="title">Histórico de asistencia diaria</h1>
     <nav class="tabs">
       <a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>
       <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
       <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
       <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
-      <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" class="active">Marcaciones</a>
+      <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
       <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
+      <a href="{{ url_for('reportes.historico') }}" class="active">Histórico diario</a>
     </nav>
+
+    <div class="note"><b>A diferencia de Reporte diario</b>, acá la Salida es la del MISMO día que la entrada (no la de ayer) -- pensado para mirar un día puntual del pasado, no para mandar un reporte a media tarde. La Hora entrada/salida <b>programada</b> se puede editar acá mismo para ese día puntual (queda registrado en Historial de cambios).</div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
-        <div class="panel" style="margin-bottom:14px; padding:10px 16px; border-left:4px solid {{ 'var(--bad)' if category == 'error' else 'var(--ok)' }};">
-          <p style="margin:0; font-size:13px;">{{ message }}</p>
-        </div>
+        <div class="flash {{ category }}">{{ message }}</div>
       {% endfor %}
     {% endwith %}
 
-    {% if dni_foco %}
-    <div class="note" style="margin-bottom:14px;">
-      Ruta del día de <b>{{ (nombre_foco or dni_foco)|title }}</b> --
-      <a href="{{ url_for('reportes.marcaciones', fecha=fecha_str) }}" style="color:var(--brand); font-weight:700;">← Ver todo el equipo</a>
-    </div>
-    {% endif %}
-
     <div class="top-actions">
-      <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        {% if dni_foco %}<input type="hidden" name="dni" value="{{ dni_foco }}">{% endif %}
-        <input type="date" name="fecha" value="{{ fecha_str }}">
-        <button class="btn primary" type="submit">Ver</button>
+      <form method="get">
+        <input type="hidden" name="rol" value="{{ filtro_args.rol }}"><input type="hidden" name="region" value="{{ filtro_args.region }}">
+        <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}"><input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
+        <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+        <input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()">
       </form>
+      {% if resumen %}
+      <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
+      {% endif %}
+      {% if frescura and frescura.ultima_sync %}
+      <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
+      {% endif %}
     </div>
 
-    {% if roles_disponibles and not dni_foco %}
+    {% if roles_disponibles %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
         <input type="hidden" name="fecha" value="{{ fecha_str }}">
@@ -171,48 +185,82 @@
     </div>
     {% endif %}
 
-    <div class="panel">
-      {% if not personas %}
+    {% if not filas %}
+      <div class="panel">
         <div class="empty-state">
-          <span class="empty-icon">📍</span>
-          <span class="empty-title">Sin marcaciones registradas para {{ fecha.strftime('%d/%m/%Y') }}</span>
+          <span class="empty-icon">📋</span>
+          <span class="empty-title">No hay datos de clasificación para {{ fecha_str }} todavía</span>
+          {% if fecha_reciente %}
+          <span class="empty-hint">¿Buscabas otro día?
+            <a href="{{ url_for('reportes.historico', fecha=fecha_reciente) }}">
+              Ver el último día con datos ({{ fecha_reciente.strftime('%d/%m/%Y') }})
+            </a>
+          </span>
+          {% endif %}
         </div>
-      {% else %}
-      <div class="table-wrap">
-        <table>
-          <tr>
-            <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
-            <th>Hora inicio</th><th>Hora fin</th><th>Canal</th><th>Punto de venta</th><th>Distancia</th>
-          </tr>
-          {% for p in personas %}
-            {% for m in p.marcaciones %}
-            <tr class="{{ 'persona-primera' if loop.first else '' }}">
-              {% if loop.first %}
-              <td class="info">
-                <a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a>
-                {% if p.correccion_manual %}<br><span style="font-size:11px; font-weight:normal; color:var(--warn);">Confirmado a mano: {{ p.correccion_manual }}</span>{% endif %}
-              </td>
-              <td>{{ (p.ciudad or '—')|title }}</td>
-              <td>{{ (p.supervisor or '—')|title }}</td>
-              {% else %}
-              <td class="info"></td><td></td><td></td>
-              {% endif %}
-              <td>{{ (m.hora_inicio or '—')[:5] }}</td>
-              <td>{{ m.hora_fin[:5] if m.hora_fin else 'En curso' }}</td>
-              <td>{{ (m.canal or '—')|title }}</td>
-              <td>{{ m.punto_venta or '—' }}</td>
-              <td>
-                {{ m.distancia ~ ' m' if m.distancia is not none else '—' }}
-                {% if not m.geofence_ok %}<span class="badge bad">Fuera de rango</span>{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          {% endfor %}
-        </table>
       </div>
-      <p class="note">Cada fila es una marcación GPS real del aplicativo (bitácora cruda, no un resumen) -- para ver a qué hora marcó alguien de verdad, independiente de cualquier corrección manual cargada en "Marcar asistencia". "Fuera de rango" = a más de 200 m del punto de venta esperado.</p>
-      {% endif %}
+    {% else %}
+    <div class="panel">
+      <p class="panel-title">Detalle del {{ fecha_str }}</p>
+      <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Supervisor</th><th>Ciudad</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
+          <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada</th>
+          <th>Salida prog.</th><th>Salida real</th><th>Comentario salida</th>
+        </tr>
+        {% for f in filas %}
+        {% set eb = (f.estado or '').split(' (')[0] %}
+        {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+        <tr>
+          <td>{{ (f.supervisor or '')|title }}</td>
+          <td>{{ (f.ciudad or '')|title }}</td>
+          <td>{{ (f.rol or '')|title }}</td>
+          <td>{{ f.canal_hoy|title }}</td>
+          <td>{{ f.mercaderista|title }}</td>
+          <td>
+            {{ f.entrada_prog or '—' }}
+            <details class="edit-hora">
+              <summary>Editar</summary>
+              <form method="post" action="{{ url_for('historial.crear') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="dni" value="{{ f.dni }}">
+                <input type="hidden" name="campo" value="Hora entrada programada">
+                <input type="hidden" name="fecha_desde" value="{{ fecha_str }}">
+                <input type="hidden" name="fecha_hasta" value="{{ fecha_str }}">
+                <input type="hidden" name="volver" value="{{ request.full_path }}">
+                <input type="time" name="valor_nuevo" required>
+                <button type="submit">Guardar</button>
+              </form>
+            </details>
+          </td>
+          <td>{{ f.entrada_real or '—' }}</td>
+          <td><span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span></td>
+          <td>{{ f.comentario_entrada or '—' }}</td>
+          <td>
+            {{ f.salida_prog or '—' }}
+            <details class="edit-hora">
+              <summary>Editar</summary>
+              <form method="post" action="{{ url_for('historial.crear') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="dni" value="{{ f.dni }}">
+                <input type="hidden" name="campo" value="Hora salida programada">
+                <input type="hidden" name="fecha_desde" value="{{ fecha_str }}">
+                <input type="hidden" name="fecha_hasta" value="{{ fecha_str }}">
+                <input type="hidden" name="volver" value="{{ request.full_path }}">
+                <input type="time" name="valor_nuevo" required>
+                <button type="submit">Guardar</button>
+              </form>
+            </details>
+          </td>
+          <td>{{ f.salida_real or '—' }}</td>
+          <td>{{ f.comentario_salida or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      </div>
     </div>
+    {% endif %}
   </div>
 </body>
 </html>
