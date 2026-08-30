@@ -1,4 +1,4 @@
 # Dependencias solo para desarrollo/CI -- NO se instalan en Render (los
 # workflows de producción siguen usando solo requirements.txt). Instalar
 # con: pip install -r requirements.txt -r requirements-dev.txt
-pytest==8.3.4
+pytest==9.1.1
