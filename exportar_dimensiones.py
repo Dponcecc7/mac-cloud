@@ -26,6 +26,7 @@ from sqlalchemy import text
 from dimension_models import (
     CatalogoMotivo, Feriado, HistorialCambio, Persona, PatronRecurrente, get_session,
 )
+from excel_safety import texto_seguro_excel
 from graph_client import subir_in_place
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "pipeline"))
@@ -63,7 +64,12 @@ def _escribir_tabla_dimension(path, hoja, nombre_tabla, columnas, filas, titulo,
 
     for r_idx, fila in enumerate(filas, start=header_row + 1):
         for c_idx, valor in enumerate(fila, start=1):
-            ws.cell(row=r_idx, column=c_idx, value=valor)
+            # texto_seguro_excel(): estas filas terminan con nombres/
+            # motivos/comentarios que alguien tipeó libremente (Cargar
+            # Headcount, Dar de baja, Historial de cambios) -- sin esto,
+            # un valor que arranca con "=" se ejecuta como fórmula al
+            # abrir el Excel (inyección de fórmulas, hallazgo 2026-08-24).
+            ws.cell(row=r_idx, column=c_idx, value=texto_seguro_excel(valor))
 
     n_filas = len(filas) + 1
     ref = f"A{header_row}:{get_column_letter(len(columnas))}{max(header_row + n_filas - 1, header_row + 1)}"

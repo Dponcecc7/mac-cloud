@@ -21,8 +21,9 @@ import numpy as np
 import pandas as pd
 
 from alertas import _tiene_sustento
-from dimension_models import Feriado, Persona, PatronRecurrente, get_session
+from dimension_models import Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
+from patron_recurrente import cargar_patron_recurrente, sin_acentos, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -33,20 +34,6 @@ HORAS_LV = 8.5
 HORAS_SABADO = 5.5
 REFRIGERIO_MIN = {"con refrigerio": 60, "medio refrigerio": 30, "sin refrigerio": 0}
 CIERRE_AUTOMATICO_STR = "23:30:00"  # mismo criterio que reporte_diario_9am.py -- no es una salida real
-WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
-
-
-def _sin_acentos(s):
-    """Normaliza "Miércoles"/"Sábado" -> "miercoles"/"sabado" -- el patrón
-    recurrente guarda el día tal cual venía del Excel, y no vale la pena
-    arriesgarse a un mismatch de encoding/acento entre el dato guardado y
-    weekday()."""
-    if not s:
-        return ""
-    return (
-        s.strip().lower()
-        .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
-    )
 
 
 def semana_iso(anio, num_semana):
@@ -134,10 +121,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
             )
 
         feriados_set = {f for (f,) in session.query(Feriado.fecha).all()}
-        refrigerio_map = {
-            (p.dni, _sin_acentos(p.dia_semana)): p.refrigerio
-            for p in session.query(PatronRecurrente).all()
-        }
+        refrigerio_map = cargar_patron_recurrente(session, "refrigerio")
         idx_historial = cargar_historial()
     finally:
         session.close()
@@ -159,7 +143,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         dia_norm = WD_NORM.get(row["fecha"].weekday())
         valor_patron = refrigerio_map.get((row["dni"], dia_norm))
         valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron)
-        return REFRIGERIO_MIN.get(_sin_acentos(valor_final), 0) if valor_final else 0
+        return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
     r["_refrigerio_min"] = r.apply(_refrigerio_min_para, axis=1)
     r["horas_a_trabajar"] = r["fecha"].apply(lambda f: _horas_esperadas_dia(f.date(), feriados_set))

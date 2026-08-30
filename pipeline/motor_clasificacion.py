@@ -29,6 +29,7 @@ from sqlalchemy import func
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
+from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria, crear_tablas  # noqa: E402
 from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
@@ -326,7 +327,10 @@ def _escribir_snapshot_auditoria(res):
         ws.title = "Clasificacion Diaria"
         ws.append(list(res.columns))
         for _, row in res.iterrows():
-            ws.append([None if pd.isna(v) else v for v in row])
+            # texto_seguro_excel(): incluye "Comentario supervisor", texto
+            # libre -- sin esto, un valor que arranca con "=" se ejecuta
+            # como fórmula al abrir el Excel (hallazgo 2026-08-24).
+            ws.append([texto_seguro_excel(None if pd.isna(v) else v) for v in row])
         subir_creando_si_no_existe(RUTA_GRAPH_MAC + NOMBRE_SALIDA_AUDITORIA, wb)
         print(f"Snapshot de auditoría subido: {NOMBRE_SALIDA_AUDITORIA}")
     except Exception as e:

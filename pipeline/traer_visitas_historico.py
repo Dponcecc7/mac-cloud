@@ -31,6 +31,13 @@ def _desde_por_defecto():
 
 def main():
     desde = sys.argv[1] if len(sys.argv) > 1 else _desde_por_defecto()
+    # dt.date.fromisoformat() valida el formato ANTES de concatenar en el
+    # f-string de abajo -- desde viene de sys.argv[1] cuando se corre a
+    # mano por CLI, sin este chequeo un valor con comillas/SQL se metería
+    # directo en la query de Athena (hallazgo de revisión de código,
+    # 2026-08-24; hoy no alcanzable desde ningún workflow de GitHub
+    # Actions, solo corriendo el script a mano, pero es defensa barata).
+    desde = dt.date.fromisoformat(desde).isoformat()
     filtro = f"AND date_parse(v.fecha_inicio, '%d-%m-%Y') >= date '{desde}'"
     out = traer_visitas("dim_lf_general_visitas", filtro)
     os.makedirs("Visitas", exist_ok=True)

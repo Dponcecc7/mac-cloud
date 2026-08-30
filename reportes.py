@@ -18,6 +18,7 @@ from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
 from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
+from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
@@ -180,7 +181,7 @@ def horas_exportar():
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for fila in resumen.to_dict("records"):
-        ws.append([fila.get(clave) for clave, _titulo in COLUMNAS_HORAS])
+        ws.append(fila_segura([fila.get(clave) for clave, _titulo in COLUMNAS_HORAS]))
     for i, (_clave, titulo) in enumerate(COLUMNAS_HORAS, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(titulo) + 2)
 
@@ -354,7 +355,7 @@ def cobertura_exportar():
     for p in personas:
         fila = [p["dni"], p["nombre"], p["ciudad"], p["supervisor"]]
         fila += [celdas.get((p["dni"], f), "") for f in fechas]
-        ws.append(fila)
+        ws.append(fila_segura(fila))
     for i in range(1, 5):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
 
@@ -509,7 +510,7 @@ def tareo_exportar():
     for p in personas:
         fila = [p["dni"], p["nombre"], p["ciudad"], p["supervisor"]]
         fila += [celdas.get((p["dni"], f), {}).get("codigo", "—") for f in fechas]
-        ws.append(fila)
+        ws.append(fila_segura(fila))
         fila_excel = ws.max_row
         for i, f in enumerate(fechas):
             info = celdas.get((p["dni"], f))

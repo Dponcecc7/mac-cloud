@@ -12,8 +12,9 @@ import sys
 
 import pandas as pd
 
-from dimension_models import Persona, PatronRecurrente, Visita, get_session
+from dimension_models import Persona, Visita, get_session
 from fact_models import ClasificacionDiaria
+from patron_recurrente import cargar_patron_recurrente, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -43,16 +44,6 @@ PUNTOS_EXCLUIDOS = (
     # tiene "ALM" pero sin punto después.
     r"ALM\s*\.",
 )
-WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
-
-
-def _sin_acentos(s):
-    if not s:
-        return ""
-    return (
-        s.strip().lower()
-        .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
-    )
 
 
 def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
@@ -270,14 +261,11 @@ def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
     idx_historial = cargar_historial()
     session = get_session()
     try:
-        patrones = session.query(PatronRecurrente).all()
+        # .get() sobre este mapa devuelve None tanto si falta la clave como
+        # si el valor guardado ES None -- no hace falta filtrar los None acá.
+        salida_prog_map = cargar_patron_recurrente(session, "hora_salida_prog")
     finally:
         session.close()
-    salida_prog_map = {}
-    for p in patrones:
-        if p.hora_salida_prog is None:
-            continue
-        salida_prog_map[(p.dni, _sin_acentos(p.dia_semana))] = p.hora_salida_prog
 
     alertas = []
 

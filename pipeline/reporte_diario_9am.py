@@ -28,6 +28,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import get_session  # noqa: E402
+from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
 from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
@@ -598,7 +599,12 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
 
         for c, val in enumerate(row, start=1):
             v = None if pd.isna(val) else val
-            cell = ws.cell(row=r, column=c, value=v)
+            # texto_seguro_excel(): esta fila incluye Mercaderista/Comentario
+            # entrada/salida, texto que un supervisor tipeó libremente --
+            # sin esto, un valor que arranca con "=" se ejecuta como
+            # fórmula al abrir el Excel (inyección de fórmulas, hallazgo
+            # 2026-08-24).
+            cell = ws.cell(row=r, column=c, value=texto_seguro_excel(v))
             cell.font = Font(name=FUENTE, size=10)
             cell.border = Border(left=borde_fino, right=borde_fino, top=borde_fino, bottom=borde_fino)
             if c == idx_estado:

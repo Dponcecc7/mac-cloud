@@ -18,3 +18,12 @@ def texto_seguro_excel(valor):
     if texto.startswith(_CARACTERES_FORMULA):
         return "'" + texto
     return valor
+
+
+def fila_segura(fila):
+    """texto_seguro_excel() aplicado a cada valor de una fila completa --
+    para los lugares que vuelcan un DataFrame/lista entera a Excel columna
+    por columna en un bucle genérico (ej. reporte_diario_9am.py,
+    motor_clasificacion.py), donde no conviene sanear un campo puntual a
+    mano y arriesgarse a olvidar el próximo que se agregue."""
+    return [texto_seguro_excel(v) for v in fila]

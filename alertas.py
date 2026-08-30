@@ -11,8 +11,9 @@ import sys
 import pandas as pd
 
 from cobertura import alertas_cobertura
-from dimension_models import Persona, PatronRecurrente, get_session
+from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
+from patron_recurrente import cargar_patron_recurrente, sin_acentos, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -41,17 +42,7 @@ MOTIVOS_CON_SUSTENTO = ("descanso médico", "descanso medico", "licencia", "feri
 # día... ya que se le debe restar la 1h de refrigerio a la resta de hora
 # programada salida - hora programada entrada".
 PCT_JORNADA_CRITICA = 0.25
-WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
 REFRIGERIO_MIN = {"con refrigerio": 60, "medio refrigerio": 30, "sin refrigerio": 0}
-
-
-def _sin_acentos(s):
-    if not s:
-        return ""
-    return (
-        s.strip().lower()
-        .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
-    )
 
 
 def _fmt_min(minutos):
@@ -63,7 +54,7 @@ def _refrigerio_min_para(row, refrigerio_map, idx_historial):
     dia_norm = WD_NORM.get(row.fecha.weekday())
     valor_patron = refrigerio_map.get((row.dni, dia_norm))
     valor_final = valor_efectivo(idx_historial, row.dni, "Refrigerio", row.fecha, valor_patron)
-    return REFRIGERIO_MIN.get(_sin_acentos(valor_final), 0) if valor_final else 0
+    return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
 
 def _detalle_salida(row, refrigerio_map, idx_historial):
@@ -137,10 +128,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
         # Para el % de jornada casi nula (25% de las horas NETAS de
         # refrigerio) -- mismo patrón que horas_semanales.py: patrón base +
         # override vigente en Historial de cambios, resuelto por fecha.
-        refrigerio_map = {
-            (p.dni, _sin_acentos(p.dia_semana)): p.refrigerio
-            for p in session.query(PatronRecurrente).all()
-        }
+        refrigerio_map = cargar_patron_recurrente(session, "refrigerio")
     finally:
         session.close()
     idx_historial = cargar_historial()
