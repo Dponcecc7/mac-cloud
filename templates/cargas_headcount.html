@@ -83,11 +83,11 @@
       <nav class="links">
         <div class="nav-pages">
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a href="{{ url_for('personal') }}">Personal</a>
-          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-          <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
-          <a href="{{ url_for('cargas.headcount_form') }}" class="active">Cargar Headcount</a>
-          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}" class="active">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">

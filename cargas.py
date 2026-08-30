@@ -9,34 +9,23 @@ nunca se pisa en silencio -- se reporta como conflicto para revisión manual
 """
 import datetime as dt
 import io
-from functools import wraps
 
 import openpyxl
 import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
-from flask_login import current_user, login_required
+from flask_login import current_user
 from openpyxl.styles import Font
 from sqlalchemy import func
 
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
 from github_actions import disparar_workflow
+from permisos import requiere_pagina
 from parseo_headcount import (
     COLUMNAS_MAESTRO_ESPERADAS, COLUMNAS_PATRON_ESPERADAS,
     parsear_maestro, parsear_patron, validar_columnas,
 )
 
 bp = Blueprint("cargas", __name__, url_prefix="/cargas")
-
-
-def _analista_requerido(f):
-    @wraps(f)
-    @login_required
-    def wrapper(*args, **kwargs):
-        if current_user.rol not in ("analista", "admin"):
-            flash("Esta sección es solo para analistas.", "error")
-            return redirect(url_for("dashboard"))
-        return f(*args, **kwargs)
-    return wrapper
 
 
 def _dni(valor):
@@ -186,7 +175,7 @@ def _plantilla_excel(nombre_hoja, titulo, columnas, fila_ejemplo):
 
 
 @bp.get("/plantilla/maestro.xlsx")
-@_analista_requerido
+@requiere_pagina("cargar_headcount")
 def plantilla_maestro():
     # DNI de ejemplo = "EJEMPLO" (no numérico) a propósito -- parsear_maestro()
     # descarta filas cuyo DNI no es numérico, así que si alguien sube el
@@ -202,7 +191,7 @@ def plantilla_maestro():
 
 
 @bp.get("/plantilla/patron.xlsx")
-@_analista_requerido
+@requiere_pagina("cargar_headcount")
 def plantilla_patron():
     buf = _plantilla_excel(
         "Patrón recurrente", "Patrón Recurrente", COLUMNAS_PATRON_ESPERADAS,
@@ -213,13 +202,13 @@ def plantilla_patron():
 
 
 @bp.get("/headcount")
-@_analista_requerido
+@requiere_pagina("cargar_headcount")
 def headcount_form():
     return render_template("cargas_headcount.html", usuario=current_user, resultado=False)
 
 
 @bp.post("/headcount")
-@_analista_requerido
+@requiere_pagina("cargar_headcount")
 def headcount_submit():
     archivo_maestro = request.files.get("maestro")
     archivo_patron = request.files.get("patron")

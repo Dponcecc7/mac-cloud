@@ -27,6 +27,12 @@ class Usuario(db.Model, UserMixin):
     # por analista_propietario/cliente_id_athena. None = sin cambio de
     # comportamiento (sigue el fallback anterior).
     canal_asignado = db.Column(db.String(50), nullable=True)
+    # Lista JSON de claves de pagina/subpagina que este usuario puede ver
+    # (ver permisos.py) -- Davor, 2026-08-30: "yo como admin debo
+    # seleccionar que accesos doy". NULL = sin configurar todavia -> usa el
+    # default de su rol (permisos.DEFAULT_POR_ROL), asi que ningun usuario
+    # existente pierde acceso hasta que un admin lo ajuste a mano.
+    paginas_permitidas = db.Column(db.Text, nullable=True)
     activo = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)

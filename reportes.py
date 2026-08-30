@@ -19,8 +19,9 @@ from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_da
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from fact_models import ClasificacionDiaria
-from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL, _analista_requerido
+from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
+from permisos import requiere_pagina
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
@@ -140,7 +141,7 @@ def _semana_desde_query():
 
 
 @bp.get("/horas")
-@login_required
+@requiere_pagina("reportes_horas")
 def horas():
     desde, hasta, semana_str = _semana_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
@@ -161,7 +162,7 @@ def horas():
 
 
 @bp.get("/horas/exportar")
-@login_required
+@requiere_pagina("reportes_horas")
 def horas_exportar():
     desde, hasta, semana_str = _semana_desde_query()
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
@@ -221,7 +222,7 @@ def _dia_foco_desde_query():
 
 
 @bp.get("/alertas")
-@login_required
+@requiere_pagina("reportes_alertas")
 def alertas():
     desde, hasta, mes_str = _mes_desde_query()
     dia_foco = _dia_foco_desde_query()
@@ -263,7 +264,7 @@ def _rango_mes_actual_por_defecto():
 
 
 @bp.get("/recomendaciones")
-@login_required
+@requiere_pagina("reportes_recomendaciones")
 def recomendaciones():
     desde, hasta = _rango_mes_actual_por_defecto()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
@@ -304,7 +305,7 @@ def _rango_desde_query(dias_por_defecto=21):
 
 
 @bp.get("/cobertura")
-@login_required
+@requiere_pagina("reportes_cobertura")
 def cobertura():
     desde, hasta = _rango_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
@@ -333,7 +334,7 @@ def cobertura():
 
 
 @bp.get("/cobertura/exportar")
-@login_required
+@requiere_pagina("reportes_cobertura")
 def cobertura_exportar():
     desde, hasta = _rango_desde_query()
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
@@ -378,7 +379,7 @@ def _fecha_desde_query():
 
 
 @bp.get("/marcaciones")
-@login_required
+@requiere_pagina("reportes_marcaciones")
 def marcaciones():
     fecha, fecha_str = _fecha_desde_query()
 
@@ -460,7 +461,7 @@ def _matriz_tareo(desde, hasta, filtro_args):
 
 
 @bp.get("/tareo")
-@login_required
+@requiere_pagina("reportes_tareo")
 def tareo():
     desde, hasta, mes_str = _mes_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
@@ -486,7 +487,7 @@ _COLOR_TAREO = {
 
 
 @bp.get("/tareo/exportar")
-@login_required
+@requiere_pagina("reportes_tareo")
 def tareo_exportar():
     desde, hasta, mes_str = _mes_desde_query()
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
@@ -800,7 +801,7 @@ def ficha(dni):
 
 
 @bp.get("/historico")
-@_analista_requerido
+@requiere_pagina("reportes_historico")
 def historico():
     """"Histórico de asistencia diaria" (Davor, 2026-08-29) -- copia de
     "Reporte diario" (asistencia.py) pero viviendo en Reportes, con dos
@@ -849,7 +850,7 @@ def historico():
 
 
 @bp.get("/perfil")
-@login_required
+@requiere_pagina("reportes_perfil")
 def perfil():
     """Punto de entrada para abrir la Ficha de un mercaderista puntual sin
     tener que encontrarlo antes en otra lista y hacerle clic al nombre

@@ -113,11 +113,11 @@
       <nav class="links">
         <div class="nav-pages">
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a href="{{ url_for('personal') }}">Personal</a>
-          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-          <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>
-          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
-          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
           {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
         </div>
         <div class="nav-user">
@@ -133,14 +133,14 @@
   <div class="wrap">
     <h1 class="title">Reportes</h1>
     <nav class="tabs">
-      <a href="{{ url_for('reportes.recomendaciones') }}" class="active">Desempeño</a>
-      <a href="{{ url_for('reportes.horas') }}">Horas semanales</a>
-      <a href="{{ url_for('reportes.alertas') }}">Alertas</a>
-      <a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>
-      <a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>
-      <a href="{{ url_for('reportes.tareo') }}">Tareo</a>
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
-      <a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>
+      {% if tiene_acceso(usuario, 'reportes_recomendaciones') %}<a href="{{ url_for('reportes.recomendaciones') }}" class="active">Desempeño</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas semanales</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_alertas') %}<a href="{{ url_for('reportes.alertas') }}">Alertas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_historico') %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_perfil') %}<a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>{% endif %}
     </nav>
 
     <div class="top-actions">

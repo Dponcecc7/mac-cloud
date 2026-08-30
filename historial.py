@@ -25,6 +25,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Font
 
 from dimension_models import HistorialCambio, Persona, get_session
+from permisos import requiere_pagina
 from scoping import condicion_scope
 
 bp = Blueprint("historial", __name__, url_prefix="/historial")
@@ -229,7 +230,7 @@ def _parsear_historial_excel(fuente):
 
 
 @bp.route("/", methods=["GET"])
-@_analista_requerido
+@requiere_pagina("historial")
 def listar():
     buscar = request.args.get("buscar", "").strip()
     campo_filtro = request.args.get("campo", "").strip()

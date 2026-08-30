@@ -26,6 +26,7 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 from extensions import csrf, db, limiter, login_manager
 from models import Usuario
 from dimension_models import Feriado, Persona, SUBCANALES
+from permisos import requiere_pagina, tiene_acceso
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
@@ -143,6 +144,10 @@ def create_app():
     app.register_blueprint(cargas_bp)
     app.register_blueprint(asistencia_bp)
     app.register_blueprint(historial_bp)
+
+    # Disponible en todas las plantillas como {% if tiene_acceso(usuario, 'clave') %}
+    # -- ver permisos.py.
+    app.jinja_env.globals["tiene_acceso"] = tiene_acceso
 
     @app.errorhandler(405)
     def _metodo_no_permitido(e):
@@ -555,7 +560,7 @@ def create_app():
         return resultado
 
     @app.get("/personal")
-    @login_required
+    @requiere_pagina("personal")
     def personal():
         # Fase 2: primera pantalla que lee directo de Postgres (dimension_models,
         # las mismas tablas que migrar_dimensiones_a_postgres.py pobló) --
@@ -578,7 +583,7 @@ def create_app():
         )
 
     @app.post("/personal/editar")
-    @login_required
+    @requiere_pagina("personal")
     def personal_editar():
         # Edición inline (Davor, 2026-08-29): Subcanal (lista fija) + Zona
         # (texto libre) con un botón "Guardar" por fila -- antes Subcanal
@@ -614,7 +619,7 @@ def create_app():
         return redirect(url_for("personal", **request.args))
 
     @app.get("/personal/exportar")
-    @login_required
+    @requiere_pagina("personal")
     def personal_exportar():
         dim_session = get_dim_session()
         try:

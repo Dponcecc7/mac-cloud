@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 from functools import wraps
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -7,6 +8,7 @@ from werkzeug.security import generate_password_hash
 
 from extensions import db
 from models import Usuario
+from permisos import PAGINAS_REPORTES, PAGINAS_TOP, TODAS_LAS_CLAVES, paginas_de
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -63,7 +65,10 @@ def usuarios():
         return redirect(url_for("admin.usuarios"))
 
     todos = Usuario.query.order_by(Usuario.created_at.desc()).all()
-    return render_template("admin_usuarios.html", usuario=current_user, usuarios=todos)
+    return render_template(
+        "admin_usuarios.html", usuario=current_user, usuarios=todos,
+        paginas_top=PAGINAS_TOP, paginas_reportes=PAGINAS_REPORTES, permisos_de=paginas_de,
+    )
 
 
 @bp.route("/usuarios/<int:usuario_id>/toggle", methods=["POST"])
@@ -110,4 +115,26 @@ def set_acceso_usuario(usuario_id):
         usuario.dni_asociado = dni_asociado
         db.session.commit()
         flash(f"Acceso de {usuario.email} actualizado.", "ok")
+    return redirect(url_for("admin.usuarios"))
+
+
+@bp.route("/usuarios/<int:usuario_id>/permisos", methods=["POST"])
+@admin_required
+def guardar_permisos(usuario_id):
+    """Qué pestañas/subpestañas ve este usuario (Davor, 2026-08-30: "yo
+    como admin debo seleccionar que accesos doy") -- ver permisos.py.
+    Guarda la selección explícita aunque venga vacía (== "sacale todo",
+    distinto de nunca haber tocado esta pantalla, que sigue usando el
+    default de su rol)."""
+    usuario = Usuario.query.get_or_404(usuario_id)
+    seleccion = [c for c in request.form.getlist("paginas") if c in TODAS_LAS_CLAVES]
+    # tiene_acceso() exige "reportes" (el top-level) para CUALQUIER
+    # subpágina "reportes_*" -- sin esto, tildar una subpágina puntual sin
+    # acordarse de tildar también "Reportes" arriba la dejaba bloqueada en
+    # silencio pese a aparecer marcada.
+    if any(c.startswith("reportes_") for c in seleccion) and "reportes" not in seleccion:
+        seleccion.append("reportes")
+    usuario.paginas_permitidas = json.dumps(seleccion)
+    db.session.commit()
+    flash(f"Permisos de {usuario.email} actualizados.", "ok")
     return redirect(url_for("admin.usuarios"))

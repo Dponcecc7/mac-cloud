@@ -34,6 +34,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
+from permisos import requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 from sqlalchemy.orm import aliased
 
@@ -535,7 +536,7 @@ def _vista_reporte(fecha_str, vista):
 
 
 @bp.get("/marcar")
-@login_required
+@requiere_pagina("asistencia")
 def marcar_vista():
     """Pestaña propia (version web de galPendientes de la Power App) --
     antes vivia dentro de "Reporte diario", ahora tiene su propio lugar
@@ -579,7 +580,7 @@ def marcar_vista():
 
 
 @bp.get("")
-@login_required
+@requiere_pagina("asistencia")
 def reporte():
     # El supervisor solo debe poder marcar asistencia de su equipo -- ver/
     # editar el detalle completo (horas corregidas, borrar comentarios) es
@@ -591,7 +592,7 @@ def reporte():
 
 
 @bp.get("/cliente")
-@login_required
+@requiere_pagina("asistencia")
 def cliente():
     if current_user.rol == "supervisor":
         return redirect(url_for("asistencia.marcar_vista"))
@@ -632,7 +633,7 @@ def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, 
 
 
 @bp.post("/guardar")
-@login_required
+@requiere_pagina("asistencia")
 def guardar():
     # Mismo criterio que reporte()/cliente(): editar horas/comentarios del
     # detalle es cosa de analista, no del supervisor (que solo marca).
@@ -776,7 +777,7 @@ ACCIONES_MARCAR = ("Asistió", "Apoyo zona", "Vacante", "Falta")
 
 
 @bp.post("/marcar")
-@login_required
+@requiere_pagina("asistencia")
 def marcar():
     """Version web de los botones Asistió/Apoyo zona/Vacante/Falta de la
     Power App (galPendientes -- ver GUIA_POWER_APPS_SUPERVISOR.md secciones
@@ -843,7 +844,7 @@ def marcar():
 
 
 @bp.post("/motivos/agregar")
-@login_required
+@requiere_pagina("asistencia")
 def motivos_agregar():
     fecha_str = request.form.get("fecha") or dt.date.today().isoformat()
     motivo = request.form.get("motivo", "").strip()
@@ -863,7 +864,7 @@ def motivos_agregar():
 
 
 @bp.post("/actualizar")
-@login_required
+@requiere_pagina("asistencia")
 def actualizar():
     # Dispara el pipeline COMPLETO (no solo reporte_9am.yml) a proposito:
     # reporte_9am.yml unicamente regenera el reporte con lo YA calculado en
@@ -887,7 +888,7 @@ def actualizar():
 
 
 @bp.get("/actualizar")
-@login_required
+@requiere_pagina("asistencia")
 def actualizar_get():
     # A diferencia de /guardar y /marcar (que redirigen tras el POST), esta
     # vista renderiza el resultado directo en la URL del POST -- si el

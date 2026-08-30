@@ -49,7 +49,24 @@
     .estado-pill.si { background:var(--ok-bg); color:var(--ok); }
     .estado-pill.no { background:var(--bad-bg); color:var(--bad); }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 14px; }
-    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative; }
+
+    /* Permisos por pestaña/subpestaña -- panel flotante, mismo patron que
+       el ".ms-panel" de los filtros multiselect de Asistencia diaria. */
+    .permisos-celda { position:relative; }
+    .btn-permisos { padding:4px 10px; font-size:11.5px; background:var(--card); border:1px solid var(--line); color:var(--ink); }
+    .permisos-panel {
+      display:none; position:absolute; top:calc(100% + 4px); right:0; z-index:40;
+      background:var(--card); border:1px solid var(--line); border-radius:10px;
+      box-shadow:0 10px 28px rgba(35,25,10,.22); padding:14px; width:280px;
+      white-space:normal;
+    }
+    .permisos-panel.abierto { display:block; }
+    .permisos-grupo-title { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; margin:10px 0 6px; }
+    .permisos-grupo-title:first-child { margin-top:0; }
+    .permiso-chk { display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:400; padding:3px 0; cursor:pointer; }
+    .permiso-chk input { width:auto; margin:0; }
+    .btn-guardar-permisos { width:100%; margin-top:10px; font-size:12px; padding:8px; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -75,11 +92,11 @@
       <nav class="links">
         <div class="nav-pages">
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a href="{{ url_for('personal') }}">Personal</a>
-          <a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>
-          <a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>
-          <a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>
-          {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
           <a href="{{ url_for('admin.usuarios') }}" class="active">Usuarios</a>
         </div>
         <div class="nav-user">
@@ -105,7 +122,7 @@
       <p class="panel-title">Cuentas</p>
       <div class="table-wrap">
       <table>
-        <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>Canal asignado</th><th>DNI asociado (supervisor)</th><th></th><th>Activo</th><th>Último login</th><th></th></tr>
+        <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>Canal asignado</th><th>DNI asociado (supervisor)</th><th></th><th>Permisos</th><th>Activo</th><th>Último login</th><th></th></tr>
         {% for u in usuarios %}
         <tr>
           <td>{{ u.email }}</td>
@@ -127,6 +144,30 @@
           <td>
             <button class="ghost" type="submit" form="acceso-{{ u.id }}" style="padding:4px 10px; font-size:11.5px;">Guardar acceso</button>
             <form id="acceso-{{ u.id }}" class="inline" method="post" action="{{ url_for('admin.set_acceso_usuario', usuario_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+          </td>
+          <td class="permisos-celda">
+            {% if u.rol == "admin" %}
+            <span title="Admin siempre ve todo, no es configurable">Todo (admin)</span>
+            {% else %}
+            {% set habilitadas = permisos_de(u) %}
+            <button type="button" class="ghost btn-permisos" onclick="togglePermisos({{ u.id }})">
+              {{ "Personalizado" if u.paginas_permitidas is not none else "Por rol" }}
+            </button>
+            <div class="permisos-panel" id="permisos-panel-{{ u.id }}">
+              <form id="permisos-{{ u.id }}" method="post" action="{{ url_for('admin.guardar_permisos', usuario_id=u.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <p class="permisos-grupo-title">Pestañas generales</p>
+                {% for clave, etiqueta in paginas_top %}
+                <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
+                {% endfor %}
+                <p class="permisos-grupo-title">Reportes -- subpestañas (tildar alguna habilita "Reportes" solo)</p>
+                {% for clave, etiqueta in paginas_reportes %}
+                <label class="permiso-chk"><input type="checkbox" name="paginas" value="{{ clave }}" {{ 'checked' if clave in habilitadas else '' }}> {{ etiqueta }}</label>
+                {% endfor %}
+                <button type="submit" class="btn-guardar-permisos">Guardar permisos</button>
+              </form>
+            </div>
+            {% endif %}
           </td>
           <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
           <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "Nunca" }}</td>
@@ -163,5 +204,18 @@
       </form>
     </div>
   </div>
+
+  <script>
+    function togglePermisos(id) {
+      var panel = document.getElementById("permisos-panel-" + id);
+      var yaAbierto = panel.classList.contains("abierto");
+      document.querySelectorAll(".permisos-panel.abierto").forEach(function (p) { p.classList.remove("abierto"); });
+      if (!yaAbierto) panel.classList.add("abierto");
+    }
+    document.addEventListener("click", function (ev) {
+      if (ev.target.closest(".permisos-celda")) return;
+      document.querySelectorAll(".permisos-panel.abierto").forEach(function (p) { p.classList.remove("abierto"); });
+    });
+  </script>
 </body>
 </html>
