@@ -38,9 +38,25 @@
     .panel { background:var(--card); border-radius:14px; padding:32px; box-shadow:0 1px 3px rgba(35,25,10,.06); max-width:520px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 4px; }
     .panel p.ayuda { color:var(--muted); font-size:12.5px; margin:0 0 16px; }
-    select { font:inherit; font-size:14px; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; margin-bottom:12px; }
-    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:10px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; width:100%; }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    select { font:inherit; font-size:14px; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; margin-bottom:14px; }
+
+    .buscador { position:relative; }
+    .buscador .lupa { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:15px; pointer-events:none; }
+    .buscador input[type=text] {
+      font:inherit; font-size:14px; padding:11px 12px 11px 36px; border-radius:8px; border:1px solid var(--line);
+      background:var(--bg); color:var(--ink); width:100%;
+    }
+    .buscador input[type=text]:focus { border-color:var(--brand); outline:none; }
+    .sugerencias {
+      position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:20;
+      background:var(--card); border:1px solid var(--line); border-radius:8px;
+      box-shadow:0 6px 18px rgba(35,25,10,.15); max-height:260px; overflow-y:auto;
+      list-style:none; margin:0; padding:4px; display:none;
+    }
+    .sugerencias li { padding:8px 10px; border-radius:6px; cursor:pointer; font-size:13px; }
+    .sugerencias li:hover, .sugerencias li.activa { background:var(--bg); }
+    .sugerencias li .dni-mini { color:var(--muted); font-size:11px; }
+    .sin-resultados { padding:8px 10px; font-size:12.5px; color:var(--muted); }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -98,26 +114,66 @@
     <div class="panel">
       <p class="panel-title">Buscar mercaderista</p>
       <p class="ayuda">Elegí a alguien de tu equipo para ver su ficha completa (indicadores, tareo, alertas, historial).</p>
-      <select id="sel-persona">
-        <option value="">Elegí un mercaderista...</option>
-        {% for dni, nombre in personas_disponibles %}<option value="{{ dni }}">{{ (nombre or dni)|title }} ({{ dni }})</option>{% endfor %}
-      </select>
-      <button class="btn" id="btn-ver" type="button" disabled>Ver perfil</button>
+
+      {% if ciudades_disponibles %}
+      <form method="get">
+        <select name="ciudad" onchange="this.form.submit()">
+          <option value="">Ciudad: todas</option>
+          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if ciudad_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+
+      <div class="buscador">
+        <span class="lupa">🔍</span>
+        <input type="text" id="buscar-persona" placeholder="Escribí un nombre o DNI..." autocomplete="off">
+        <ul class="sugerencias" id="sugerencias"></ul>
+      </div>
     </div>
   </div>
 
   <script>
     const URL_FICHA_BASE = "{{ url_for('reportes.ficha', dni='__DNI__') }}";
-    const sel = document.getElementById("sel-persona");
-    const btn = document.getElementById("btn-ver");
-    function irAFicha() {
-      if (sel.value) window.location.href = URL_FICHA_BASE.replace("__DNI__", sel.value);
-    }
-    sel.addEventListener("change", function () {
-      btn.disabled = !sel.value;
+    const PERSONAS = {{ personas_disponibles|list|tojson }}.map(function (p) {
+      return { dni: p[0], nombre: p[1] };
     });
-    sel.addEventListener("change", irAFicha);
-    btn.addEventListener("click", irAFicha);
+    const input = document.getElementById("buscar-persona");
+    const lista = document.getElementById("sugerencias");
+
+    function irA(dni) {
+      window.location.href = URL_FICHA_BASE.replace("__DNI__", dni);
+    }
+
+    function renderSugerencias() {
+      const texto = input.value.trim().toLowerCase();
+      lista.innerHTML = "";
+      if (!texto) { lista.style.display = "none"; return; }
+      const coincidencias = PERSONAS.filter(function (p) {
+        return (p.nombre || "").toLowerCase().includes(texto) || p.dni.includes(texto);
+      }).slice(0, 15);
+      if (!coincidencias.length) {
+        lista.innerHTML = '<li class="sin-resultados">Sin resultados para "' + input.value + '"</li>';
+        lista.style.display = "block";
+        return;
+      }
+      coincidencias.forEach(function (p) {
+        const li = document.createElement("li");
+        li.innerHTML = (p.nombre || p.dni).replace(/\b\w/g, c => c.toUpperCase()) + ' <span class="dni-mini">(' + p.dni + ')</span>';
+        li.addEventListener("mousedown", function (ev) { ev.preventDefault(); irA(p.dni); });
+        lista.appendChild(li);
+      });
+      lista.style.display = "block";
+    }
+
+    input.addEventListener("input", renderSugerencias);
+    input.addEventListener("focus", renderSugerencias);
+    input.addEventListener("blur", function () { setTimeout(function () { lista.style.display = "none"; }, 150); });
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        const primera = lista.querySelector("li:not(.sin-resultados)");
+        if (primera) { ev.preventDefault(); primera.dispatchEvent(new MouseEvent("mousedown")); }
+      }
+    });
   </script>
 </body>
 </html>

@@ -858,17 +858,36 @@ def perfil():
     reportes una pestaña... donde pongo el mercaderista y se activa toda
     esa ventana"). Mismo scope que el resto del sitio -- un supervisor solo
     ve su propio equipo en el desplegable, igual que ya le pasa en
-    cualquier otra lista."""
+    cualquier otra lista.
+
+    `ciudad` (Davor, 2026-08-29: "agregale un filtro ciudad") -- acota el
+    desplegable/buscador antes de tipear, útil cuando dos personas
+    comparten nombre o hay muchas para una sola ciudad."""
+    ciudad_filtro = request.args.get("ciudad") or ""
     session = get_session()
     try:
-        query = session.query(Persona.dni, Persona.nombre_completo)
         cond_scope = condicion_scope(Persona, current_user)
+
+        query_ciudades = session.query(Persona.ciudad).filter(Persona.ciudad.isnot(None))
+        if cond_scope is not None:
+            query_ciudades = query_ciudades.filter(cond_scope)
+        ciudades_disponibles = sorted({c for (c,) in query_ciudades.distinct().all() if c})
+
+        query = session.query(Persona.dni, Persona.nombre_completo)
         if cond_scope is not None:
             query = query.filter(cond_scope)
-        personas_disponibles = sorted(query.all(), key=lambda p: (p[1] or "").title())
+        if ciudad_filtro:
+            query = query.filter(Persona.ciudad == ciudad_filtro)
+        # Tupla plana (no el Row de SQLAlchemy que devuelve .all()) -- hace
+        # falta para que |tojson la pueda serializar tal cual en el buscador
+        # con sugerencias del template.
+        personas_disponibles = sorted(
+            ((dni, nombre) for dni, nombre in query.all()), key=lambda p: (p[1] or "").title(),
+        )
     finally:
         session.close()
     return render_template(
         "reportes_perfil.html", usuario=current_user, activo="perfil",
         personas_disponibles=personas_disponibles,
+        ciudad_filtro=ciudad_filtro, ciudades_disponibles=ciudades_disponibles,
     )
