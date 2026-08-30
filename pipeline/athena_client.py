@@ -129,7 +129,10 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
     # correcto por fila ("cuando se genera la visita, hay una columna que
     # indica el canal donde salió la visita" -- directriz explícita de
     # Davor), así que el canal se resuelve con v.campana_id más abajo, no
-    # con el de este join.
+    # con el de este join. dim_lf_general_visitas_diarias (rama es_diaria,
+    # usada por reporte_9am.yml/reporte_diario_9am.py) también tiene su
+    # propio campana_id nativo por fila -- confirmado por Davor 2026-08-29
+    # ("Si cuenta con la columna campana_id"), mismo fix aplicado ahí abajo.
     campana_vigente_cte = f"""
         WITH campana_vigente AS (
             SELECT *, ROW_NUMBER() OVER (PARTITION BY punto_venta_id ORDER BY updated_at DESC) AS rn
@@ -147,7 +150,7 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
                    v.posicion_inicio, v.posicion_fin, v.visita_efectiva,
                    v.bateria_inicio, v.bateria_fin, NULL AS motivo_visita,
                    p.nombre_personalizado, p.cadena_personalizada, p.empresa_personalizada,
-                   p.departamento, p.provincia, p.distrito, p.latitud, p.longitud, p.campana_id
+                   p.departamento, p.provincia, p.distrito, p.latitud, p.longitud, v.campana_id
             FROM livetradebi.{tabla} v
             JOIN campana_vigente p
               ON v.punto_venta_id = p.punto_venta_id AND v.cliente_id = p.cliente_id AND p.rn = 1
