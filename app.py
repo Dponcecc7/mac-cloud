@@ -618,6 +618,43 @@ def create_app():
             dim_session.close()
         return redirect(url_for("personal", **request.args))
 
+    @app.post("/personal/reactivar")
+    @requiere_pagina("personal")
+    def personal_reactivar():
+        # Davor, 2026-08-30: caso Jose Quiñones (descanso médico largo,
+        # cubierto por Yuridia, vuelve en setiembre) -- el sistema no tiene
+        # un estado "en licencia", así que una baja temporal se modela
+        # igual que una baja definitiva (Vacante -> reemplazo -> Inactivo).
+        # "Agregar reemplazo" no sirve para reactivar a la MISMA persona en
+        # su propio puesto (reemplazos.py lo bloquea a propósito, ver
+        # comentario ahí), así que hace falta este botón aparte: vuelve a
+        # Activo y limpia fecha/motivo de baja, sin tocar canal/zona/
+        # supervisor/patrón -- son su propia fila, nunca se borraron.
+        if current_user.rol not in ("admin", "analista"):
+            flash("No tenés permiso para reactivar en Personal.", "error")
+            return redirect(url_for("personal"))
+        dni = request.form.get("dni", "")
+        dim_session = get_dim_session()
+        try:
+            query = dim_session.query(Persona).filter(Persona.dni == dni)
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
+            persona = query.first()
+            if persona is None:
+                flash("No se encontró a esa persona en tu equipo.", "error")
+            elif persona.estado == "Activo":
+                flash(f"{persona.nombre_completo.title()} ya está Activo.", "error")
+            else:
+                persona.estado = "Activo"
+                persona.fecha_baja = None
+                persona.motivo_baja = None
+                dim_session.commit()
+                flash(f"{persona.nombre_completo.title()} reactivado.", "ok")
+        finally:
+            dim_session.close()
+        return redirect(url_for("personal", **request.args))
+
     @app.get("/personal/exportar")
     @requiere_pagina("personal")
     def personal_exportar():
