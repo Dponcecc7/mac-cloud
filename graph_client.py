@@ -60,6 +60,13 @@ def _token(forzar_nuevo=False):
     authority = f"https://login.microsoftonline.com/{os.environ['TENANT_ID']}"
     app = msal.ConfidentialClientApplication(
         os.environ["CLIENT_ID"], authority=authority, client_credential=os.environ["CLIENT_SECRET"],
+        # Mismo motivo que TIMEOUT en las llamadas a Graph de mas abajo --
+        # sin esto, si login.microsoftonline.com no responde, msal se queda
+        # esperando el token PARA SIEMPRE, y como esto corre ANTES de
+        # cualquier requests.get/put con timeout, el arreglo de esas
+        # llamadas no alcanza a aplicarse (Davor, 2026-08-31: seguia
+        # colgado despues de agregar timeout solo a Graph).
+        timeout=TIMEOUT,
     )
     resultado = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
     if "access_token" not in resultado:
