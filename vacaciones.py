@@ -10,7 +10,7 @@ VACACIONES, es que volvió y salió de nuevo -- viaje nuevo. La duración se
 cuenta en días CALENDARIO (regreso - salida), no en cantidad de filas."""
 import datetime as dt
 
-from dimension_models import Feriado
+from dimension_models import Feriado, Persona
 from fact_models import ClasificacionDiaria
 
 
@@ -82,6 +82,21 @@ def calcular_viajes_vacaciones(session, r, hasta):
             v["dias"] = None
             v["regreso_dt"] = None
         del v["fin"]
+
+    # Alguien que queda Inactivo (dado de baja) nunca vuelve a tener una
+    # fila de clasificación después -- si ese día de baja coincidió con
+    # (o vino justo después de) un día VACACIONES, el viaje nunca encuentra
+    # un "regreso" y queda "En curso" para siempre, aunque la persona ya no
+    # trabaje más acá (Davor, 2026-08-30 -- caso real: Jose Quiñones, dado
+    # de baja el mismo día que aparece "Falta - Vacaciones"). No es un
+    # viaje en curso, es alguien que ya no está -- se excluye.
+    sin_regreso = {v["dni"] for v in viajes if v["dias"] is None}
+    if sin_regreso:
+        inactivos = {
+            dni for (dni,) in session.query(Persona.dni)
+            .filter(Persona.dni.in_(sin_regreso), Persona.estado == "Inactivo").all()
+        }
+        viajes = [v for v in viajes if not (v["dias"] is None and v["dni"] in inactivos)]
 
     viajes.sort(key=lambda v: v["inicio"], reverse=True)
     # Sin año en la fecha (%d/%m) -- la tabla del dashboard tiene 4 columnas
