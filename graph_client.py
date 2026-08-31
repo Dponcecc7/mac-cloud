@@ -33,6 +33,13 @@ SANCELA_DRIVE_ID = "b!kmKOTe_IokaGam5Gtzts6jEZ3lG7ZrZIgwxmB3O2ir7XCIzlEMUUTZoHFy
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 
+# (conexion, lectura) en segundos -- sin esto, requests espera EL PEDIDO
+# ENTERO para siempre si Graph se queda sin responder (ni error ni timeout
+# del lado de Python), lo que colgaba el boton "Falta"/Guardar de Marcar
+# asistencia de forma indefinida (Davor, 2026-08-31: "sale cargando nomas
+# y no se guarda", confirmado que nunca terminaba ni esperando minutos).
+TIMEOUT = (10, 60)
+
 # Apagón real 2026-08-27: este módulo, a pesar del docstring de arriba
 # ("solo para lo que corre en GitHub Actions"), también lo usa asistencia.py
 # en el proceso web de Render -- que es LARGO VIVIENDO (a diferencia de un
@@ -81,7 +88,7 @@ def _headers():
 
 def resolver_item_id(ruta_relativa):
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/root:/{ruta_relativa}"
-    r = _con_reintento_401(lambda: requests.get(url, headers=_headers()))
+    r = _con_reintento_401(lambda: requests.get(url, headers=_headers(), timeout=TIMEOUT))
     r.raise_for_status()
     return r.json()["id"]
 
@@ -90,7 +97,7 @@ def descargar(ruta_relativa):
     """Devuelve el contenido del archivo (bytes)."""
     item_id = resolver_item_id(ruta_relativa)
     url = f"{GRAPH}/drives/{SANCELA_DRIVE_ID}/items/{item_id}/content"
-    r = _con_reintento_401(lambda: requests.get(url, headers=_headers()))
+    r = _con_reintento_401(lambda: requests.get(url, headers=_headers(), timeout=TIMEOUT))
     r.raise_for_status()
     return r.content
 
@@ -136,7 +143,7 @@ def subir_creando_si_no_existe(ruta_relativa, wb_o_bytes):
     def _pedido():
         headers = dict(_headers())
         headers["Content-Type"] = "application/octet-stream"
-        return requests.put(url, headers=headers, data=contenido)
+        return requests.put(url, headers=headers, data=contenido, timeout=TIMEOUT)
 
     r = _con_reintento_401(_pedido)
     r.raise_for_status()
@@ -159,7 +166,7 @@ def subir_in_place(ruta_relativa, wb_o_bytes):
     def _pedido():
         headers = dict(_headers())
         headers["Content-Type"] = "application/octet-stream"
-        return requests.put(url, headers=headers, data=contenido)
+        return requests.put(url, headers=headers, data=contenido, timeout=TIMEOUT)
 
     r = _con_reintento_401(_pedido)
     r.raise_for_status()

@@ -25,6 +25,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 import openpyxl
+import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -805,14 +806,26 @@ def marcar():
             volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
         )
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-        ws = wb["Registro diario supervisor"]
-        fila_libre = ws.max_row + 1
-        if accion == "Falta":
-            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_falta)
-        else:
-            _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
-        subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fila_libre = ws.max_row + 1
+            if accion == "Falta":
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_falta)
+            else:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            # Sin esto, si SharePoint/Graph no responde (timeout, red caida,
+            # throttle) la excepcion volaba sin capturar y el navegador
+            # quedaba con el boton "cargando" pegado -- ahora corta y avisa
+            # (Davor, 2026-08-31: "sale cargando nomas y no se guarda").
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="marcar",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
+            )
 
         # Ademas de Tabla 3 (lo que lee el motor), se guarda en correcciones_web
         # -- asi "Pendientes de marcar" puede sacar a esta persona de la
