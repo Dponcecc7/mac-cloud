@@ -108,10 +108,20 @@
     var botones = Array.prototype.slice.call(
       form.querySelectorAll('button[type="submit"], input[type="submit"]')
     );
-    botones.forEach(function (btn) {
-      btn.disabled = true;
-      btn.classList.add("is-guardando");
-    });
+    // setTimeout(0), NO deshabilitar sincronico aca -- un formulario con
+    // VARIOS botones submit del mismo name (ej. accion=Asistio/Vacante/
+    // Falta en Marcar asistencia) manda el valor del boton que se clickeo
+    // como parte del mismo evento submit; si se lo deshabilita ANTES de que
+    // el navegador termine de armar esos datos, un control disabled queda
+    // afuera del envio y el campo llega vacio al servidor (bug real,
+    // Davor 2026-08-31: "Vacante" llegaba con accion='' y nunca guardaba).
+    // Con el timeout, el navegador ya capturo el envio antes de bloquear.
+    setTimeout(function () {
+      botones.forEach(function (btn) {
+        btn.disabled = true;
+        btn.classList.add("is-guardando");
+      });
+    }, 0);
     resetearLuegoDe(8000, botones);
   });
 
