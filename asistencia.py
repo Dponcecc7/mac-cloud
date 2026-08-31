@@ -94,6 +94,20 @@ _ESTADOS_CON_HORA_PENDIENTE = ("ASISTIÓ", "APOYO ZONA")
 def _estado_base(estado):
     return (estado or "").split(" (")[0]
 
+
+def _canal_para_mostrar(marcado, canal_asignado):
+    """"Canal hoy"/"Canal ayer" salen de canales_marcados (el canal REAL de
+    la visita GPS) -- si la persona marco en un punto administrativo/censo
+    (ver UBICACIONES_ADMINISTRATIVAS en pipeline/athena_client.py), el
+    motor lo clasifica como "Otro" a proposito (no es Tradicional/Farmacia/
+    Autoservicio de verdad). Mostrar "Otro" tal cual parece un dato
+    faltante -- Davor, 2026-08-31: "igual deberia aparecer el canal, no
+    debe salir Otro". Se usa el canal asignado de la persona en su lugar
+    cuando no hay nada mas util que mostrar."""
+    if not marcado or marcado.strip() == "Otro":
+        return canal_asignado or marcado or ""
+    return marcado
+
 _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 
 
@@ -267,7 +281,13 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             "canal": p.canal if p else None,
             "rol": p.rol if p else None,
             "mercado": p.zona if p else None,
+            # OJO: canal_hoy se usa como CHEQUEO DE VERDAD/FALSO en otros
+            # lados (_ya_marcaron(), _marcaciones_reales_hoy() -- "¿hay
+            # visita real hoy?"), no solo para mostrar -- por eso el
+            # reemplazo por el canal asignado cuando cae en "Otro" va en un
+            # campo aparte (canal_hoy_mostrar), sin tocar este.
             "canal_hoy": c.canales_marcados or "",
+            "canal_hoy_mostrar": _canal_para_mostrar(c.canales_marcados, p.canal if p else None),
             "entrada_prog": c.entrada_esperada,
             "entrada_real": c.entrada_real,
             "entrada_corregida": c.fuente_dato == "Corregido manualmente (Tabla 3)",
@@ -280,7 +300,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             "salida_real": fuente_salida.salida_real if fuente_salida else None,
             "salida_corregida": bool(fuente_salida and fuente_salida.fuente_dato == "Corregido manualmente (Tabla 3)"),
             "salida_temprana": bool(salida_anticipada and salida_anticipada > SALIDA_ANTICIPADA_MIN),
-            "canal_ayer": (ayer_c.canales_marcados or "") if ayer_c else "",
+            "canal_ayer": _canal_para_mostrar(ayer_c.canales_marcados if ayer_c else "", p.canal if p else None),
             "comentario_salida": _homologar_motivo(override_salida.get(c.dni, fuente_salida.comentario_supervisor if fuente_salida else None)) or "",
             "entrada_pendiente": (
                 MARCADOR_PENDIENTE in (c.comentario_supervisor or "")
