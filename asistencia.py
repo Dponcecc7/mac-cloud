@@ -782,8 +782,10 @@ def marcar():
     accion = request.form.get("accion", "").strip()
     motivo = request.form.get("motivo", "").strip()
     comentario_extra = request.form.get("comentario", "").strip()
+    print(f"[marcar] POST recibido: dni={dni!r} fecha={fecha_str!r} accion={accion!r}", flush=True)
 
     if accion not in ACCIONES_MARCAR:
+        print(f"[marcar] {dni}: accion {accion!r} no esta en ACCIONES_MARCAR -- redirige sin guardar nada.", flush=True)
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
     if accion == "Falta" and not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
@@ -807,26 +809,38 @@ def marcar():
         )
     try:
         try:
+            # Checkpoints temporales en Render logs (Davor, 2026-08-31): con
+            # timeout ya puesto en Graph y en msal, sigue sin guardar ni
+            # mostrar error -- esto muestra en que paso exacto se traba.
+            print(f"[marcar] {dni}/{fecha_str}/{accion}: descargando Tabla 3...", flush=True)
             wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            print(f"[marcar] {dni}: Tabla 3 descargada, agregando fila...", flush=True)
             ws = wb["Registro diario supervisor"]
             fila_libre = ws.max_row + 1
             if accion == "Falta":
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_falta)
             else:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
+            print(f"[marcar] {dni}: subiendo Tabla 3 a SharePoint...", flush=True)
             subir_in_place(TABLA3_RUTA_GRAPH, wb)
+            print(f"[marcar] {dni}: Tabla 3 subida OK.", flush=True)
         except requests.exceptions.RequestException as e:
             # Sin esto, si SharePoint/Graph no responde (timeout, red caida,
             # throttle) la excepcion volaba sin capturar y el navegador
             # quedaba con el boton "cargando" pegado -- ahora corta y avisa
             # (Davor, 2026-08-31: "sale cargando nomas y no se guarda").
+            print(f"[marcar] {dni}: FALLO de red contra Graph/SharePoint: {e!r}", flush=True)
             return render_template(
                 "asistencia_resultado.html", usuario=current_user, activo="marcar",
                 titulo="No se pudo guardar", ok=False,
                 detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
                 volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
             )
+        except Exception as e:
+            print(f"[marcar] {dni}: EXCEPCION inesperada: {e!r}", flush=True)
+            raise
 
+        print(f"[marcar] {dni}: guardando en correcciones_web (Postgres)...", flush=True)
         # Ademas de Tabla 3 (lo que lee el motor), se guarda en correcciones_web
         # -- asi "Pendientes de marcar" puede sacar a esta persona de la
         # lista de una, sin esperar a que el motor vuelva a correr.
@@ -843,6 +857,7 @@ def marcar():
     finally:
         liberar_lock("tabla3_web")
 
+    print(f"[marcar] {dni}: listo, guardado completo. Redirigiendo.", flush=True)
     return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok"))
 
 
