@@ -55,6 +55,13 @@
     .barra-mini.tardanza { background:var(--warn); }
     .pill-preliminar { font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:999px; background:var(--warn-bg); color:var(--warn); }
 
+    /* Matriz mercaderista x día de semana (próxima falta probable) --
+       scrollea a lo ancho en vez de achicar columnas en mobile. */
+    .table-wrap-proy { overflow-x:auto; border-radius:12px; }
+    .table-wrap-proy table { min-width:640px; }
+    .table-wrap-proy td.pct-medio { background:var(--warn-bg); color:var(--warn); font-weight:700; }
+    .table-wrap-proy td.pct-alto { background:var(--bad-bg); color:var(--bad); font-weight:700; }
+
     .ranking-item { background:var(--card); border-radius:12px; padding:12px 16px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:8px; display:flex; align-items:center; gap:14px; border-left:4px solid var(--line); }
     .ranking-item.alto { border-left-color:var(--bad); }
     .ranking-item.medio { border-left-color:var(--warn); }
@@ -152,8 +159,6 @@
     </div>
     {% endif %}
 
-    <p class="note"><b>Importante:</b> esto NO es un modelo predictivo con IA — son reglas estadísticas simples sobre los mismos datos ya validados de Desempeño/Horas semanales (señales activas, antigüedad, tasas históricas, recencia de incidencias). Sirve para mirar antes de que algo pase, no como diagnóstico definitivo.</p>
-    <p class="note preliminar"><b>Dato preliminar:</b> el sistema en la nube arrancó el 2026-07-01 -- todavía hay poca historia (pocas bajas por supervisor). La estacionalidad por día de semana ya es confiable; rotación, contratación proyectada y próxima falta van a mejorar solos a medida que se acumulen más meses.</p>
 
     <h2 class="subtitle">📅 Estacionalidad de faltas y tardanzas</h2>
     <p class="note" style="margin-top:0;">% de Falta y % de Tardanza por día de la semana, desde el 2026-07-01. Sin desglose mensual/anual todavía -- hace falta un año completo de historia para eso.</p>
@@ -212,21 +217,26 @@
     </table>
     {% endif %}
 
-    <h2 class="subtitle">🎯 Ranking de próxima falta probable</h2>
-    <p class="note" style="margin-top:0;">0-100, combina la estacionalidad del mejor día proyectado para esa persona dentro de los próximos 7 días (30%), su score de riesgo de rotación (40%) y sus faltas/tardanzas de los últimos 14 días con más peso a la última semana (30%).</p>
+    <h2 class="subtitle">🎯 Próxima falta probable, por día de la semana</h2>
     {% if not proxima_falta %}
       <p class="empty">Sin personas para evaluar con este filtro.</p>
     {% else %}
-      {% for r in proxima_falta[:15] %}
-      <div class="ranking-item {{ 'alto' if r.score >= 60 else ('medio' if r.score >= 35 else '') }}">
-        <div class="ranking-pos">{{ loop.index }}</div>
-        <div class="ranking-cuerpo">
-          <div class="ranking-nombre"><a href="{{ url_for('reportes.ficha', dni=r.dni) }}">{{ r.nombre|title }}</a></div>
-          <div class="ranking-detalle">Día proyectado: {{ r.dia_semana_proyectado }} {{ r.fecha_proyectada[8:10] }}/{{ r.fecha_proyectada[5:7] }} ({{ r.pct_falta_dia_proyectado }}% histórico de falta ese día de semana)</div>
-        </div>
-        <div class="ranking-score">{{ r.score }}</div>
-      </div>
+    <div class="table-wrap-proy">
+    <table>
+      <tr>
+        <th>Mercaderista</th>
+        {% for d in proxima_falta[0].dias %}<th>{{ d.dia }}<br><span style="font-weight:400; text-transform:none;">{{ d.fecha[8:10] }}/{{ d.fecha[5:7] }}</span></th>{% endfor %}
+      </tr>
+      {% for r in proxima_falta[:20] %}
+      <tr>
+        <td><a href="{{ url_for('reportes.ficha', dni=r.dni) }}" style="color:inherit; text-decoration:none; font-weight:600;">{{ r.nombre|title }}</a></td>
+        {% for d in r.dias %}
+        <td class="{{ 'pct-alto' if d.pct >= 50 else ('pct-medio' if d.pct >= 25 else '') }}">{{ (d.pct ~ '%') if d.pct > 0 else '—' }}</td>
+        {% endfor %}
+      </tr>
       {% endfor %}
+    </table>
+    </div>
     {% endif %}
   </div>
 </body>

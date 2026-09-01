@@ -328,7 +328,7 @@ def proyecciones():
     señales = insights_equipo(current_user, **kwargs_filtro)
     riesgo = score_riesgo_rotacion(current_user, tasas_ciudad=tasas_ciudad, señales=señales, **kwargs_filtro)
     contratacion = necesidad_contratacion(current_user, tasas_sup=tasas_sup, **kwargs_filtro)
-    proxima_falta = ranking_proxima_falta(current_user, riesgo=riesgo, estacionalidad_equipo=estacionalidad, **kwargs_filtro)
+    proxima_falta = ranking_proxima_falta(current_user, estacionalidad_equipo=estacionalidad, **kwargs_filtro)
     return render_template(
         "reportes_proyecciones.html", usuario=current_user, activo="proyecciones",
         estacionalidad=estacionalidad, riesgo=riesgo, contratacion=contratacion, proxima_falta=proxima_falta,
