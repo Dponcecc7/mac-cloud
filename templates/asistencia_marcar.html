@@ -146,11 +146,11 @@
       .pendiente-row form { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
       .pendiente-row .btn.sm { font-size:13.5px; padding:11px 8px; min-height:44px; width:100%; }
       .pendiente-row .ipt-filtro.sm { grid-column:1 / -1; font-size:14px; min-height:44px; width:100% !important; padding:9px 10px; }
-      /* "Vacante" no tiene pareja (a diferencia de Asistió+Apoyo y
-         Falta+Reemplazo) -- sin esto, el auto-placement de la grilla dejaba
-         una celda vacía al lado (el selector de Motivo, que sí ocupa el
-         ancho completo, empujaba a Vacante a quedar solo igual pero con un
-         hueco invisible de por medio). */
+      /* "Vacante" no tiene pareja (a diferencia de Falta+Reemplazo) --
+         sin esto, el auto-placement de la grilla dejaba una celda vacía
+         al lado (los selectores de Motivo/Día de descanso, que sí ocupan
+         el ancho completo, empujaban a Vacante a quedar solo igual pero
+         con un hueco invisible de por medio). */
       .pendiente-row form button[name="accion"][value="Vacante"] { grid-column:1 / -1; }
       .pendiente-row a.btn.sm { display:flex; align-items:center; justify-content:center; }
 
@@ -257,7 +257,7 @@
         {% if marcado == 'ok' %}✓ Registrado -- se va a reflejar en el reporte en unos minutos (usá "Actualizar ahora" si querés verlo ya).
         {% elif marcado == 'motivo_agregado' %}✓ Motivo agregado a la lista.
         {% elif marcado == 'motivo_eliminado' %}✓ Motivo eliminado de la lista.
-        {% elif marcado == 'falta_sin_motivo' %}Elegí un motivo antes de confirmar la falta.
+        {% elif marcado == 'falta_sin_motivo' %}Elegí un motivo antes de confirmar la falta o el día de descanso.
         {% endif %}
       </p>
     </div>
@@ -288,6 +288,10 @@
     {% else %}
     <div class="panel" style="padding:14px 16px;">
       <p class="panel-title" style="margin-bottom:6px;">Pendientes de marcar ({{ pendientes|length }})</p>
+      <p style="margin:0 0 10px; font-size:11.5px; color:var(--muted);">
+        <b>Día de descanso</b>: se coloca cuando al mercaderista se le considerará el día pero no asistió a laborar.
+        <b>Falta</b>: se coloca cuando el mercaderista no asistió y se le descontará (excepto descanso médico -- con sustento).
+      </p>
       <div>
         {% for p in pendientes %}
         <div class="pendiente-row">
@@ -296,7 +300,11 @@
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
             <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
-            <button class="btn sm info" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo</button>
+            <select class="ipt-filtro sm" name="motivo_descanso" style="width:150px;">
+              <option value="">Día de descanso...</option>
+              {% for m in motivos_descanso %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <button class="btn sm info" type="submit" name="accion" value="Descanso">Descanso</button>
             <button class="btn sm warn" type="submit" name="accion" value="Vacante">Vacante</button>
             <select class="ipt-filtro sm" name="motivo" style="width:135px;" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
               <option value="">Motivo...</option>
@@ -309,28 +317,36 @@
         </div>
         {% endfor %}
       </div>
+      {% macro chip_motivo(id, motivo) %}
+      <span class="motivo-chip">
+        {{ motivo }}
+        <form method="post" action="{{ url_for('asistencia.motivos_eliminar') }}" style="display:inline;"
+              onsubmit="return confirm('¿Quitar \'{{ motivo }}\' de la lista de motivos? No borra los que ya se usaron, solo deja de aparecer en el desplegable.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="fecha" value="{{ fecha_str }}">
+          <input type="hidden" name="motivo_id" value="{{ id }}">
+          <button type="submit" class="motivo-chip-x" title="Quitar de la lista">×</button>
+        </form>
+      </span>
+      {% endmacro %}
       <details style="margin-top:10px;">
         <summary style="font-size:11.5px; color:var(--muted); cursor:pointer; font-weight:700;">+ Agregar o quitar motivos de la lista</summary>
         <form method="post" action="{{ url_for('asistencia.motivos_agregar') }}" style="display:flex; gap:8px; margin-top:8px;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="fecha" value="{{ fecha_str }}">
           <input class="ipt-filtro" name="motivo" placeholder="Nuevo motivo..." required style="flex:1;">
+          <select name="tipo" class="ipt-filtro">
+            <option value="falta">Para Falta</option>
+            <option value="descanso">Para Día de descanso</option>
+          </select>
           <button class="btn ghost sm" type="submit">Agregar</button>
         </form>
         {% if motivos_catalogo %}
-        <div class="motivos-lista">
-          {% for id, motivo in motivos_catalogo %}
-          <span class="motivo-chip">
-            {{ motivo }}
-            <form method="post" action="{{ url_for('asistencia.motivos_eliminar') }}" style="display:inline;"
-                  onsubmit="return confirm('¿Quitar \'{{ motivo }}\' de la lista de motivos? No borra los que ya se usaron, solo deja de aparecer en el desplegable.');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="fecha" value="{{ fecha_str }}">
-              <input type="hidden" name="motivo_id" value="{{ id }}">
-              <button type="submit" class="motivo-chip-x" title="Quitar de la lista">×</button>
-            </form>
-          </span>
-          {% endfor %}
-        </div>
+        <p style="margin:10px 0 4px; font-size:10.5px; color:var(--muted); text-transform:uppercase; font-weight:700;">Motivos de Falta</p>
+        <div class="motivos-lista">{% for id, motivo in motivos_catalogo %}{{ chip_motivo(id, motivo) }}{% endfor %}</div>
+        {% endif %}
+        {% if motivos_catalogo_descanso %}
+        <p style="margin:10px 0 4px; font-size:10.5px; color:var(--muted); text-transform:uppercase; font-weight:700;">Motivos de Día de descanso</p>
+        <div class="motivos-lista">{% for id, motivo in motivos_catalogo_descanso %}{{ chip_motivo(id, motivo) }}{% endfor %}</div>
         {% endif %}
       </details>
     </div>
@@ -476,7 +492,11 @@
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
             <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
-            <button class="btn sm info" type="submit" name="accion" value="Apoyo zona">⇄ Apoyo</button>
+            <select name="motivo_descanso">
+              <option value="">Día de descanso...</option>
+              {% for m in motivos_descanso %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+            <button class="btn sm info" type="submit" name="accion" value="Descanso">Descanso</button>
             <button class="btn sm warn" type="submit" name="accion" value="Vacante">Vacante</button>
             <select name="motivo" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
               <option value="">Cambiar motivo...</option>

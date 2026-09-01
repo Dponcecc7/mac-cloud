@@ -196,7 +196,7 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
         # analista debe ser prioridad a todo"). Mismo criterio que
         # asistencia.py::guardar() ya aplica cuando ambas llegan en el mismo
         # envío -- acá se extiende a horas viejas de envíos anteriores.
-        if comentario_sup_norm.startswith("FALTA"):
+        if comentario_sup_norm.startswith(("FALTA", "DESCANSO")):
             hora_ent_corr = None
             hora_sal_corr = None
 
@@ -236,6 +236,16 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             fuente = "Aplicativo (con comentario de supervisor)"
         elif comentario_sup_norm.startswith("FALTA"):
             estado_base = "FALTA (comentario supervisor)"
+            fuente = "Aplicativo (con comentario de supervisor)"
+            salida_anticipada = None
+        elif comentario_sup_norm.startswith("DESCANSO"):
+            # "Día de descanso" (Davor, 2026-08-31, reemplazo de "Apoyo
+            # zona"): a diferencia de Falta, el día SÍ se le considera a la
+            # persona -- no empieza con "FALTA" a propósito, así que
+            # motor_compensacion_indicador.py (busca Estado_base que
+            # empiece con "FALTA") no lo cuenta como negativo en el
+            # Indicador de Asistencia.
+            estado_base = "DESCANSO (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
             salida_anticipada = None
         elif sin_marcacion_valida and "VACANTE" in comentario_sup_norm:

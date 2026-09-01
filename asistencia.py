@@ -66,10 +66,12 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
 
 # motor_clasificacion.py escribe este sufijo exacto en el Estado cuando el
-# dato viene del botón "Marcar asistencia" de acá (Asistió/Apoyo zona/Vacante
-# sin marcación real de GPS) -- mismo caso que MARCADOR_PENDIENTE pero para el
-# flujo nuevo: acá el aviso vive en el propio Estado, no en el comentario del
-# supervisor, asi que hay que buscarlo aparte.
+# dato viene del botón "Marcar asistencia" de acá (Asistió/Vacante sin
+# marcación real de GPS -- "Apoyo zona" tenía este mismo problema, por eso
+# se reemplazó por "Día de descanso", ver ACCIONES_MARCAR más abajo) --
+# mismo caso que MARCADOR_PENDIENTE pero para el flujo nuevo: acá el aviso
+# vive en el propio Estado, no en el comentario del supervisor, asi que hay
+# que buscarlo aparte.
 MARCADOR_SIN_APP = "según supervisor, sin marcación app"
 
 # Tabla 3 es append-only -- el motor arma cada (DNI, Fecha) fusionando todas
@@ -340,18 +342,42 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
 def _motivos_falta():
     session = get_session()
     try:
-        return [m for (m,) in session.query(CatalogoMotivo.motivo).order_by(CatalogoMotivo.motivo).all()]
+        return [
+            m for (m,) in session.query(CatalogoMotivo.motivo)
+            .filter(CatalogoMotivo.categoria != "Descanso")
+            .order_by(CatalogoMotivo.motivo).all()
+        ]
+    finally:
+        session.close()
+
+
+def _motivos_descanso():
+    """Motivos del boton "Dia de descanso" (Davor, 2026-08-31) -- catalogo
+    separado del de Falta via CatalogoMotivo.categoria == "Descanso": el
+    dia SI se le considera a la persona, no se descuenta ni cuenta como
+    falta en el Indicador de Asistencia (a diferencia de Falta)."""
+    session = get_session()
+    try:
+        return [
+            m for (m,) in session.query(CatalogoMotivo.motivo)
+            .filter(CatalogoMotivo.categoria == "Descanso")
+            .order_by(CatalogoMotivo.motivo).all()
+        ]
     finally:
         session.close()
 
 
 def _motivos_falta_con_id():
     """Para el panel de administrar motivos (analista/admin) -- necesita el
-    id de cada fila para poder borrarla, a diferencia de _motivos_falta()
-    (usada en los <select> de Falta, donde solo importa el texto)."""
+    id de cada fila para poder borrarla, a diferencia de _motivos_falta()/
+    _motivos_descanso() (usadas en los <select>, donde solo importa el
+    texto). Separado en 2 listas para poder mostrarlas agrupadas."""
     session = get_session()
     try:
-        return [(m.id, m.motivo) for m in session.query(CatalogoMotivo).order_by(CatalogoMotivo.motivo).all()]
+        todos = session.query(CatalogoMotivo).order_by(CatalogoMotivo.motivo).all()
+        falta = [(m.id, m.motivo) for m in todos if m.categoria != "Descanso"]
+        descanso = [(m.id, m.motivo) for m in todos if m.categoria == "Descanso"]
+        return falta, descanso
     finally:
         session.close()
 
@@ -588,12 +614,17 @@ def marcar_vista():
         f["canal_real_detalle"] = detalle[1] if detalle else None
     reemplazos = _reemplazos_hoy(fecha, current_user)
     fecha_reciente = None if filas else _fecha_mas_reciente_con_datos()
+    hay_pendientes_de_algo = pendientes or marcaron or corregidos_a_mano or faltas_vacaciones_vacantes
+    motivos_catalogo_falta, motivos_catalogo_descanso = (
+        _motivos_falta_con_id() if current_user.rol != "supervisor" else (None, None)
+    )
     return render_template(
         "asistencia_marcar.html", usuario=current_user, activo="marcar",
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
         pendientes=pendientes, marcaron=marcaron,
-        motivos=_motivos_falta() if (pendientes or marcaron or corregidos_a_mano or faltas_vacaciones_vacantes) else None,
-        motivos_catalogo=_motivos_falta_con_id() if current_user.rol != "supervisor" else None,
+        motivos=_motivos_falta() if hay_pendientes_de_algo else None,
+        motivos_descanso=_motivos_descanso() if hay_pendientes_de_algo else None,
+        motivos_catalogo=motivos_catalogo_falta, motivos_catalogo_descanso=motivos_catalogo_descanso,
         faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, corregidos_a_mano=corregidos_a_mano,
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
@@ -796,28 +827,40 @@ def guardar():
     )
 
 
-ACCIONES_MARCAR = ("Asistió", "Apoyo zona", "Vacante", "Falta")
+ACCIONES_MARCAR = ("Asistió", "Descanso", "Vacante", "Falta")
+
+# Davor, 2026-08-31: "Apoyo zona" no servía -- cualquier estado reportado
+# por el supervisor sin marcación real de la app (incluido "Apoyo zona")
+# caía en un balde genérico ("... según supervisor, sin marcación app")
+# que motor_compensacion_indicador.py SÍ contaba como falta en el
+# Indicador de Asistencia, aunque la persona sí hubiera trabajado. Se
+# reemplaza por "Día de descanso" con motivo obligatorio (mismo patrón que
+# Falta), que el motor clasifica aparte ("DESCANSO (comentario supervisor)",
+# ver motor_clasificacion.py) y que el indicador NO cuenta como negativo --
+# "se le considera el día", no se descuenta.
+ACCIONES_CON_MOTIVO = ("Falta", "Descanso")
 
 
 @bp.post("/marcar")
 @requiere_pagina("asistencia")
 def marcar():
-    """Version web de los botones Asistió/Apoyo zona/Vacante/Falta de la
-    Power App (galPendientes -- ver GUIA_POWER_APPS_SUPERVISOR.md secciones
-    3/4). Escribe a la MISMA Tabla 3 que la app móvil, con el mismo criterio
-    que usa motor_clasificacion.py para interpretarlo -- "Falta" via
-    Comentario="Falta - {motivo}" (mismo patron que ya usan las correcciones
-    web y la app), las otras 3 via la columna "Estado reportado"."""
+    """Version web de los botones Asistió/Día de descanso/Vacante/Falta de
+    la Power App (galPendientes -- ver GUIA_POWER_APPS_SUPERVISOR.md
+    secciones 3/4). Escribe a la MISMA Tabla 3 que la app móvil, con el
+    mismo criterio que usa motor_clasificacion.py para interpretarlo --
+    "Falta"/"Descanso" via Comentario="{Accion} - {motivo}" (mismo patron
+    que ya usan las correcciones web y la app), las otras 2 via la columna
+    "Estado reportado"."""
     dni = request.form["dni"].strip()
     fecha_str = request.form["fecha"]
     fecha = dt.date.fromisoformat(fecha_str)
     accion = request.form.get("accion", "").strip()
-    motivo = request.form.get("motivo", "").strip()
+    motivo = request.form.get("motivo", "").strip() or request.form.get("motivo_descanso", "").strip()
     comentario_extra = request.form.get("comentario", "").strip()
 
     if accion not in ACCIONES_MARCAR:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
-    if accion == "Falta" and not motivo:
+    if accion in ACCIONES_CON_MOTIVO and not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
 
     # El detalle adicional va entre paréntesis al final -- _homologar_motivo()
@@ -825,9 +868,9 @@ def marcar():
     # "Faltas por motivo" (mismo mecanismo que ya usa MARCADOR_BORRADO), así
     # que el motivo sigue agrupando bien aunque cada persona escriba un
     # detalle distinto acá.
-    comentario_falta = f"Falta - {motivo}"
+    comentario_con_motivo = f"{accion} - {motivo}"
     if comentario_extra:
-        comentario_falta += f" ({comentario_extra})"
+        comentario_con_motivo += f" ({comentario_extra})"
 
     ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
     if not ok_lock:
@@ -842,8 +885,8 @@ def marcar():
             wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
             ws = wb["Registro diario supervisor"]
             fila_libre = ws.max_row + 1
-            if accion == "Falta":
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_falta)
+            if accion in ACCIONES_CON_MOTIVO:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_con_motivo)
             else:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
             subir_in_place(TABLA3_RUTA_GRAPH, wb)
@@ -866,7 +909,7 @@ def marcar():
         try:
             session.add(CorreccionWeb(
                 dni=dni, fecha=fecha,
-                comentario_entrada=(comentario_falta if accion == "Falta" else accion),
+                comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else accion),
                 registrado_por=current_user.email,
             ))
             session.commit()
@@ -885,12 +928,15 @@ def motivos_agregar():
     motivo = request.form.get("motivo", "").strip()
     if not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
+    # "Descanso" (Davor, 2026-08-31) para que el nuevo motivo caiga en el
+    # desplegable de "Día de descanso" en vez del de "Falta" por defecto.
+    categoria = "Descanso" if request.form.get("tipo") == "descanso" else "Falta"
 
     session = get_session()
     try:
         ya_existe = session.query(CatalogoMotivo).filter(CatalogoMotivo.motivo.ilike(motivo)).first()
         if not ya_existe:
-            session.add(CatalogoMotivo(motivo=motivo, categoria="Falta"))
+            session.add(CatalogoMotivo(motivo=motivo, categoria=categoria))
             session.commit()
     finally:
         session.close()
