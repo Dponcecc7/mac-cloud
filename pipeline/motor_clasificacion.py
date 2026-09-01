@@ -182,9 +182,25 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
         comentario_sup = registro_sup.get("Comentario")
         hora_ent_corr = registro_sup.get("Hora entrada corregida")
         hora_sal_corr = registro_sup.get("Hora salida corregida")
-        tiene_correccion_hora = pd.notna(hora_ent_corr) or pd.notna(hora_sal_corr)
 
         comentario_sup_norm = str(comentario_sup).upper() if pd.notna(comentario_sup) else ""
+
+        # sup_idx (más arriba) fusiona TODAS las filas de Tabla 3 de un mismo
+        # día por COLUMNA, no por fila -- si un día ya tenía una hora
+        # corregida de una corrección anterior (ej. "Recupera 31/08") y
+        # después el analista lo pasa a Falta sin tocar la hora, esa hora
+        # vieja igual queda pegada en la fusión y el motor terminaba
+        # calculando Tardanza/Asistió en vez de Falta, aunque el comentario
+        # ya dijera "Falta" (Davor, 2026-08-31: "a primera hora colocamos
+        # eso... pero durante el día nunca marcaron... lo que diga el
+        # analista debe ser prioridad a todo"). Mismo criterio que
+        # asistencia.py::guardar() ya aplica cuando ambas llegan en el mismo
+        # envío -- acá se extiende a horas viejas de envíos anteriores.
+        if comentario_sup_norm.startswith("FALTA"):
+            hora_ent_corr = None
+            hora_sal_corr = None
+
+        tiene_correccion_hora = pd.notna(hora_ent_corr) or pd.notna(hora_sal_corr)
 
         if tiene_correccion_hora:
             entrada_esp_td = pd.to_timedelta(str(entrada_esp))
