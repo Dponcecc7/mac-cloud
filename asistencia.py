@@ -156,7 +156,7 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False, incluir_dados_de_baja=False):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
@@ -269,6 +269,19 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     ultima_sync = None
     for c in filas_hoy:
         p = personas.get(c.dni)
+        # Davor, 2026-09-01: dar de baja a alguien con fecha de baja HOY (o
+        # antes) no reprocesa la fila de ClasificacionDiaria de esa fecha
+        # -- el motor la calculo ANTES de la baja (mientras todavia estaba
+        # Activo en el Maestro) y no vuelve a tocar a alguien que ya no
+        # esta Activo. Sin este filtro, la persona seguia apareciendo en
+        # Reporte diario como "Falta" el mismo dia que se le dio de baja,
+        # aunque ya no corresponda seguir haciendole seguimiento.
+        # incluir_dados_de_baja=True en marcar_vista() a proposito -- el
+        # panel "Faltas/Vacaciones/Vacantes de hoy" de Marcar asistencia
+        # necesita seguir viendo estas posiciones (para saber que falta
+        # cubrirlas con un reemplazo), no debe desaparecer con este filtro.
+        if not incluir_dados_de_baja and p is not None and p.fecha_baja is not None and p.fecha_baja <= fecha:
+            continue
         ayer_c = filas_ayer.get(c.dni)
         fuente_salida = c if salida_mismo_dia else ayer_c
         supervisor_dni_efectivo = overrides_sup.get(c.dni, p.supervisor_dni) if p else None
@@ -602,6 +615,7 @@ def marcar_vista():
         fecha, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+        incluir_dados_de_baja=True,
     )
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
