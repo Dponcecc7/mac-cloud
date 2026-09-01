@@ -31,7 +31,8 @@ BANDA_SEGUIMIENTO = 85
 
 
 def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
-                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+                     rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None,
+                     detalle=None):
     """Devuelve la lista de insights/alertas predictivas para el equipo
     visible de `usuario_actual` -- o para un solo `dni_filtro` (ficha
     individual, el acceso ya se valida aparte). `desde` acota el bloque C
@@ -41,17 +42,25 @@ def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
     `hasta.replace(day=1)` si no se pasa, igual que antes. `hasta` es la
     fecha de referencia para "esta semana"/"días transcurridos" (default
     hoy real). `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`:
-    filtros extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra)."""
+    filtros extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra).
+
+    `detalle` (Davor, 2026-09-01, 503 en Render por timeout): si ya se trajo
+    calcular_detalle_semana() afuera (ver reportes.py::recomendaciones(),
+    que reusa el mismo detalle para esta función y resumen_perfil_equipo()
+    en vez de traerlo 2 veces -- lo mas caro del reporte), se reusa en vez
+    de volver a consultar. Debe cubrir al menos desde `desde_semanas` (4
+    semanas antes del isocalendar de `hasta`) hasta `hasta`."""
     hasta = hasta or dt.date.today()
     anio_actual, num_actual, _ = hasta.isocalendar()
     inicio_actual, _ = semana_iso(anio_actual, num_actual)
     desde_semanas = inicio_actual - dt.timedelta(weeks=4)  # 4 semanas cerradas + la actual
 
-    detalle = calcular_detalle_semana(
-        desde_semanas, hasta, usuario_actual, dni_filtro=dni_filtro,
-        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
-    )
+    if detalle is None:
+        detalle = calcular_detalle_semana(
+            desde_semanas, hasta, usuario_actual, dni_filtro=dni_filtro,
+            rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+            ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
+        )
     if not len(detalle):
         return []
     detalle = detalle.copy()
@@ -173,7 +182,8 @@ def _clip(x):
 
 
 def resumen_perfil_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
-                           rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+                           rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None,
+                           detalle=None):
     """Resumen de perfil del periodo elegido (default: mes en curso) -- 4
     métricas normalizadas a 0-100 (más alto = mejor), combinadas con
     PESO_CUMPLIMIENTO/PESO_FALTA/PESO_TARDANZA/PESO_SALIDA: Cumplimiento de
@@ -186,15 +196,28 @@ def resumen_perfil_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=Non
     curso) -- Davor, 2026-08-26: quería poder filtrar hasta un día
     puntual, no solo el mes completo. `rol_filtro`/`region_filtro`/
     `supervisor_filtro`/`ciudad_filtro`: filtros extra de Reportes (solo
-    admin/analista, ver scoping.aplicar_filtros_extra)."""
+    admin/analista, ver scoping.aplicar_filtros_extra).
+
+    `detalle` -- mismo criterio que insights_equipo(): si ya se trajo
+    calcular_detalle_semana() afuera (cubriendo al menos desde/hasta), se
+    reusa y solo se recorta al rango pedido, en vez de volver a consultar
+    (evita traer 2 veces lo mismo cuando reportes.py::recomendaciones()
+    pide insights_equipo() y esto en la misma request)."""
     hasta = hasta or dt.date.today()
     desde = desde or hasta.replace(day=1)
 
-    detalle_mes = calcular_detalle_semana(
-        desde, hasta, usuario_actual, dni_filtro=dni_filtro,
-        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
-        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
-    )
+    if detalle is None:
+        detalle_mes = calcular_detalle_semana(
+            desde, hasta, usuario_actual, dni_filtro=dni_filtro,
+            rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+            ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
+        )
+    elif not len(detalle):
+        # calcular_detalle_semana() devuelve un DataFrame SIN columnas si no
+        # hay filas -- detalle["fecha"] tiraria KeyError sobre ese vacio.
+        detalle_mes = detalle
+    else:
+        detalle_mes = detalle[(detalle["fecha"] >= pd.Timestamp(desde)) & (detalle["fecha"] <= pd.Timestamp(hasta))]
     if not len(detalle_mes):
         return []
 
