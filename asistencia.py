@@ -156,9 +156,14 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False, dni_filtro=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
+
+    `dni_filtro` (Davor, 2026-09-01, "Histórico diario" -- ver día por día
+    de UN mercaderista en vez de todos): acota a una sola persona, además
+    del scope/filtros normales -- se usa llamando esta función una vez por
+    día del rango elegido.
 
     `usuario_actual`: si se pasa, acota a las Personas visibles para ese
     usuario (ver scoping.py) -- sin esto, un analista de otro cliente veía
@@ -191,6 +196,8 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         if cond_scope is not None:
             query_personas = query_personas.filter(cond_scope)
         query_personas = aplicar_filtros_extra(query_personas, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
+        if dni_filtro:
+            query_personas = query_personas.filter(Persona.dni == dni_filtro)
         personas = {p.dni: p for p in query_personas.all()}
         nombre_de = {dni: p.nombre_completo for dni, p in personas.items()}
         # Nombre del SUPERVISOR -- consulta aparte, sin condicion_scope().
@@ -348,6 +355,79 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     )
     frescura = {"ultima_sync": ultima_sync_peru, "fecha": fecha, "ayer": ayer}
     return resumen, filas, frescura
+
+
+def historico_persona(dni_filtro, desde, hasta, usuario_actual=None):
+    """Como _cargar_reporte(..., salida_mismo_dia=True) pero para UNA sola
+    persona a lo largo de un rango de fechas, en una sola tanda de
+    consultas (Davor, 2026-09-01, "Histórico diario" con rango + filtro de
+    mercaderista). Llamar a _cargar_reporte() una vez POR DÍA tardaba ~2.5s
+    por día (7+ consultas cada vez, incluidas cosas que no cambian entre
+    llamadas como feriados/supervisor) -- para un rango de varias semanas
+    eso pasaba largamente el timeout del worker en Render. Acá se trae
+    TODO el rango de una, y se arma cada fila en memoria.
+
+    No incluye supervisor/región/etc -- son constantes para una sola
+    persona, no hace falta resolverlos por fila (a diferencia de
+    _cargar_reporte(), que muestra varias personas a la vez)."""
+    session = get_session()
+    try:
+        query = session.query(Persona).filter(Persona.dni == dni_filtro)
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        persona = query.first()
+        if persona is None:
+            return [], None
+
+        filas_rango = (
+            session.query(ClasificacionDiaria)
+            .filter(ClasificacionDiaria.dni == dni_filtro, ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
+            .order_by(ClasificacionDiaria.fecha.desc())
+            .all()
+        )
+        if not filas_rango:
+            return [], None
+
+        # Mismo criterio que correcciones_recientes en _cargar_reporte(),
+        # pero para TODO el rango de una -- el motivo/comentario recién
+        # guardado desde la web aparece de una, sin esperar a que el motor
+        # vuelva a correr (ver ese comentario más arriba para el porqué).
+        correcciones = (
+            session.query(CorreccionWeb)
+            .filter(CorreccionWeb.dni == dni_filtro, CorreccionWeb.fecha >= desde, CorreccionWeb.fecha <= hasta)
+            .order_by(CorreccionWeb.fecha_registro.desc())
+            .all()
+        )
+        override_entrada_por_fecha, override_salida_por_fecha = {}, {}
+        for corr in correcciones:
+            if corr.comentario_entrada and corr.fecha not in override_entrada_por_fecha:
+                override_entrada_por_fecha[corr.fecha] = corr.comentario_entrada
+            if corr.comentario_salida and corr.fecha not in override_salida_por_fecha:
+                override_salida_por_fecha[corr.fecha] = corr.comentario_salida
+
+        filas = []
+        ultima_sync = None
+        for c in filas_rango:
+            filas.append({
+                "dni": c.dni, "mercaderista": persona.nombre_completo,
+                "fecha_str": c.fecha.isoformat(),
+                "canal_hoy_mostrar": _canal_para_mostrar(c.canales_marcados, persona.canal),
+                "entrada_prog": c.entrada_esperada,
+                "entrada_real": c.entrada_real,
+                "estado": c.estado,
+                "comentario_entrada": _homologar_motivo(override_entrada_por_fecha.get(c.fecha, c.comentario_supervisor)) or "",
+                "salida_prog": c.salida_esperada,
+                "salida_real": c.salida_real,
+                "salida_temprana": bool(c.salida_anticipada_min and c.salida_anticipada_min > SALIDA_ANTICIPADA_MIN),
+                "comentario_salida": _homologar_motivo(override_salida_por_fecha.get(c.fecha, c.comentario_supervisor)) or "",
+            })
+            if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):
+                ultima_sync = c.procesado_en
+        ultima_sync_peru = ultima_sync.replace(tzinfo=ZoneInfo("UTC")).astimezone(PERU_TZ) if ultima_sync else None
+        return filas, ultima_sync_peru
+    finally:
+        session.close()
 
 
 def _motivos_falta():

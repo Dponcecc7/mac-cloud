@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
-from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo
+from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, get_session
 from excel_safety import fila_segura
@@ -847,6 +847,9 @@ def ficha(dni):
     )
 
 
+HISTORICO_MAX_DIAS_RANGO = 31  # ~1 mes -- cada dia es una consulta aparte (ver mas abajo), un rango gigante seria muy lento
+
+
 @bp.get("/historico")
 @requiere_pagina("reportes_historico")
 def historico():
@@ -861,7 +864,16 @@ def historico():
     boton que salga editar y abajo se escriba la nueva hora, algo mas
     pequeño") -- postea directo a historial.crear(), mismo motor que ya
     usa "Historial de cambios" para forzar un horario distinto al Maestro/
-    Patrón, sin duplicar esa lógica acá."""
+    Patrón, sin duplicar esa lógica acá.
+
+    Modo mercaderista (Davor, 2026-09-01: "debo poner un rango de fechas y
+    me debe salir un filtro de mercaderista... me debe salir de forma
+    diaria en modo horizontal cada día su detalle") -- si se elige una
+    persona puntual, la vista cambia de "todos en un solo día" a "un día
+    por fila para esa sola persona", en el rango elegido (tope
+    HISTORICO_MAX_DIAS_RANGO). Reusa _cargar_reporte(dni_filtro=...) UNA
+    VEZ POR DÍA -- cada llamada ya es barata (acotada a un solo DNI), pero
+    son varias consultas por día, por eso el tope al rango."""
     fecha_str = request.args.get("fecha") or dt.date.today().isoformat()
     try:
         fecha = dt.date.fromisoformat(fecha_str)
@@ -870,6 +882,55 @@ def historico():
         fecha_str = fecha.isoformat()
 
     filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles = _filtros_admin()
+    solo_incidencias = request.args.get("solo_incidencias") == "1"
+
+    # El filtro de mercaderista es solo para quien YA tiene los demas
+    # filtros (admin/analista) -- mismo criterio que _filtros_admin().
+    mercaderista_filtro = (request.args.get("mercaderista") or "") if roles_disponibles else ""
+    mercaderistas_disponibles = []
+    if roles_disponibles:
+        session = get_session()
+        try:
+            cond_scope = condicion_scope(Persona, current_user)
+            query_m = session.query(Persona.dni, Persona.nombre_completo)
+            if cond_scope is not None:
+                query_m = query_m.filter(cond_scope)
+            mercaderistas_disponibles = sorted(
+                ((dni, nombre) for dni, nombre in query_m.all()), key=lambda p: (p[1] or "").title(),
+            )
+        finally:
+            session.close()
+
+    if mercaderista_filtro:
+        desde_str = request.args.get("desde") or fecha_str
+        hasta_str = request.args.get("hasta") or fecha_str
+        try:
+            desde, hasta = dt.date.fromisoformat(desde_str), dt.date.fromisoformat(hasta_str)
+        except ValueError:
+            desde = hasta = fecha
+        if hasta < desde:
+            desde, hasta = hasta, desde
+        if (hasta - desde).days > HISTORICO_MAX_DIAS_RANGO:
+            desde = hasta - dt.timedelta(days=HISTORICO_MAX_DIAS_RANGO)
+        desde_str, hasta_str = desde.isoformat(), hasta.isoformat()
+
+        filas, ultima_sync = historico_persona(mercaderista_filtro, desde, hasta, usuario_actual=current_user)
+        hay_datos_del_dia = bool(filas)
+        if solo_incidencias and filas:
+            filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
+        mercaderista_nombre = dict(mercaderistas_disponibles).get(mercaderista_filtro, mercaderista_filtro)
+        return render_template(
+            "reportes_historico.html", usuario=current_user, activo="historico",
+            modo_mercaderista=True, mercaderista_filtro=mercaderista_filtro, mercaderistas_disponibles=mercaderistas_disponibles,
+            mercaderista_nombre=mercaderista_nombre,
+            desde_str=desde_str, hasta_str=hasta_str,
+            fecha_str=fecha_str, resumen=None, filas=filas, frescura={"ultima_sync": ultima_sync} if ultima_sync else None,
+            fecha_reciente=None, hay_datos_del_dia=hay_datos_del_dia,
+            filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
+            supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
+            canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
+        )
+
     resumen, filas, frescura = _cargar_reporte(
         fecha, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
@@ -882,12 +943,13 @@ def historico():
     # (no acota qué se trae de la base, solo qué se muestra) -- el resumen
     # de arriba (asistio/tardanza/falta) sigue mostrando el total del día
     # completo, sin importar el check.
-    solo_incidencias = request.args.get("solo_incidencias") == "1"
     if solo_incidencias and filas:
         filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
     fecha_reciente = None if hay_datos_del_dia else _fecha_mas_reciente_con_datos()
     return render_template(
         "reportes_historico.html", usuario=current_user, activo="historico",
+        modo_mercaderista=False, mercaderista_filtro=mercaderista_filtro, mercaderistas_disponibles=mercaderistas_disponibles,
+        desde_str=fecha_str, hasta_str=fecha_str,
         fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura, fecha_reciente=fecha_reciente,
         hay_datos_del_dia=hay_datos_del_dia,
         filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,

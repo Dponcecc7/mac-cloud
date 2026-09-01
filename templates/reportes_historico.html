@@ -137,7 +137,7 @@
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
     </nav>
 
-    <div class="note"><b>A diferencia de Reporte diario</b>, acá la Salida es la del MISMO día que la entrada (no la de ayer) -- pensado para mirar un día puntual del pasado, no para mandar un reporte a media tarde. La Hora entrada/salida <b>programada</b> se puede editar acá mismo para ese día puntual (queda registrado en Historial de cambios).</div>
+    <div class="note"><b>A diferencia de Reporte diario</b>, acá la Salida es la del MISMO día que la entrada (no la de ayer) -- pensado para mirar un día puntual del pasado, no para mandar un reporte a media tarde. La Hora entrada/salida <b>programada</b> se puede editar acá mismo para ese día puntual (queda registrado en Historial de cambios). Elegí un <b>mercaderista</b> abajo para ver su detalle día por día en un rango de fechas (hasta 31 días).</div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
@@ -151,7 +151,15 @@
         <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}"><input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
         <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
         <input type="hidden" name="solo_incidencias" value="{{ '1' if solo_incidencias else '' }}">
+        {% if modo_mercaderista %}
+        <input type="hidden" name="mercaderista" value="{{ mercaderista_filtro }}">
+        <input type="date" name="desde" value="{{ desde_str }}">
+        <span style="color:var(--muted);">→</span>
+        <input type="date" name="hasta" value="{{ hasta_str }}">
+        <button class="btn primary" type="submit">Aplicar</button>
+        {% else %}
         <input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()">
+        {% endif %}
       </form>
       {% if resumen %}
       <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
@@ -165,6 +173,11 @@
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
         <input type="hidden" name="fecha" value="{{ fecha_str }}">
+        {% if modo_mercaderista %}<input type="hidden" name="desde" value="{{ desde_str }}"><input type="hidden" name="hasta" value="{{ hasta_str }}">{% endif %}
+        <select name="mercaderista">
+          <option value="">Mercaderista: todos (un día)</option>
+          {% for dni, nombre in mercaderistas_disponibles %}<option value="{{ dni }}" {{ 'selected' if mercaderista_filtro == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+        </select>
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -199,7 +212,10 @@
     {% if not filas %}
       <div class="panel">
         <div class="empty-state">
-          {% if hay_datos_del_dia %}
+          {% if modo_mercaderista %}
+          <span class="empty-icon">📋</span>
+          <span class="empty-title">Sin datos de {{ mercaderista_nombre|title }} entre el {{ desde_str }} y el {{ hasta_str }}</span>
+          {% elif hay_datos_del_dia %}
           <span class="empty-icon">✅</span>
           <span class="empty-title">Nadie con tardanza ni salida antes de hora el {{ fecha_str }}</span>
           <span class="empty-hint">Destildá el check de arriba para ver a todos.</span>
@@ -218,23 +234,35 @@
       </div>
     {% else %}
     <div class="panel">
-      <p class="panel-title">Detalle del {{ fecha_str }}</p>
+      <p class="panel-title">
+        {% if modo_mercaderista %}{{ mercaderista_nombre|title }} -- del {{ desde_str }} al {{ hasta_str }}{% else %}Detalle del {{ fecha_str }}{% endif %}
+      </p>
       <div class="table-wrap">
       <table>
         <tr>
+          {% if modo_mercaderista %}
+          <th>Fecha</th><th>Canal ese día</th>
+          {% else %}
           <th>Supervisor</th><th>Ciudad</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
+          {% endif %}
           <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada</th>
           <th>Salida prog.</th><th>Salida real</th><th>Comentario salida</th>
         </tr>
         {% for f in filas %}
         {% set eb = (f.estado or '').split(' (')[0] %}
         {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+        {% set fila_fecha = f.fecha_str if modo_mercaderista else fecha_str %}
         <tr>
+          {% if modo_mercaderista %}
+          <td>{{ fila_fecha }}</td>
+          <td>{{ f.canal_hoy_mostrar|title }}</td>
+          {% else %}
           <td>{{ (f.supervisor or '')|title }}</td>
           <td>{{ (f.ciudad or '')|title }}</td>
           <td>{{ (f.rol or '')|title }}</td>
           <td>{{ f.canal_hoy_mostrar|title }}</td>
           <td>{{ f.mercaderista|title }}</td>
+          {% endif %}
           <td>
             {{ f.entrada_prog or '—' }}
             <details class="edit-hora">
@@ -243,8 +271,8 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="dni" value="{{ f.dni }}">
                 <input type="hidden" name="campo" value="Hora entrada programada">
-                <input type="hidden" name="fecha_desde" value="{{ fecha_str }}">
-                <input type="hidden" name="fecha_hasta" value="{{ fecha_str }}">
+                <input type="hidden" name="fecha_desde" value="{{ fila_fecha }}">
+                <input type="hidden" name="fecha_hasta" value="{{ fila_fecha }}">
                 <input type="hidden" name="volver" value="{{ request.full_path }}">
                 <input type="time" name="valor_nuevo" required>
                 <button type="submit">Guardar</button>
@@ -262,8 +290,8 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="dni" value="{{ f.dni }}">
                 <input type="hidden" name="campo" value="Hora salida programada">
-                <input type="hidden" name="fecha_desde" value="{{ fecha_str }}">
-                <input type="hidden" name="fecha_hasta" value="{{ fecha_str }}">
+                <input type="hidden" name="fecha_desde" value="{{ fila_fecha }}">
+                <input type="hidden" name="fecha_hasta" value="{{ fila_fecha }}">
                 <input type="hidden" name="volver" value="{{ request.full_path }}">
                 <input type="time" name="valor_nuevo" required>
                 <button type="submit">Guardar</button>
