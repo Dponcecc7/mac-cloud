@@ -156,7 +156,7 @@ def _dia_habil_anterior(fecha, feriados_set):
     return d
 
 
-def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False, incluir_dados_de_baja=False):
+def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
 
@@ -274,13 +274,11 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         # -- el motor la calculo ANTES de la baja (mientras todavia estaba
         # Activo en el Maestro) y no vuelve a tocar a alguien que ya no
         # esta Activo. Sin este filtro, la persona seguia apareciendo en
-        # Reporte diario como "Falta" el mismo dia que se le dio de baja,
-        # aunque ya no corresponda seguir haciendole seguimiento.
-        # incluir_dados_de_baja=True en marcar_vista() a proposito -- el
-        # panel "Faltas/Vacaciones/Vacantes de hoy" de Marcar asistencia
-        # necesita seguir viendo estas posiciones (para saber que falta
-        # cubrirlas con un reemplazo), no debe desaparecer con este filtro.
-        if not incluir_dados_de_baja and p is not None and p.fecha_baja is not None and p.fecha_baja <= fecha:
+        # Reporte diario/Marcar asistencia como "Falta" el mismo dia que se
+        # le dio de baja. "No habria porque tenerla ese dia" (Davor) -- para
+        # agregar su reemplazo esta "Agregar reemplazo" (tiene su propia
+        # lista de vacantes pendientes, independiente de este reporte).
+        if p is not None and p.fecha_baja is not None and p.fecha_baja <= fecha:
             continue
         ayer_c = filas_ayer.get(c.dni)
         fuente_salida = c if salida_mismo_dia else ayer_c
@@ -615,7 +613,6 @@ def marcar_vista():
         fecha, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
-        incluir_dados_de_baja=True,
     )
     pendientes = _pendientes_de_marcar(filas) if filas else []
     marcaron = _ya_marcaron(filas) if filas else []
@@ -1345,6 +1342,7 @@ def dar_de_baja_submit():
             persona.estado = "Vacante"
             persona.fecha_baja = fecha_baja
             persona.motivo_baja = motivo
+            persona.dado_de_baja_por = current_user.email
             session.commit()
             titulo, ok = "Baja registrada", True
             detalle = (

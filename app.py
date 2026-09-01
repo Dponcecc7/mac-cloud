@@ -649,6 +649,7 @@ def create_app():
                 persona.estado = "Activo"
                 persona.fecha_baja = None
                 persona.motivo_baja = None
+                persona.dado_de_baja_por = None
                 dim_session.commit()
                 flash(f"{persona.nombre_completo.title()} reactivado.", "ok")
         finally:

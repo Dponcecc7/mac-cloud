@@ -64,6 +64,11 @@ class Persona(Base):
     reemplaza_a_dni = Column(String(15), ForeignKey("personas.dni", ondelete="SET NULL"))
     es_reingreso = Column(Boolean, default=False)
     motivo_baja = Column(String(200))
+    # Quien dio de baja (Davor, 2026-09-01: "en dar de baja debe quedar el
+    # historico de a quienes hemos sacado, lo mismo en agregar headcount")
+    # -- mismo criterio que registrado_por/fecha_registro para altas, pero
+    # para el otro extremo del ciclo de vida.
+    dado_de_baja_por = Column(String(150))
     registrado_por = Column(String(150))
     fecha_registro = Column(Date)
     # Fase 4 (2026-08-21): a quien pertenece esta persona -- el correo del

@@ -101,7 +101,7 @@ def exportar_maestro(session, personas_por_dni):
         "DNI", "Nombre completo", "Fecha de ingreso", "Fecha de baja", "Estado",
         "Reemplaza_a (DNI)", "Es reingreso (Sí/No)", "Rol", "Canal", "Región",
         "Ciudad / Mercado", "Zona / Ruta asignada", "Supervisor asignado",
-        "Correo corporativo", "Motivo de baja", "Registrado por", "Fecha de registro",
+        "Correo corporativo", "Motivo de baja", "Dado de baja por", "Registrado por", "Fecha de registro",
     ]
     filas = []
     for p in session.query(Persona).order_by(Persona.dni).all():
@@ -110,7 +110,7 @@ def exportar_maestro(session, personas_por_dni):
             p.estado, (int(p.reemplaza_a_dni) if p.reemplaza_a_dni and p.reemplaza_a_dni.isdigit() else p.reemplaza_a_dni),
             "Sí" if p.es_reingreso else "No", p.rol, p.canal, p.region, p.ciudad, p.zona,
             _nombre_supervisor(personas_por_dni, p.supervisor_dni), p.correo, p.motivo_baja,
-            p.registrado_por, p.fecha_registro,
+            p.dado_de_baja_por, p.registrado_por, p.fecha_registro,
         ])
     _escribir_tabla_dimension(
         "1_Maestro_Headcount.xlsx", "Maestro Headcount", "MaestroHeadcount", columnas, filas,
