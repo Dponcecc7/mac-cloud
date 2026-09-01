@@ -105,10 +105,20 @@ def _canal_para_mostrar(marcado, canal_asignado):
     Autoservicio de verdad). Mostrar "Otro" tal cual parece un dato
     faltante -- Davor, 2026-08-31: "igual deberia aparecer el canal, no
     debe salir Otro". Se usa el canal asignado de la persona en su lugar
-    cuando no hay nada mas util que mostrar."""
-    if not marcado or marcado.strip() == "Otro":
-        return canal_asignado or marcado or ""
-    return marcado
+    cuando no hay nada mas util que mostrar.
+
+    `marcado` puede traer VARIOS canales el mismo dia unidos por coma (ej.
+    "Farmacia, Otro" -- visito Farmacia y ademas un punto administrativo/
+    censo) -- comparar el string COMPLETO contra "Otro" solo agarraba el
+    caso de un unico canal; con dos o mas, "Otro" se seguia colando igual
+    (Davor, 2026-09-01: "porque sale canal Otro? eso esta mal"). Se filtra
+    "Otro" de la lista en vez de todo-o-nada."""
+    if not marcado:
+        return canal_asignado or ""
+    partes = [p.strip() for p in marcado.split(",") if p.strip() and p.strip() != "Otro"]
+    if partes:
+        return ", ".join(partes)
+    return canal_asignado or marcado or ""
 
 _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 
