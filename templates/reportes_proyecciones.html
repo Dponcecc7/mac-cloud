@@ -213,7 +213,7 @@
     {% endif %}
 
     <h2 class="subtitle">🎯 Ranking de próxima falta probable</h2>
-    <p class="note" style="margin-top:0;">0-100, combina estacionalidad del día de hoy para esa persona (30%), su score de riesgo de rotación (40%) y sus faltas/tardanzas de los últimos 14 días con más peso a la última semana (30%).</p>
+    <p class="note" style="margin-top:0;">0-100, combina la estacionalidad del mejor día proyectado para esa persona dentro de los próximos 7 días (30%), su score de riesgo de rotación (40%) y sus faltas/tardanzas de los últimos 14 días con más peso a la última semana (30%).</p>
     {% if not proxima_falta %}
       <p class="empty">Sin personas para evaluar con este filtro.</p>
     {% else %}
@@ -222,7 +222,7 @@
         <div class="ranking-pos">{{ loop.index }}</div>
         <div class="ranking-cuerpo">
           <div class="ranking-nombre"><a href="{{ url_for('reportes.ficha', dni=r.dni) }}">{{ r.nombre|title }}</a></div>
-          <div class="ranking-detalle">{{ r.dia_semana_hoy }}: {{ r.pct_falta_dia_hoy }}% histórico de falta ese día</div>
+          <div class="ranking-detalle">Día proyectado: {{ r.dia_semana_proyectado }} {{ r.fecha_proyectada[8:10] }}/{{ r.fecha_proyectada[5:7] }} ({{ r.pct_falta_dia_proyectado }}% histórico de falta ese día de semana)</div>
         </div>
         <div class="ranking-score">{{ r.score }}</div>
       </div>

@@ -305,13 +305,20 @@ def score_riesgo_rotacion(usuario_actual, rol_filtro=None, region_filtro=None, s
     return resultado
 
 
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+HORIZONTE_PROYECCION_DIAS = 7  # "en los próximos 7 días", ver docstring del módulo
+
+
 def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, riesgo=None, estacionalidad_equipo=None):
     """El techo de las 3 funciones de arriba: score 0-100 por persona que
-    combina estacionalidad individual (o del equipo si no hay suficiente
-    historia propia) del día de hoy, su score_riesgo_rotacion(), y sus
-    faltas/tardanzas de los últimos 14 días (recencia simple: cuentan
-    doble las de la última semana) -- para decirle al supervisor a quién
-    prestarle atención ANTES de que falte.
+    combina estacionalidad (individual, o del equipo si no hay suficiente
+    historia propia) del MEJOR día dentro de los próximos
+    HORIZONTE_PROYECCION_DIAS (Davor, 2026-09-01: "sería bueno que indique
+    el día que proyectamos a faltar" -- antes solo miraba el día de hoy),
+    su score_riesgo_rotacion(), y sus faltas/tardanzas de los últimos 14
+    días (recencia simple: cuentan doble las de la última semana) -- para
+    decirle al supervisor a quién prestarle atención y CUÁNDO, antes de
+    que falte.
 
     `riesgo`/`estacionalidad_equipo`: si ya se calcularon afuera (ver
     reportes.py::proyecciones()), se reusan -- mismo motivo que
@@ -323,13 +330,19 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     riesgo_por_dni = {r["dni"]: r["score"] for r in riesgo}
 
     hoy = dt.date.today()
-    dia_semana_hoy = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][hoy.weekday()]
+    # Ventana de proyección: hoy + los próximos días, saltando domingo (el
+    # motor nunca genera fila ese día, no tiene sentido "proyectar" ahí).
+    dias_ventana = []
+    cursor = hoy
+    while len(dias_ventana) < HORIZONTE_PROYECCION_DIAS:
+        if cursor.weekday() != 6:
+            dias_ventana.append(cursor)
+        cursor += dt.timedelta(days=1)
 
     estacionalidad_individual = _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
     if estacionalidad_equipo is None:
         estacionalidad_equipo = estacionalidad_faltas(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
-    estacionalidad_equipo = {e["dia"]: e["pct_falta"] for e in estacionalidad_equipo}
-    pct_falta_hoy_equipo = estacionalidad_equipo.get(dia_semana_hoy, 0)
+    pct_equipo_por_dia = {e["dia"]: e["pct_falta"] for e in estacionalidad_equipo}
 
     session = get_session()
     try:
@@ -356,15 +369,27 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     resultado = []
     for r in riesgo:
         dni = r["dni"]
-        pct_falta_hoy = estacionalidad_individual.get(dni, {}).get(dia_semana_hoy, pct_falta_hoy_equipo)
-        comp_estacionalidad = min(pct_falta_hoy, 100.0)
+        # De los próximos días, el que tenga el % histórico de falta MÁS
+        # ALTO para esa persona (o del equipo si no tiene suficiente
+        # historia propia ese día de semana) es el "día proyectado".
+        mejor_fecha, mejor_pct = dias_ventana[0], -1.0
+        for fecha_candidata in dias_ventana:
+            dia_semana = DIAS_ES[fecha_candidata.weekday()]
+            pct = estacionalidad_individual.get(dni, {}).get(dia_semana, pct_equipo_por_dia.get(dia_semana, 0))
+            if pct > mejor_pct:
+                mejor_pct, mejor_fecha = pct, fecha_candidata
+        mejor_pct = max(mejor_pct, 0.0)
+
+        comp_estacionalidad = min(mejor_pct, 100.0)
         comp_riesgo = riesgo_por_dni.get(dni, 0)
         comp_reciente = min(incidencias_recientes.get(dni, 0) / max_incidencias * 100, 100.0)
 
         score = comp_estacionalidad * 0.3 + comp_riesgo * 0.4 + comp_reciente * 0.3
         resultado.append({
             "dni": dni, "nombre": r["nombre"], "score": round(score, 1),
-            "pct_falta_dia_hoy": round(pct_falta_hoy, 1), "dia_semana_hoy": dia_semana_hoy,
+            "pct_falta_dia_proyectado": round(mejor_pct, 1),
+            "dia_semana_proyectado": DIAS_ES[mejor_fecha.weekday()],
+            "fecha_proyectada": mejor_fecha.isoformat(),
         })
     resultado.sort(key=lambda r: r["score"], reverse=True)
     return resultado
