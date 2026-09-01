@@ -30,10 +30,11 @@ DIAS_ANTIGUEDAD_RIESGO = 90  # menos de 3 meses en el puesto = bonus de riesgo
 
 # Pesos del score de riesgo de rotación (documentados acá, no mágicos en el
 # cálculo) -- señales de Desempeño ya validadas + antigüedad + rotación
-# histórica de su supervisor.
-PESO_SENALES = 0.40
+# histórica de su CIUDAD (ajustado por Davor, 2026-09-01 -- antes era
+# 40/20/40 con rotación por supervisor).
+PESO_SENALES = 0.60
 PESO_ANTIGUEDAD = 0.20
-PESO_ROTACION_SUPERVISOR = 0.40
+PESO_ROTACION_CIUDAD = 0.20
 
 
 def _meses_observados(hasta=None):
@@ -56,19 +57,14 @@ def _personas_visibles(usuario_actual, rol_filtro=None, region_filtro=None, supe
         session.close()
 
 
-def tasa_rotacion_por_supervisor(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
-    """{supervisor_dni: {"headcount_actual", "bajas_historicas", "tasa_mensual_pct", "preliminar"}}
+def _tasa_rotacion_por(clave_de, usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+    """{clave: {"headcount_actual", "bajas_historicas", "tasa_mensual_pct", "preliminar"}}
     -- tasa de rotación mensual aproximada: bajas históricas / tamaño
-    promedio del equipo (activos + bajas, ya que no hay snapshots mes a mes
-    de headcount) / meses observados desde INICIO_SISTEMA. Alimenta el
-    score de riesgo de rotación y la necesidad de contratación proyectada
-    -- no es su propia sección en pantalla.
-
-    Público (sin `_`) a propósito: reportes.py::proyecciones() lo calcula
-    UNA sola vez y lo pasa a score_riesgo_rotacion()/necesidad_contratacion()
-    via `tasas_sup=` -- son consultas idénticas, calcularlo 3 veces por
-    request fue el mismo error de duplicar calcular_detalle_semana() que
-    ya tumbó Desempeño con 503 en Render (Davor, 2026-09-01)."""
+    promedio del grupo (activos + bajas, ya que no hay snapshots mes a mes
+    de headcount) / meses observados desde INICIO_SISTEMA. `clave_de(persona)`
+    decide el agrupamiento (por supervisor_dni, por ciudad, etc.) -- helper
+    compartido por tasa_rotacion_por_supervisor()/tasa_rotacion_por_ciudad()
+    para no duplicar esta consulta+cálculo por cada dimensión."""
     activos = _personas_visibles(
         usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro, solo_activos=True
     )
@@ -86,27 +82,52 @@ def tasa_rotacion_por_supervisor(usuario_actual, rol_filtro=None, region_filtro=
     meses = _meses_observados()
     preliminar = meses < MESES_MINIMOS_CONFIABLE
 
-    headcount_por_sup = {}
+    headcount_por_clave = {}
     for p in activos:
-        if p.supervisor_dni:
-            headcount_por_sup.setdefault(p.supervisor_dni, []).append(p)
-    bajas_por_sup = {}
+        clave = clave_de(p)
+        if clave:
+            headcount_por_clave.setdefault(clave, []).append(p)
+    bajas_por_clave = {}
     for p in bajas:
-        if p.supervisor_dni:
-            bajas_por_sup.setdefault(p.supervisor_dni, []).append(p)
+        clave = clave_de(p)
+        if clave:
+            bajas_por_clave.setdefault(clave, []).append(p)
 
-    supervisores = set(headcount_por_sup) | set(bajas_por_sup)
+    claves = set(headcount_por_clave) | set(bajas_por_clave)
     resultado = {}
-    for sup_dni in supervisores:
-        headcount_actual = len(headcount_por_sup.get(sup_dni, []))
-        bajas_historicas = len(bajas_por_sup.get(sup_dni, []))
+    for clave in claves:
+        headcount_actual = len(headcount_por_clave.get(clave, []))
+        bajas_historicas = len(bajas_por_clave.get(clave, []))
         tamano_promedio = max(headcount_actual + bajas_historicas, 1)
         tasa_mensual_pct = bajas_historicas / tamano_promedio / meses * 100
-        resultado[sup_dni] = {
+        resultado[clave] = {
             "headcount_actual": headcount_actual, "bajas_historicas": bajas_historicas,
             "tasa_mensual_pct": round(tasa_mensual_pct, 1), "preliminar": preliminar,
         }
     return resultado
+
+
+def tasa_rotacion_por_supervisor(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+    """{supervisor_dni: {...}} -- alimenta necesidad_contratacion() (por
+    supervisor, para saber a quién anticiparle el reclutamiento).
+
+    Público (sin `_`) a propósito: reportes.py::proyecciones() lo calcula
+    UNA sola vez y lo pasa a necesidad_contratacion() via `tasas_sup=` --
+    calcularlo por cada función que lo necesita fue el mismo error de
+    duplicar calcular_detalle_semana() que ya tumbó Desempeño con 503 en
+    Render (Davor, 2026-09-01)."""
+    return _tasa_rotacion_por(
+        lambda p: p.supervisor_dni, usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro
+    )
+
+
+def tasa_rotacion_por_ciudad(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+    """{ciudad: {...}} -- alimenta score_riesgo_rotacion() (ajustado por
+    Davor, 2026-09-01: la rotación histórica de la CIUDAD, no del
+    supervisor, es la que cuenta para el riesgo por persona)."""
+    return _tasa_rotacion_por(
+        lambda p: p.ciudad, usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro
+    )
 
 
 def necesidad_contratacion(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, tasas_sup=None):
@@ -225,15 +246,16 @@ def _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supe
     return resultado
 
 
-def score_riesgo_rotacion(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, tasas_sup=None, señales=None):
+def score_riesgo_rotacion(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, tasas_ciudad=None, señales=None):
     """Lista de dicts {dni, nombre, score, detalle} ordenada de mayor a
     menor riesgo -- puntaje 0-100 combinando (pesos en PESO_SENALES/
-    PESO_ANTIGUEDAD/PESO_ROTACION_SUPERVISOR): cuántas señales de
-    Desempeño tiene activas ahora mismo, si es de ingreso reciente
-    (< DIAS_ANTIGUEDAD_RIESGO días), y la tasa de rotación histórica de su
-    supervisor relativa al promedio del equipo visible.
+    PESO_ANTIGUEDAD/PESO_ROTACION_CIUDAD, ajustados por Davor 2026-09-01):
+    cuántas señales de Desempeño tiene activas ahora mismo, si es de
+    ingreso reciente (< DIAS_ANTIGUEDAD_RIESGO días), y la tasa de
+    rotación histórica de su CIUDAD relativa al promedio del equipo
+    visible.
 
-    `tasas_sup`/`señales`: si ya se calcularon afuera (ver
+    `tasas_ciudad`/`señales`: si ya se calcularon afuera (ver
     reportes.py::proyecciones()), se reusan en vez de volver a consultar
     -- insights_equipo() es lo más pesado de todo el reporte (llama a
     calcular_detalle_semana()), no se puede dar el lujo de recalcularlo
@@ -252,9 +274,9 @@ def score_riesgo_rotacion(usuario_actual, rol_filtro=None, region_filtro=None, s
     for s in señales:
         señales_por_dni[s["dni"]] = señales_por_dni.get(s["dni"], 0) + 1
 
-    if tasas_sup is None:
-        tasas_sup = tasa_rotacion_por_supervisor(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
-    tasas_validas = [d["tasa_mensual_pct"] for d in tasas_sup.values()]
+    if tasas_ciudad is None:
+        tasas_ciudad = tasa_rotacion_por_ciudad(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
+    tasas_validas = [d["tasa_mensual_pct"] for d in tasas_ciudad.values()]
     tasa_promedio_equipo = sum(tasas_validas) / len(tasas_validas) if tasas_validas else 0
 
     hoy = dt.date.today()
@@ -266,18 +288,18 @@ def score_riesgo_rotacion(usuario_actual, rol_filtro=None, region_filtro=None, s
         dias_antiguedad = (hoy - p.fecha_ingreso).days if p.fecha_ingreso else None
         comp_antiguedad = 100.0 if dias_antiguedad is not None and dias_antiguedad < DIAS_ANTIGUEDAD_RIESGO else 0.0
 
-        tasa_sup = tasas_sup.get(p.supervisor_dni, {}).get("tasa_mensual_pct", 0) if p.supervisor_dni else 0
+        tasa_ciudad = tasas_ciudad.get(p.ciudad, {}).get("tasa_mensual_pct", 0) if p.ciudad else 0
         if tasa_promedio_equipo > 0:
-            comp_rotacion = min(tasa_sup / tasa_promedio_equipo * 50, 100.0)
+            comp_rotacion = min(tasa_ciudad / tasa_promedio_equipo * 50, 100.0)
         else:
             comp_rotacion = 0.0
 
-        score = comp_señales * PESO_SENALES + comp_antiguedad * PESO_ANTIGUEDAD + comp_rotacion * PESO_ROTACION_SUPERVISOR
+        score = comp_señales * PESO_SENALES + comp_antiguedad * PESO_ANTIGUEDAD + comp_rotacion * PESO_ROTACION_CIUDAD
         resultado.append({
             "dni": p.dni, "nombre": p.nombre_completo,
             "score": round(score, 1),
             "n_señales": n_señales, "ingreso_reciente": comp_antiguedad == 100.0,
-            "tasa_rotacion_supervisor": tasa_sup,
+            "tasa_rotacion_ciudad": tasa_ciudad,
         })
     resultado.sort(key=lambda r: r["score"], reverse=True)
     return resultado

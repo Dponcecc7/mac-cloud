@@ -174,7 +174,7 @@
     {% endif %}
 
     <h2 class="subtitle">⚠️ Score de riesgo de rotación por persona</h2>
-    <p class="note" style="margin-top:0;">0-100, combina señales activas de Desempeño (40%), ingreso reciente &lt; 90 días (20%) y la tasa de rotación histórica de su supervisor (40%).</p>
+    <p class="note" style="margin-top:0;">0-100, combina señales activas de Desempeño (60%), ingreso reciente &lt; 90 días (20%) y la tasa de rotación histórica de su ciudad (20%).</p>
     {% if not riesgo %}
       <p class="empty">Sin personas para evaluar con este filtro.</p>
     {% else %}
@@ -184,7 +184,7 @@
         <div class="ranking-cuerpo">
           <div class="ranking-nombre"><a href="{{ url_for('reportes.ficha', dni=r.dni) }}">{{ r.nombre|title }}</a></div>
           <div class="ranking-detalle">
-            {{ r.n_señales }} señal{{ 'es' if r.n_señales != 1 else '' }} de Desempeño activa{{ 's' if r.n_señales != 1 else '' }}{% if r.ingreso_reciente %} · ingreso reciente{% endif %}{% if r.tasa_rotacion_supervisor %} · rotación de su supervisor: {{ r.tasa_rotacion_supervisor }}%/mes{% endif %}
+            {{ r.n_señales }} señal{{ 'es' if r.n_señales != 1 else '' }} de Desempeño activa{{ 's' if r.n_señales != 1 else '' }}{% if r.ingreso_reciente %} · ingreso reciente{% endif %}{% if r.tasa_rotacion_ciudad %} · rotación de su ciudad: {{ r.tasa_rotacion_ciudad }}%/mes{% endif %}
           </div>
         </div>
         <div class="ranking-score">{{ r.score }}</div>
