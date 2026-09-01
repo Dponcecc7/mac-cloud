@@ -134,7 +134,7 @@
       </form>
       {% endif %}
       {% if resumen %}
-      <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
+      <span class="stat-pill" id="resumen-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
       {% endif %}
       {% if frescura and frescura.ultima_sync %}
       <span class="stat-pill">Datos hasta las {{ frescura.ultima_sync.strftime('%H:%M') }}</span>
@@ -163,7 +163,7 @@
       <div class="panel">
         <p class="panel-title">Filtros</p>
         <div class="form-row">
-          {% for campo, etiqueta in [('supervisor','Supervisor'), ('region','Región'), ('ciudad','Ciudad'), ('rol','Rol'), ('estado','Estado')] %}
+          {% for campo, etiqueta in [('supervisor','Supervisor'), ('region','Región'), ('ciudad','Ciudad'), ('rol','Rol'), ('canal','Canal'), ('estado','Estado')] %}
           <label class="field">{{ etiqueta }}
             <div class="ms">
               <button type="button" class="ms-toggle" id="btn-{{ campo }}" onclick="togglePanel('{{ campo }}')">Todos</button>
@@ -196,7 +196,7 @@
             {% set pendiente = f.entrada_pendiente or f.salida_pendiente %}
             {% set estado_tags = eb_corto + (',Pendiente confirmar hora' if pendiente else '') %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
-                data-rol="{{ (f.rol or '')|title }}" data-estado="{{ estado_tags }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
+                data-rol="{{ (f.rol or '')|title }}" data-canal="{{ (f.canal_hoy_mostrar or '')|title }}" data-estado="{{ estado_tags }}" data-mercaderista="{{ (f.mercaderista or '')|title }}"
                 data-temprana="{{ 'true' if f.salida_temprana else 'false' }}">
               <td>{{ (f.supervisor or '')|title }}</td>
               <td>{{ (f.ciudad or '')|title }}</td>
@@ -244,7 +244,7 @@
   </div>
 
 <script>
-const CAMPOS = ['supervisor', 'region', 'ciudad', 'rol', 'estado'];
+const CAMPOS = ['supervisor', 'region', 'ciudad', 'rol', 'canal', 'estado'];
 const seleccion = {};
 CAMPOS.forEach(c => seleccion[c] = new Set());
 
@@ -306,8 +306,28 @@ function filtrar() {
     const n = seleccion[campo].size;
     btn.textContent = n === 0 ? 'Todos' : (n === 1 ? [...seleccion[campo]][0] : `${n} seleccionados`);
   }
-  const visibles = new Set(coinciden(todas, null).map(f => f.el));
+  const visiblesFilas = coinciden(todas, null);
+  const visibles = new Set(visiblesFilas.map(f => f.el));
   for (const f of todas) f.el.classList.toggle('oculta', !visibles.has(f.el));
+
+  // El resumen ("X asistieron...") lo manda el servidor para el TOTAL del
+  // día sin filtrar -- con un filtro activo (supervisor/región/etc) debe
+  // reflejar solo lo que queda visible, no seguir mostrando el total de
+  // todos (Davor, 2026-09-01: "cuando hago un filtro tb se debe cambiar
+  // las cantidades... porque no son 144 con el filtro"). El primer tag de
+  // 'estado' es siempre el estado base (Asistió/Tardanza/Falta/...), el
+  // segundo (si existe) es "Pendiente confirmar hora", no cuenta acá.
+  const pill = document.getElementById('resumen-pill');
+  if (pill) {
+    let asistio = 0, tardanza = 0, falta = 0;
+    for (const f of visiblesFilas) {
+      const base = (f.estado || '').split(',')[0];
+      if (base === 'Asistió') asistio++;
+      else if (base === 'Tardanza') tardanza++;
+      else if (base === 'Falta') falta++;
+    }
+    pill.textContent = `${asistio} asistieron · ${tardanza} tardanza · ${falta} falta (total ${visiblesFilas.length})`;
+  }
 }
 document.addEventListener('DOMContentLoaded', filtrar);
 </script>

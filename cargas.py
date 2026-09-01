@@ -15,7 +15,6 @@ import pandas as pd
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
 from openpyxl.styles import Font
-from sqlalchemy import func
 
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
 from github_actions import disparar_workflow
@@ -54,6 +53,15 @@ def _si_no_a_bool(valor):
     return str(valor).strip().upper() == "SÍ" if pd.notna(valor) else False
 
 
+def _normalizar_nombre(nombre):
+    # .split() sin args colapsa CUALQUIER espacio en blanco Unicode,
+    # incluido \xa0 (espacio de no separación, típico al copiar/pegar desde
+    # Word/Excel) -- sin esto, "MARIA ... DE\xa0LA\xa0CRUZ" (como quedó
+    # guardado el nombre de Maria Plasencia) nunca matchea contra el mismo
+    # nombre tipeado con espacios normales, en silencio (Davor, 2026-09-01).
+    return " ".join(str(nombre).split()).upper() if nombre else ""
+
+
 def _hora(valor):
     return valor if pd.notna(valor) else None
 
@@ -69,21 +77,16 @@ COL_SUP_FARMACIA_AU = "Supervisor Farmacia/AU"
 COL_SUP_TRADICIONAL = "Supervisor Tradicional"
 
 
-def _resolver_supervisor_por_nombre(session, nombre):
-    """Busca un supervisor por nombre en TODA la tabla de personas, no solo
-    las del analista que sube el archivo -- a diferencia de
-    `supervisores_propios` (Supervisor asignado, columna base), acá el caso
-    de uso es justamente referenciar a un supervisor de OTRO canal/analista
-    (ej. Diego, Farmacia, apuntando al supervisor de Tradicional de un
+def _resolver_supervisor_por_nombre(supervisores, nombre):
+    """Busca un supervisor por nombre en `supervisores` (dict nombre
+    normalizado -> dni, ya construido para TODA la tabla de personas, no
+    solo las del analista que sube el archivo) -- el caso de uso es
+    justamente referenciar a un supervisor de OTRO canal/analista (ej.
+    Diego, Farmacia, apuntando al supervisor de Tradicional de un
     mercaderista compartido)."""
     if not nombre:
         return None
-    fila = (
-        session.query(Persona.dni)
-        .filter(func.upper(Persona.nombre_completo) == nombre.strip().upper(), Persona.rol == "SUPERVISORES")
-        .first()
-    )
-    return fila[0] if fila else None
+    return supervisores.get(_normalizar_nombre(nombre))
 
 
 def crear_persona_individual(
@@ -247,9 +250,21 @@ def headcount_submit():
         # exacto contra "SUPERVISORES" nunca los encontraba y el DNI
         # simplemente no se aplicaba, en silencio). Sigue sin matchear
         # "Asesora"/"Mercaderistas"/etc, solo tolera la variante singular.
+        #
+        # Sin filtro por analista_propietario a propósito (Davor, 2026-09-01:
+        # Jesus Marquez y Maria Plasencia De La Cruz, ambos de Diego, también
+        # supervisan gente de Autoservicios de Davor -- "permitir que estén
+        # en ambas cargas"). Un supervisor puede tener gente a cargo en el
+        # headcount de MÁS DE UN analista, así que el universo de supervisores
+        # resolubles es TODA la tabla Persona, no solo los del uploader.
+        # _normalizar_nombre (no .strip().upper() a secas) en las claves:
+        # Maria Plasencia quedó guardada con \xa0 en vez de espacio normal
+        # entre "DE"/"LA"/"CRUZ" (típico de copiar/pegar desde Word) y sin
+        # esto el nombre tipeado en el Excel (con espacios normales) nunca
+        # matcheaba, en silencio (Davor, 2026-09-01).
         supervisores_propios = {
-            per.nombre_completo.strip().upper(): per.dni
-            for per in session.query(Persona).filter_by(analista_propietario=propietario).all()
+            _normalizar_nombre(per.nombre_completo): per.dni
+            for per in session.query(Persona).all()
             if (per.rol or "").strip().upper().startswith("SUPERVISOR")
         }
         # Los supervisores de ESTE MISMO archivo se resuelven antes del loop
@@ -263,7 +278,7 @@ def headcount_submit():
         for _, fila_sup in m[m["Rol"].astype(str).str.strip().str.upper().str.startswith("SUPERVISOR")].iterrows():
             nombre_sup, dni_sup = _texto(fila_sup["Nombre completo"]), _dni(fila_sup["DNI"])
             if nombre_sup and dni_sup:
-                supervisores_propios[nombre_sup.strip().upper()] = dni_sup
+                supervisores_propios[_normalizar_nombre(nombre_sup)] = dni_sup
 
         pendientes_supervisor = []  # [(dni, supervisor_dni), ...] -- ver comentario mas abajo
         overrides_canal = []  # [(dni, canal, supervisor_dni), ...] -- ver COL_SUP_FARMACIA_AU/TRADICIONAL
@@ -301,7 +316,7 @@ def headcount_submit():
                 nombre_sup = _texto(row[columna])
                 if not nombre_sup:
                     continue
-                dni_sup = _resolver_supervisor_por_nombre(session, nombre_sup)
+                dni_sup = _resolver_supervisor_por_nombre(supervisores_propios, nombre_sup)
                 if dni_sup:
                     overrides_canal.extend((dni, canal, dni_sup) for canal in canales)
                 else:
@@ -312,7 +327,7 @@ def headcount_submit():
                 continue
 
             sup_texto = _texto(row["Supervisor asignado"])
-            supervisor_dni = supervisores_propios.get(sup_texto.strip().upper()) if sup_texto else None
+            supervisor_dni = supervisores_propios.get(_normalizar_nombre(sup_texto)) if sup_texto else None
             nombre = _texto(row["Nombre completo"]) or "(sin nombre)"
             rol = _texto(row["Rol"])
             # Canal forzado al del analista (Davor, 2026-08-27): antes se
