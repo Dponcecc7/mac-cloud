@@ -44,6 +44,28 @@
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .filtros-admin input[type=date] { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+
+    /* Buscador de mercaderista con sugerencias -- mismo patron que
+       "Perfil mercaderista" (reportes_perfil.html), reescalado para caber
+       inline en la fila de filtros en vez de ocupar toda la pantalla. */
+    .buscador { position:relative; }
+    .buscador .lupa { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:12px; pointer-events:none; }
+    .buscador input[type=text] {
+      font:inherit; font-size:12px; padding:7px 8px 7px 28px; border-radius:8px; border:1px solid var(--line);
+      background:var(--card); color:var(--ink); width:100%;
+    }
+    .buscador input[type=text]:focus { border-color:var(--brand); outline:none; }
+    .sugerencias {
+      position:absolute; top:calc(100% + 4px); left:0; min-width:220px; z-index:20;
+      background:var(--card); border:1px solid var(--line); border-radius:8px;
+      box-shadow:0 6px 18px rgba(35,25,10,.15); max-height:240px; overflow-y:auto;
+      list-style:none; margin:0; padding:4px; display:none;
+    }
+    .sugerencias li { padding:7px 9px; border-radius:6px; cursor:pointer; font-size:12.5px; }
+    .sugerencias li:hover, .sugerencias li.activa { background:var(--bg); }
+    .sugerencias li .dni-mini { color:var(--muted); font-size:10.5px; }
+    .sin-resultados { padding:7px 9px; font-size:12px; color:var(--muted); }
     .chk-incidencias { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink); cursor:pointer; }
     .chk-incidencias input { width:auto; margin:0; }
     td.temprana { background:var(--bad-bg); color:var(--bad); font-weight:700; }
@@ -146,21 +168,11 @@
     {% endwith %}
 
     <div class="top-actions">
+      {% if not roles_disponibles %}
       <form method="get">
-        <input type="hidden" name="rol" value="{{ filtro_args.rol }}"><input type="hidden" name="region" value="{{ filtro_args.region }}">
-        <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}"><input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
-        <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
-        <input type="hidden" name="solo_incidencias" value="{{ '1' if solo_incidencias else '' }}">
-        {% if modo_mercaderista %}
-        <input type="hidden" name="mercaderista" value="{{ mercaderista_filtro }}">
-        <input type="date" name="desde" value="{{ desde_str }}">
-        <span style="color:var(--muted);">→</span>
-        <input type="date" name="hasta" value="{{ hasta_str }}">
-        <button class="btn primary" type="submit">Aplicar</button>
-        {% else %}
         <input type="date" name="fecha" value="{{ fecha_str }}" onchange="this.form.submit()">
-        {% endif %}
       </form>
+      {% endif %}
       {% if resumen %}
       <span class="stat-pill">{{ resumen.asistio }} asistieron · {{ resumen.tardanza }} tardanza · {{ resumen.falta }} falta (total {{ resumen.total }})</span>
       {% endif %}
@@ -170,14 +182,17 @@
     </div>
 
     {% if roles_disponibles %}
-    <div class="filtros-admin">
+    <div class="filtros-admin" style="position:relative;">
       <form method="get" style="display:contents;">
-        <input type="hidden" name="fecha" value="{{ fecha_str }}">
-        {% if modo_mercaderista %}<input type="hidden" name="desde" value="{{ desde_str }}"><input type="hidden" name="hasta" value="{{ hasta_str }}">{% endif %}
-        <select name="mercaderista">
-          <option value="">Mercaderista: todos (un día)</option>
-          {% for dni, nombre in mercaderistas_disponibles %}<option value="{{ dni }}" {{ 'selected' if mercaderista_filtro == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
-        </select>
+        <div class="buscador" style="max-width:200px;">
+          <span class="lupa">🔍</span>
+          <input type="text" id="buscar-mercaderista" placeholder="Mercaderista..." autocomplete="off" value="{{ mercaderista_nombre|title if modo_mercaderista else '' }}">
+          <input type="hidden" name="mercaderista" id="mercaderista-dni" value="{{ mercaderista_filtro }}">
+          <ul class="sugerencias" id="sugerencias"></ul>
+        </div>
+        <input type="date" name="desde" value="{{ desde_str }}" title="Desde (solo se usa junto con un mercaderista elegido)">
+        <span style="color:var(--muted);">→</span>
+        <input type="date" name="hasta" value="{{ hasta_str }}" title="Hasta">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -307,5 +322,60 @@
     </div>
     {% endif %}
   </div>
+
+  {% if roles_disponibles %}
+  <script>
+    // Buscador de mercaderista con sugerencias -- mismo patron que
+    // "Perfil mercaderista" (reportes_perfil.html), pero acá solo carga el
+    // campo oculto "mercaderista" en vez de navegar de una; hace falta
+    // apretar "Aplicar filtros" para combinarlo con el rango de fechas.
+    const MERCADERISTAS = {{ mercaderistas_disponibles|list|tojson }}.map(function (p) {
+      return { dni: p[0], nombre: p[1] };
+    });
+    const inputBuscar = document.getElementById("buscar-mercaderista");
+    const inputDni = document.getElementById("mercaderista-dni");
+    const listaSug = document.getElementById("sugerencias");
+
+    function elegirMercaderista(p) {
+      inputDni.value = p.dni;
+      inputBuscar.value = (p.nombre || p.dni).replace(/\b\w/g, c => c.toUpperCase());
+      listaSug.style.display = "none";
+    }
+
+    function renderSugerenciasMercaderista() {
+      const texto = inputBuscar.value.trim().toLowerCase();
+      listaSug.innerHTML = "";
+      if (!texto) { listaSug.style.display = "none"; return; }
+      const coincidencias = MERCADERISTAS.filter(function (p) {
+        return (p.nombre || "").toLowerCase().includes(texto) || p.dni.includes(texto);
+      }).slice(0, 15);
+      if (!coincidencias.length) {
+        listaSug.innerHTML = '<li class="sin-resultados">Sin resultados para "' + inputBuscar.value + '"</li>';
+        listaSug.style.display = "block";
+        return;
+      }
+      coincidencias.forEach(function (p) {
+        const li = document.createElement("li");
+        li.innerHTML = (p.nombre || p.dni).replace(/\b\w/g, c => c.toUpperCase()) + ' <span class="dni-mini">(' + p.dni + ')</span>';
+        li.addEventListener("mousedown", function (ev) { ev.preventDefault(); elegirMercaderista(p); });
+        listaSug.appendChild(li);
+      });
+      listaSug.style.display = "block";
+    }
+
+    inputBuscar.addEventListener("input", function () {
+      inputDni.value = "";  // si borra/reescribe, no manda un DNI que ya no corresponde al texto
+      renderSugerenciasMercaderista();
+    });
+    inputBuscar.addEventListener("focus", renderSugerenciasMercaderista);
+    inputBuscar.addEventListener("blur", function () { setTimeout(function () { listaSug.style.display = "none"; }, 150); });
+    inputBuscar.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") {
+        const primera = listaSug.querySelector("li:not(.sin-resultados)");
+        if (primera) { ev.preventDefault(); primera.dispatchEvent(new MouseEvent("mousedown")); }
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>

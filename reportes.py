@@ -884,8 +884,11 @@ def historico():
     filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles = _filtros_admin()
     solo_incidencias = request.args.get("solo_incidencias") == "1"
 
-    # El filtro de mercaderista es solo para quien YA tiene los demas
-    # filtros (admin/analista) -- mismo criterio que _filtros_admin().
+    # El filtro de mercaderista y el rango de fechas son solo para quien YA
+    # tiene los demas filtros (admin/analista) -- mismo criterio que
+    # _filtros_admin(). Davor, 2026-09-01: "falta las fechas de rango" --
+    # desde/hasta se muestran SIEMPRE para admin/analista (no solo despues
+    # de elegir mercaderista), asi se pueden elegir ambos en un solo paso.
     mercaderista_filtro = (request.args.get("mercaderista") or "") if roles_disponibles else ""
     mercaderistas_disponibles = []
     if roles_disponibles:
@@ -901,7 +904,7 @@ def historico():
         finally:
             session.close()
 
-    if mercaderista_filtro:
+    if roles_disponibles:
         desde_str = request.args.get("desde") or fecha_str
         hasta_str = request.args.get("hasta") or fecha_str
         try:
@@ -910,10 +913,14 @@ def historico():
             desde = hasta = fecha
         if hasta < desde:
             desde, hasta = hasta, desde
-        if (hasta - desde).days > HISTORICO_MAX_DIAS_RANGO:
+        if mercaderista_filtro and (hasta - desde).days > HISTORICO_MAX_DIAS_RANGO:
             desde = hasta - dt.timedelta(days=HISTORICO_MAX_DIAS_RANGO)
         desde_str, hasta_str = desde.isoformat(), hasta.isoformat()
+    else:
+        desde = hasta = fecha
+        desde_str = hasta_str = fecha_str
 
+    if mercaderista_filtro:
         filas, ultima_sync = historico_persona(mercaderista_filtro, desde, hasta, usuario_actual=current_user)
         hay_datos_del_dia = bool(filas)
         if solo_incidencias and filas:
@@ -931,8 +938,14 @@ def historico():
             canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
         )
 
+    # Sin mercaderista elegido: "todos en un solo dia" -- para admin/analista
+    # ese dia es `hasta` (el rango de fechas sigue visible en pantalla, pero
+    # sin una persona puntual mostrar varios dias x todas las personas seria
+    # una tabla gigante, no lo que se pidio); para supervisor sigue siendo
+    # el selector simple de un dia (`fecha`, sin rango).
+    dia_efectivo = hasta if roles_disponibles else fecha
     resumen, filas, frescura = _cargar_reporte(
-        fecha, usuario_actual=current_user,
+        dia_efectivo, usuario_actual=current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
         salida_mismo_dia=True,
@@ -946,11 +959,12 @@ def historico():
     if solo_incidencias and filas:
         filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
     fecha_reciente = None if hay_datos_del_dia else _fecha_mas_reciente_con_datos()
+    fecha_str_efectiva = dia_efectivo.isoformat()
     return render_template(
         "reportes_historico.html", usuario=current_user, activo="historico",
         modo_mercaderista=False, mercaderista_filtro=mercaderista_filtro, mercaderistas_disponibles=mercaderistas_disponibles,
-        desde_str=fecha_str, hasta_str=fecha_str,
-        fecha_str=fecha_str, resumen=resumen, filas=filas, frescura=frescura, fecha_reciente=fecha_reciente,
+        desde_str=desde_str, hasta_str=hasta_str,
+        fecha_str=fecha_str_efectiva, resumen=resumen, filas=filas, frescura=frescura, fecha_reciente=fecha_reciente,
         hay_datos_del_dia=hay_datos_del_dia,
         filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
         supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
