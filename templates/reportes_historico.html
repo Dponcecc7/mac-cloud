@@ -134,6 +134,7 @@
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_historico') %}<a href="{{ url_for('reportes.historico') }}" class="active">Histórico diario</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_perfil') %}<a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
     </nav>
 
     <div class="note"><b>A diferencia de Reporte diario</b>, acá la Salida es la del MISMO día que la entrada (no la de ayer) -- pensado para mirar un día puntual del pasado, no para mandar un reporte a media tarde. La Hora entrada/salida <b>programada</b> se puede editar acá mismo para ese día puntual (queda registrado en Historial de cambios).</div>

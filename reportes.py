@@ -23,6 +23,7 @@ from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from permisos import requiere_pagina
+from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
@@ -298,6 +299,35 @@ def recomendaciones():
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
         insights=lista, perfiles=perfiles, desde=desde, hasta=hasta,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
+    )
+
+
+@bp.get("/proyecciones")
+@requiere_pagina("reportes_proyecciones")
+def proyecciones():
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
+    kwargs_filtro = dict(
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+    )
+    # Cada pieza se calcula UNA sola vez y se pasa a las funciones que la
+    # necesitan (tasas_sup/señales/riesgo/estacionalidad_equipo) -- sin
+    # esto insights_equipo() (lo más pesado, llama a calcular_detalle_semana())
+    # se recalculaba 2 veces y tasa_rotacion_por_supervisor() 3 veces por
+    # request, la misma duplicación que ya tumbó Desempeño con 503 en
+    # Render (Davor, 2026-09-01: 18.5s la primera versión de esta pantalla).
+    estacionalidad = estacionalidad_faltas(current_user, **kwargs_filtro)
+    tasas_sup = tasa_rotacion_por_supervisor(current_user, **kwargs_filtro)
+    señales = insights_equipo(current_user, **kwargs_filtro)
+    riesgo = score_riesgo_rotacion(current_user, tasas_sup=tasas_sup, señales=señales, **kwargs_filtro)
+    contratacion = necesidad_contratacion(current_user, tasas_sup=tasas_sup, **kwargs_filtro)
+    proxima_falta = ranking_proxima_falta(current_user, riesgo=riesgo, estacionalidad_equipo=estacionalidad, **kwargs_filtro)
+    return render_template(
+        "reportes_proyecciones.html", usuario=current_user, activo="proyecciones",
+        estacionalidad=estacionalidad, riesgo=riesgo, contratacion=contratacion, proxima_falta=proxima_falta,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,

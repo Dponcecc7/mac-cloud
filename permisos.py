@@ -55,6 +55,7 @@ PAGINAS_REPORTES = [
     ("reportes_tareo", "Tareo"),
     ("reportes_historico", "Histórico diario"),
     ("reportes_perfil", "Perfil mercaderista"),
+    ("reportes_proyecciones", "Proyecciones"),
 ]
 
 TODAS_LAS_CLAVES = [c for c, _ in PAGINAS_TOP] + [c for c, _ in PAGINAS_REPORTES]
@@ -66,14 +67,18 @@ _ABIERTAS_A_TODOS = ["personal", "asistencia", "reportes"]
 _SOLO_ANALISTA_ADMIN = ["cargar_headcount", "historial"]
 # "reportes_historico" era la única subpágina de Reportes que ya exigía
 # analista/admin (historial._analista_requerido) -- el resto estaba
-# abierto a cualquier logueado.
-_REPORTES_ABIERTOS_A_TODOS = [c for c, _ in PAGINAS_REPORTES if c != "reportes_historico"]
+# abierto a cualquier logueado. "reportes_proyecciones" (Davor, 2026-09-01)
+# se suma a esa excepción a propósito: riesgo de rotación/contratación
+# proyectada por persona es mas sensible que un reporte operativo, no
+# abierto a supervisores por defecto.
+_SOLO_ANALISTA_ADMIN_REPORTES = ("reportes_historico", "reportes_proyecciones")
+_REPORTES_ABIERTOS_A_TODOS = [c for c, _ in PAGINAS_REPORTES if c not in _SOLO_ANALISTA_ADMIN_REPORTES]
 
 # Reproduce el acceso que cada rol YA tenía antes de este sistema (ver
 # docstring de más arriba).
 DEFAULT_POR_ROL = {
     "admin": TODAS_LAS_CLAVES,
-    "analista": _ABIERTAS_A_TODOS + _SOLO_ANALISTA_ADMIN + _REPORTES_ABIERTOS_A_TODOS + ["reportes_historico"],
+    "analista": _ABIERTAS_A_TODOS + _SOLO_ANALISTA_ADMIN + _REPORTES_ABIERTOS_A_TODOS + list(_SOLO_ANALISTA_ADMIN_REPORTES),
     "supervisor": _ABIERTAS_A_TODOS + _REPORTES_ABIERTOS_A_TODOS,
 }
 
