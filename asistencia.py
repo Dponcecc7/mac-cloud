@@ -345,6 +345,17 @@ def _motivos_falta():
         session.close()
 
 
+def _motivos_falta_con_id():
+    """Para el panel de administrar motivos (analista/admin) -- necesita el
+    id de cada fila para poder borrarla, a diferencia de _motivos_falta()
+    (usada en los <select> de Falta, donde solo importa el texto)."""
+    session = get_session()
+    try:
+        return [(m.id, m.motivo) for m in session.query(CatalogoMotivo).order_by(CatalogoMotivo.motivo).all()]
+    finally:
+        session.close()
+
+
 def _pendientes_de_marcar(filas):
     """Personas con Falta/Vacante que todavía no tienen ningún comentario --
     ni de la app móvil de supervisores ni de acá -- igual al panel
@@ -582,6 +593,7 @@ def marcar_vista():
         fecha_str=fecha_str, resumen=resumen, frescura=frescura, fecha_reciente=fecha_reciente,
         pendientes=pendientes, marcaron=marcaron,
         motivos=_motivos_falta() if (pendientes or marcaron or corregidos_a_mano or faltas_vacaciones_vacantes) else None,
+        motivos_catalogo=_motivos_falta_con_id() if current_user.rol != "supervisor" else None,
         faltas_vacaciones_vacantes=faltas_vacaciones_vacantes, corregidos_a_mano=corregidos_a_mano,
         reemplazos=reemplazos, marcado=request.args.get("marcado"),
         filtro_args=filtro_args, roles_disponibles=roles_disponibles,
@@ -884,6 +896,30 @@ def motivos_agregar():
         session.close()
 
     return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="motivo_agregado"))
+
+
+@bp.post("/motivos/eliminar")
+@_analista_requerido
+def motivos_eliminar():
+    # Mas sensible que agregar (afecta el desplegable de todos) -- analista
+    # o admin, no supervisor (Davor, 2026-08-31: "Vacante" se repetia con
+    # el boton de accion rapida y quiso poder sacarlo de la lista).
+    fecha_str = request.form.get("fecha") or dt.date.today().isoformat()
+    try:
+        motivo_id = int(request.form.get("motivo_id", ""))
+    except ValueError:
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
+
+    session = get_session()
+    try:
+        motivo = session.query(CatalogoMotivo).filter(CatalogoMotivo.id == motivo_id).first()
+        if motivo:
+            session.delete(motivo)
+            session.commit()
+    finally:
+        session.close()
+
+    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="motivo_eliminado"))
 
 
 @bp.post("/actualizar")
