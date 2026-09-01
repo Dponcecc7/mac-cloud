@@ -239,9 +239,18 @@ def headcount_submit():
     session = get_session()
     try:
         nuevas, actualizadas, conflictos, compartidos = [], [], [], []
+        # startswith("SUPERVISOR") en vez de == "SUPERVISORES" a propósito
+        # (Davor, 2026-09-01: cargó "Supervisor asignado" para 82 personas
+        # de Autoservicios/Multicanal y quedó vacío en TODAS, sin ningún
+        # error -- encontramos que 2 supervisores de Autoservicios estaban
+        # guardados con Rol="SUPERVISOR" en singular, así que el match
+        # exacto contra "SUPERVISORES" nunca los encontraba y el DNI
+        # simplemente no se aplicaba, en silencio). Sigue sin matchear
+        # "Asesora"/"Mercaderistas"/etc, solo tolera la variante singular.
         supervisores_propios = {
             per.nombre_completo.strip().upper(): per.dni
-            for per in session.query(Persona).filter_by(analista_propietario=propietario, rol="SUPERVISORES").all()
+            for per in session.query(Persona).filter_by(analista_propietario=propietario).all()
+            if (per.rol or "").strip().upper().startswith("SUPERVISOR")
         }
         # Los supervisores de ESTE MISMO archivo se resuelven antes del loop
         # principal, sin importar en qué fila aparezcan -- antes, si el Excel
@@ -251,7 +260,7 @@ def headcount_submit():
         # supervisor todavía no se había "visto" en el loop (Davor,
         # 2026-08-29: "le colocó supervisor pero no se visualiza" -- Diego
         # cargó a Chuchon y María como filas SUPERVISORES al final).
-        for _, fila_sup in m[m["Rol"].astype(str).str.strip().str.upper() == "SUPERVISORES"].iterrows():
+        for _, fila_sup in m[m["Rol"].astype(str).str.strip().str.upper().str.startswith("SUPERVISOR")].iterrows():
             nombre_sup, dni_sup = _texto(fila_sup["Nombre completo"]), _dni(fila_sup["DNI"])
             if nombre_sup and dni_sup:
                 supervisores_propios[nombre_sup.strip().upper()] = dni_sup
