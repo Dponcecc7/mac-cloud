@@ -898,10 +898,18 @@ def guardar():
                     registrado_por=current_user.email,
                 ))
             if e.get("salida_corr_hoy"):
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, hora_sal=e["salida_corr_hoy"])
+                # Comentario fijo "Marcación manual" (Davor, 2026-09-01: "le
+                # coloco su marcación del día manual, que diga se colocó
+                # marcación manual por algún lado") -- antes se guardaba sin
+                # ningún comentario, así que en Reporte diario no quedaba
+                # ninguna señal de que esa hora de salida vino tipeada a mano
+                # (via "Pendientes de marcación real -- seguimiento") y no de
+                # una visita real del aplicativo.
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, "Marcación manual", hora_sal=e["salida_corr_hoy"])
                 fila_libre += 1
                 correcciones_web.append(CorreccionWeb(
                     dni=e["dni"], fecha=fecha,
+                    comentario_salida="Marcación manual",
                     hora_salida_corregida=e["salida_corr_hoy"],
                     registrado_por=current_user.email,
                 ))
