@@ -37,6 +37,9 @@
     table { border-collapse:collapse; width:100%; }
     th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:13px; }
     th { background:var(--bg); font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
     form.inline { display:inline; }
     label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px; }
     input, select { width:100%; padding:8px 10px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; box-sizing:border-box; font:inherit; background:var(--bg); color:var(--ink); }
@@ -121,10 +124,23 @@
     <div class="panel">
       <p class="panel-title">Cuentas</p>
       <div class="table-wrap">
-      <table>
-        <tr><th>Correo</th><th>Rol</th><th>Cliente ID (Athena)</th><th>Canal asignado</th><th>DNI asociado (supervisor)</th><th></th><th>Permisos</th><th>Activo</th><th>Último login</th><th></th></tr>
-        {% for u in usuarios %}
+      <table id="tabla-usuarios">
         <tr>
+          <th class="th-ordenable" onclick="ordenarPor('correo')">Correo <span class="flecha-orden" id="flecha-correo"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('rol')">Rol <span class="flecha-orden" id="flecha-rol"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('cliente_id')">Cliente ID (Athena) <span class="flecha-orden" id="flecha-cliente_id"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('canal')">Canal asignado <span class="flecha-orden" id="flecha-canal"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('dni')">DNI asociado (supervisor) <span class="flecha-orden" id="flecha-dni"></span></th>
+          <th></th><th>Permisos</th>
+          <th class="th-ordenable" onclick="ordenarPor('activo')">Activo <span class="flecha-orden" id="flecha-activo"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('ultimo_login')">Último login <span class="flecha-orden" id="flecha-ultimo_login"></span></th>
+          <th></th>
+        </tr>
+        {% for u in usuarios %}
+        <tr data-orden-correo="{{ (u.email or '')|upper }}" data-orden-rol="{{ (u.rol or '')|upper }}"
+            data-orden-cliente_id="{{ u.cliente_id_athena or '' }}" data-orden-canal="{{ (u.canal_asignado or '')|upper }}"
+            data-orden-dni="{{ u.dni_asociado or '' }}" data-orden-activo="{{ '1' if u.activo else '0' }}"
+            data-orden-ultimo_login="{{ u.last_login.isoformat() if u.last_login else '' }}">
           <td>{{ u.email }}</td>
           <td>{{ u.rol }}</td>
           <td>
@@ -245,6 +261,28 @@
       document.querySelectorAll(".permisos-panel").forEach(function (p) { p.style.display = "none"; });
       document.getElementById("permisos-vacio").style.display = "block";
       permisoAbiertoId = null;
+    }
+
+    // Ordenar por encabezado (mismo patron que Personal) -- reordena en el
+    // DOM las filas ya cargadas, sin perder ningún input de Cliente ID/Canal/DNI
+    // que ya se haya tipeado sin guardar.
+    var ordenActual = { campo: null, asc: true };
+    function ordenarPor(campo) {
+      var tabla = document.getElementById('tabla-usuarios');
+      var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+      if (!filas.length) return;
+      var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+      ordenActual = { campo: campo, asc: asc };
+      var esNumerico = campo === 'cliente_id' || campo === 'dni';
+      filas.sort(function (a, b) {
+        var va = a.getAttribute('data-orden-' + campo) || '';
+        var vb = b.getAttribute('data-orden-' + campo) || '';
+        var cmp = esNumerico ? (Number(va) - Number(vb)) : va.localeCompare(vb, 'es');
+        return asc ? cmp : -cmp;
+      });
+      filas.forEach(function (fila) { tabla.appendChild(fila); });
+      document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+      document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
     }
   </script>
 </body>

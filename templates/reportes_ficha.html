@@ -103,6 +103,9 @@
     td { padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
     tr:last-child td { border-bottom:none; }
     td.num, th.num { text-align:right; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
     .badge-pct { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
     .badge-pct.ok { background:var(--ok-bg); color:var(--ok); }
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
@@ -348,10 +351,21 @@
       <p class="empty" style="margin:-6px 0 8px;">"Editar" corrige la hora programada de ESE día puntual (ej. si el horario cambió y recién avisaron después) -- completa el formulario de Historial de cambios más abajo.</p>
       {% endif %}
       <div class="table-wrap">
-        <table>
-          <tr><th>Fecha</th><th>Estado</th><th>Entrada real</th><th>Entrada prog.</th><th></th><th>Salida real</th><th>Salida prog.</th><th></th></tr>
-          {% for t in tardanzas_mes %}
+        <table id="tabla-tardanzas">
           <tr>
+            <th class="th-ordenable" onclick="ordenarPor('fecha')">Fecha <span class="flecha-orden" id="flecha-fecha"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('estado')">Estado <span class="flecha-orden" id="flecha-estado"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('entrada_real')">Entrada real <span class="flecha-orden" id="flecha-entrada_real"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('entrada_prog')">Entrada prog. <span class="flecha-orden" id="flecha-entrada_prog"></span></th>
+            <th></th>
+            <th class="th-ordenable" onclick="ordenarPor('salida_real')">Salida real <span class="flecha-orden" id="flecha-salida_real"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('salida_prog')">Salida prog. <span class="flecha-orden" id="flecha-salida_prog"></span></th>
+            <th></th>
+          </tr>
+          {% for t in tardanzas_mes %}
+          <tr data-orden-fecha="{{ t.fecha_iso }}" data-orden-estado="{{ ('TARDANZA' if t.tardanza else '') ~ (' SALIDA ANTICIPADA' if t.salida_temprana else '') }}"
+              data-orden-entrada_real="{{ t.entrada_real or '' }}" data-orden-entrada_prog="{{ t.entrada_esperada or '' }}"
+              data-orden-salida_real="{{ t.salida_real or '' }}" data-orden-salida_prog="{{ t.salida_esperada or '' }}">
             <td>{{ t.fecha }}</td>
             <td>
               {% if t.tardanza %}<span class="badge-pct warn">Tardanza</span>{% endif %}
@@ -438,10 +452,20 @@
       {% if not historial_persona %}<p class="empty">Sin cambios registrados para esta persona.</p>
       {% else %}
       <div class="table-wrap">
-        <table>
-          <tr><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th><th>Día</th><th>Comentario</th><th></th></tr>
-          {% for c in historial_persona %}
+        <table id="tabla-historial-ficha">
           <tr>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('campo')">Campo <span class="flecha-orden" id="flecha-h-campo"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('valor')">Valor nuevo <span class="flecha-orden" id="flecha-h-valor"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('desde')">Desde <span class="flecha-orden" id="flecha-h-desde"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('hasta')">Hasta <span class="flecha-orden" id="flecha-h-hasta"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('dia')">Día <span class="flecha-orden" id="flecha-h-dia"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('comentario')">Comentario <span class="flecha-orden" id="flecha-h-comentario"></span></th>
+            <th></th>
+          </tr>
+          {% for c in historial_persona %}
+          <tr data-orden-campo="{{ (c.campo or '')|upper }}" data-orden-valor="{{ (c.valor_nuevo or '')|upper }}"
+              data-orden-desde="{{ c.fecha_desde.isoformat() }}" data-orden-hasta="{{ c.fecha_hasta.isoformat() if c.fecha_hasta else '' }}"
+              data-orden-dia="{{ (c.dia_semana or '')|upper }}" data-orden-comentario="{{ (c.comentario or '')|upper }}">
             <td>{{ c.campo }}</td>
             <td>{{ c.valor_nuevo }}</td>
             <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
@@ -522,5 +546,32 @@
       {% endif %}
     </div>
   </div>
+
+<script>
+// Ordenar por encabezado (mismo patron que Personal) -- esta página tiene DOS
+// tablas ordenables (Tardanzas y Historial de cambios), cada una con su
+// propia función/estado para que ordenar una nunca reordene la otra.
+function _ordenarTabla(tablaId, campo, estado, flechaPrefijo) {
+  var tabla = document.getElementById(tablaId);
+  if (!tabla) return;
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var asc = estado.campo === campo ? !estado.asc : true;
+  estado.campo = campo; estado.asc = asc;
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  tabla.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById(flechaPrefijo + campo).textContent = asc ? '▲' : '▼';
+}
+var ordenTardanzas = { campo: null, asc: true };
+function ordenarPor(campo) { _ordenarTabla('tabla-tardanzas', campo, ordenTardanzas, 'flecha-'); }
+var ordenHistorialFicha = { campo: null, asc: true };
+function ordenarPorHistorial(campo) { _ordenarTabla('tabla-historial-ficha', campo, ordenHistorialFicha, 'flecha-h-'); }
+</script>
 </body>
 </html>

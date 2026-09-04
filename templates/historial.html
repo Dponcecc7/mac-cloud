@@ -36,6 +36,9 @@
     table { border-collapse:collapse; width:100%; }
     th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
     th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
     td.comentario { white-space:normal; min-width:160px; color:var(--muted); }
     .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
     a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
@@ -206,14 +209,22 @@
 
         <div class="table-wrap">
         {% if cambios %}
-          <table>
+          <table id="tabla-historial">
             <tr>
-              <th>Persona</th><th>Campo</th><th>Valor nuevo</th><th>Desde</th><th>Hasta</th>
-              <th>Día</th><th class="comentario">Comentario</th><th></th>
+              <th class="th-ordenable" onclick="ordenarPor('persona')">Persona <span class="flecha-orden" id="flecha-persona"></span></th>
+              <th class="th-ordenable" onclick="ordenarPor('campo')">Campo <span class="flecha-orden" id="flecha-campo"></span></th>
+              <th class="th-ordenable" onclick="ordenarPor('valor')">Valor nuevo <span class="flecha-orden" id="flecha-valor"></span></th>
+              <th class="th-ordenable" onclick="ordenarPor('desde')">Desde <span class="flecha-orden" id="flecha-desde"></span></th>
+              <th class="th-ordenable" onclick="ordenarPor('hasta')">Hasta <span class="flecha-orden" id="flecha-hasta"></span></th>
+              <th class="th-ordenable" onclick="ordenarPor('dia')">Día <span class="flecha-orden" id="flecha-dia"></span></th>
+              <th class="th-ordenable comentario" onclick="ordenarPor('comentario')">Comentario <span class="flecha-orden" id="flecha-comentario"></span></th><th></th>
             </tr>
             {% for item in cambios %}
             {% set c = item.c %}
-            <tr>
+            <tr data-orden-persona="{{ ((item.nombre or c.dni) or '')|upper }}" data-orden-campo="{{ (c.campo or '')|upper }}"
+                data-orden-valor="{{ (c.valor_nuevo or '')|upper }}" data-orden-desde="{{ c.fecha_desde.isoformat() }}"
+                data-orden-hasta="{{ c.fecha_hasta.isoformat() if c.fecha_hasta else '' }}" data-orden-dia="{{ (c.dia_semana or '')|upper }}"
+                data-orden-comentario="{{ (c.comentario or '')|upper }}">
               <td>
                 <a class="nombre-link" href="{{ url_for('reportes.ficha', dni=c.dni) }}">{{ (item.nombre or c.dni)|title }}</a><br>
                 <span class="dni">{{ c.dni }}</span>
@@ -247,5 +258,27 @@
       </details>
     </div>
   </div>
+
+<script>
+// Ordenar por encabezado (mismo patron que Personal) -- reordena en el DOM
+// las filas ya traídas, sin volver a pedirle nada al servidor.
+var ordenActual = { campo: null, asc: true };
+function ordenarPor(campo) {
+  var tabla = document.getElementById('tabla-historial');
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+  ordenActual = { campo: campo, asc: asc };
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
+}
+</script>
 </body>
 </html>

@@ -57,6 +57,9 @@
     th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
     tr:last-child td { border-bottom:none; }
     tr.oculto-nombre { display:none; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
 
     .cod { display:inline-block; min-width:22px; padding:2px 5px; border-radius:5px; font-size:10.5px; font-weight:800; }
     .cod.ok { background:var(--ok-bg); color:var(--ok); }
@@ -181,13 +184,16 @@
         {% endfor %}
       </div>
       <div class="table-wrap">
-        <table>
+        <table id="tabla-tareo">
           <tr>
-            <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
+            <th class="info th-ordenable" onclick="ordenarPor('mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('ciudad')">Ciudad <span class="flecha-orden" id="flecha-ciudad"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('supervisor')">Supervisor <span class="flecha-orden" id="flecha-supervisor"></span></th>
             {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
           </tr>
           {% for p in personas %}
-          <tr data-nombre="{{ (p.nombre or '')|lower }}">
+          <tr data-nombre="{{ (p.nombre or '')|lower }}"
+              data-orden-mercaderista="{{ (p.nombre or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-supervisor="{{ (p.supervisor or '')|upper }}">
             <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.supervisor or '—')|title }}</td>
@@ -215,6 +221,29 @@
         if (nombre === null) return;
         tr.classList.toggle("oculto-nombre", q !== "" && nombre.indexOf(q) === -1);
       });
+    }
+
+    // Ordenar por encabezado (mismo patron que Personal) -- solo en las 3
+    // columnas "info" (Mercaderista/Ciudad/Supervisor); los ~31 días del mes
+    // no se hacen ordenables uno por uno, no aportan tanto y complicarían
+    // la tabla. Convive con el buscador de arriba: éste solo esconde filas
+    // con tr.oculto-nombre, nunca las reordena.
+    var ordenActual = { campo: null, asc: true };
+    function ordenarPor(campo) {
+      var tabla = document.getElementById('tabla-tareo');
+      var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+      if (!filas.length) return;
+      var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+      ordenActual = { campo: campo, asc: asc };
+      filas.sort(function (a, b) {
+        var va = a.getAttribute('data-orden-' + campo) || '';
+        var vb = b.getAttribute('data-orden-' + campo) || '';
+        var cmp = va.localeCompare(vb, 'es');
+        return asc ? cmp : -cmp;
+      });
+      filas.forEach(function (fila) { tabla.appendChild(fila); });
+      document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+      document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
     }
   </script>
 </body>

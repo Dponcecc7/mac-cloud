@@ -57,6 +57,9 @@
     th.info, td.info { position:sticky; left:0; background:var(--card); z-index:1; }
     th:nth-child(1), td:nth-child(1) { left:0; }
     tr:last-child td { border-bottom:none; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
 
     .celda-baja { background:var(--warn-bg); color:var(--warn); font-weight:700; border-radius:5px; }
     .celda-vacia { color:var(--muted); }
@@ -191,13 +194,15 @@
         <span class="item"><span class="swatch baja"></span> Por debajo de su propio promedio</span>
       </div>
       <div class="table-wrap">
-        <table>
+        <table id="tabla-cobertura">
           <tr>
-            <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
+            <th class="info th-ordenable" onclick="ordenarPor('mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('ciudad')">Ciudad <span class="flecha-orden" id="flecha-ciudad"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('supervisor')">Supervisor <span class="flecha-orden" id="flecha-supervisor"></span></th>
             {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
           </tr>
           {% for p in personas %}
-          <tr>
+          <tr data-orden-mercaderista="{{ (p.nombre or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-supervisor="{{ (p.supervisor or '')|upper }}">
             <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.supervisor or '—')|title }}</td>
@@ -222,5 +227,28 @@
       {% endif %}
     </div>
   </div>
+
+<script>
+// Ordenar por encabezado (mismo patron que Personal) -- solo en las 3
+// columnas "info" (Mercaderista/Ciudad/Supervisor); los días del periodo
+// no se hacen ordenables uno por uno.
+var ordenActual = { campo: null, asc: true };
+function ordenarPor(campo) {
+  var tabla = document.getElementById('tabla-cobertura');
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+  ordenActual = { campo: campo, asc: asc };
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
+}
+</script>
 </body>
 </html>

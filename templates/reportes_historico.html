@@ -83,6 +83,9 @@
     .table-wrap { overflow-x:auto; }
     table { border-collapse:collapse; width:100%; font-size:11.5px; }
     th { text-align:left; padding:8px 6px; font-size:10.5px; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
     td { padding:6px; border-bottom:1px solid var(--line); vertical-align:top; }
     .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; color:#fff; }
     .badge.ok { background:var(--ok); }
@@ -253,21 +256,36 @@
         {% if modo_mercaderista %}{{ mercaderista_nombre|title }} -- del {{ desde_str }} al {{ hasta_str }}{% else %}Detalle del {{ fecha_str }}{% endif %}
       </p>
       <div class="table-wrap">
-      <table>
+      <table id="tabla-historico">
         <tr>
           {% if modo_mercaderista %}
-          <th>Fecha</th><th>Canal ese día</th>
+          <th class="th-ordenable" onclick="ordenarPor('fecha')">Fecha <span class="flecha-orden" id="flecha-fecha"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('canal_hoy')">Canal ese día <span class="flecha-orden" id="flecha-canal_hoy"></span></th>
           {% else %}
-          <th>Supervisor</th><th>Ciudad</th><th>Rol</th><th>Canal hoy</th><th>Mercaderista</th>
+          <th class="th-ordenable" onclick="ordenarPor('supervisor')">Supervisor <span class="flecha-orden" id="flecha-supervisor"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('ciudad')">Ciudad <span class="flecha-orden" id="flecha-ciudad"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('rol')">Rol <span class="flecha-orden" id="flecha-rol"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('canal_hoy')">Canal hoy <span class="flecha-orden" id="flecha-canal_hoy"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista"></span></th>
           {% endif %}
-          <th>Entrada prog.</th><th>Entrada real</th><th>Estado</th><th>Comentario entrada</th>
-          <th>Salida prog.</th><th>Salida real</th><th>Comentario salida</th>
+          <th class="th-ordenable" onclick="ordenarPor('entrada_prog')">Entrada prog. <span class="flecha-orden" id="flecha-entrada_prog"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('entrada_real')">Entrada real <span class="flecha-orden" id="flecha-entrada_real"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('estado')">Estado <span class="flecha-orden" id="flecha-estado"></span></th>
+          <th>Comentario entrada</th>
+          <th class="th-ordenable" onclick="ordenarPor('salida_prog')">Salida prog. <span class="flecha-orden" id="flecha-salida_prog"></span></th>
+          <th class="th-ordenable" onclick="ordenarPor('salida_real')">Salida real <span class="flecha-orden" id="flecha-salida_real"></span></th>
+          <th>Comentario salida</th>
         </tr>
         {% for f in filas %}
         {% set eb = (f.estado or '').split(' (')[0] %}
         {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
         {% set fila_fecha = f.fecha_str if modo_mercaderista else fecha_str %}
-        <tr>
+        <tr
+          {% if modo_mercaderista %}data-orden-fecha="{{ fila_fecha }}" data-orden-canal_hoy="{{ (f.canal_hoy_mostrar or '')|upper }}"
+          {% else %}data-orden-supervisor="{{ (f.supervisor or '')|upper }}" data-orden-ciudad="{{ (f.ciudad or '')|upper }}" data-orden-rol="{{ (f.rol or '')|upper }}" data-orden-canal_hoy="{{ (f.canal_hoy_mostrar or '')|upper }}" data-orden-mercaderista="{{ (f.mercaderista or '')|upper }}"
+          {% endif %}
+          data-orden-entrada_prog="{{ f.entrada_prog or '' }}" data-orden-entrada_real="{{ f.entrada_real or '' }}" data-orden-estado="{{ eb_corto|upper }}"
+          data-orden-salida_prog="{{ f.salida_prog or '' }}" data-orden-salida_real="{{ f.salida_real or '' }}">
           {% if modo_mercaderista %}
           <td>{{ fila_fecha }}</td>
           <td>{{ f.canal_hoy_mostrar|title }}</td>
@@ -322,6 +340,28 @@
     </div>
     {% endif %}
   </div>
+
+<script>
+// Ordenar por encabezado (mismo patron que Personal) -- reordena en el DOM
+// las filas ya traídas, sin volver a pedirle nada al servidor.
+var ordenActual = { campo: null, asc: true };
+function ordenarPor(campo) {
+  var tabla = document.getElementById('tabla-historico');
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+  ordenActual = { campo: campo, asc: asc };
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
+}
+</script>
 
   {% if roles_disponibles %}
   <script>
