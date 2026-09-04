@@ -193,14 +193,16 @@
         <table id="tabla-tareo">
           <tr>
             <th class="info th-ordenable" onclick="ordenarPor('mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('dni')">DNI <span class="flecha-orden" id="flecha-dni"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('ciudad')">Ciudad <span class="flecha-orden" id="flecha-ciudad"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('supervisor')">Supervisor <span class="flecha-orden" id="flecha-supervisor"></span></th>
             {% for f in fechas %}<th>{{ f.strftime('%d/%m') }}</th>{% endfor %}
           </tr>
           {% for p in personas %}
           <tr data-nombre="{{ (p.nombre or '')|lower }}"
-              data-orden-mercaderista="{{ (p.nombre or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-supervisor="{{ (p.supervisor or '')|upper }}">
+              data-orden-mercaderista="{{ (p.nombre or '')|upper }}" data-orden-dni="{{ p.dni }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-supervisor="{{ (p.supervisor or '')|upper }}">
             <td class="info"><a href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ (p.nombre or '')|title }}</a></td>
+            <td>{{ p.dni }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.supervisor or '—')|title }}</td>
             {% for f in fechas %}
@@ -241,10 +243,11 @@
       if (!filas.length) return;
       var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
       ordenActual = { campo: campo, asc: asc };
+      var esNumerico = campo === 'dni';
       filas.sort(function (a, b) {
         var va = a.getAttribute('data-orden-' + campo) || '';
         var vb = b.getAttribute('data-orden-' + campo) || '';
-        var cmp = va.localeCompare(vb, 'es');
+        var cmp = esNumerico ? (Number(va) - Number(vb)) : va.localeCompare(vb, 'es');
         return asc ? cmp : -cmp;
       });
       filas.forEach(function (fila) { tabla.appendChild(fila); });
