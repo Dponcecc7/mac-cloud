@@ -148,7 +148,7 @@ def todos_overrides_supervisor_canal(session, dnis):
     return resultado
 
 
-def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, subcanal_filtro=None):
+def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, subcanal_filtro=None, estado_filtro=None):
     """Filtros de Rol/Región/Supervisor/Ciudad de Reportes y Marcar
     asistencia (Davor, 2026-08-24/25) -- encima del scope de acceso
     (condicion_scope), no en vez de. Solo admin/analista le pasan valores
@@ -158,7 +158,13 @@ def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=N
     `canal_filtro` (Davor, 2026-08-29) -- SOLO para admin: un analista de
     canal ya está acotado a su canal_asignado por condicion_scope(), no
     necesita elegir; el admin ve todo por defecto y con esto puede acotarse
-    a un canal puntual para revisar, igual que ya podía por Rol/Región/etc."""
+    a un canal puntual para revisar, igual que ya podía por Rol/Región/etc.
+
+    `estado_filtro` (Davor, 2026-09-04, "Personal" -- filtrar solo Activos):
+    Persona.estado es Activo/Inactivo/Vacante ("Vacante" = alguien de baja
+    cuya posición sigue sin reemplazo, ver dar_de_baja_submit() -- no es un
+    error de datos, la fila se mantiene visible A PROPÓSITO para no perder
+    el hilo hasta que "Agregar reemplazo" la cubra)."""
     if rol_filtro:
         query = query.filter(persona_model.rol == rol_filtro)
     if region_filtro:
@@ -171,4 +177,6 @@ def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=N
         query = query.filter(condicion_canal(persona_model, canal_filtro))
     if subcanal_filtro:
         query = query.filter(persona_model.subcanal == subcanal_filtro)
+    if estado_filtro:
+        query = query.filter(persona_model.estado == estado_filtro)
     return query

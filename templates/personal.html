@@ -110,7 +110,7 @@
       {% endfor %}
     {% endwith %}
     <div class="top-actions">
-      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles %}
+      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles %}
       <form method="get">
         {% if regiones_disponibles %}
         <select name="region" onchange="this.form.submit()">
@@ -134,6 +134,12 @@
         <select name="subcanal" onchange="this.form.submit()">
           <option value="">Subcanal: todos</option>
           {% for s in subcanales_disponibles %}<option value="{{ s }}" {{ 'selected' if filtro_args.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        {% if estados_disponibles %}
+        <select name="estado" onchange="this.form.submit()" title="'Vacante' = alguien de baja cuya posición sigue sin reemplazo">
+          <option value="">Estado: todos</option>
+          {% for e in estados_disponibles %}<option value="{{ e }}" {{ 'selected' if filtro_args.estado == e else '' }}>{{ e }}</option>{% endfor %}
         </select>
         {% endif %}
       </form>
