@@ -19,6 +19,7 @@ from openpyxl.styles import Font
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
 from github_actions import disparar_workflow
 from permisos import requiere_pagina
+from scoping import canonizar_canal
 from parseo_headcount import (
     COLUMNAS_MAESTRO_ESPERADAS, COLUMNAS_PATRON_ESPERADAS,
     parsear_maestro, parsear_patron, validar_columnas,
@@ -119,7 +120,7 @@ def crear_persona_individual(
             session.add(persona)
         persona.nombre_completo = nombre
         persona.rol = rol
-        persona.canal = canal
+        persona.canal = canonizar_canal(canal)
         persona.region = region
         persona.ciudad = ciudad
         persona.zona = zona
@@ -337,7 +338,11 @@ def headcount_submit():
             # Yeny), se ignora la columna del Excel y se usa el suyo; si no
             # (Kevin, Davor) se sigue respetando lo tipeado, sin cambio de
             # comportamiento.
-            canal = canal_propio or _texto(row["Canal"])
+            # canonizar_canal() (Davor, 2026-09-04: "Homologa autoservicio y
+            # autoservicios"): el Excel trae texto libre -- "Autoservicios"
+            # (plural) y "Autoservicio" (singular) son el MISMO canal pero
+            # sin esto quedaban guardados como 2 valores distintos.
+            canal = canonizar_canal(canal_propio or _texto(row["Canal"]))
 
             datos = dict(
                 nombre_completo=nombre, rol=rol, canal=canal, region=_texto(row["Región"]),

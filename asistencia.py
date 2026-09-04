@@ -35,7 +35,7 @@ from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
 from permisos import requiere_analista_admin, requiere_pagina
-from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
+from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from sqlalchemy.orm import aliased
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -112,13 +112,19 @@ def _canal_para_mostrar(marcado, canal_asignado):
     censo) -- comparar el string COMPLETO contra "Otro" solo agarraba el
     caso de un unico canal; con dos o mas, "Otro" se seguia colando igual
     (Davor, 2026-09-01: "porque sale canal Otro? eso esta mal"). Se filtra
-    "Otro" de la lista en vez de todo-o-nada."""
+    "Otro" de la lista en vez de todo-o-nada.
+
+    canonizar_canal() en el respaldo: canal_asignado es texto libre tipeado
+    en el Excel ("Autoservicios" plural conviven con "Autoservicio" singular
+    en la base) -- sin esto salian como 2 valores distintos en "Canal hoy" y
+    en el filtro de Canal (Davor, 2026-09-04: "Homologa autoservicio y
+    autoservicios")."""
     if not marcado:
-        return canal_asignado or ""
+        return canonizar_canal(canal_asignado) or ""
     partes = [p.strip() for p in marcado.split(",") if p.strip() and p.strip() != "Otro"]
     if partes:
         return ", ".join(partes)
-    return canal_asignado or marcado or ""
+    return canonizar_canal(canal_asignado) or marcado or ""
 
 _RE_PREFIJO_FALTA = re.compile(r"^falta\s*[-–]?\s*", re.IGNORECASE)
 

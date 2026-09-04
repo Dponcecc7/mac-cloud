@@ -64,15 +64,43 @@ def condicion_scope(persona_model, usuario_actual):
 # Farmacia y AU") necesitan la misma lista.
 CANALES_FILTRABLES = ["FARMACIA", "AUTOSERVICIO", "TRADICIONAL"]
 
+# Persona.canal es texto libre tipeado en el Excel de Headcount -- "AUTOSERVICIOS"
+# (plural) y "AUTOSERVICIO" (singular, la forma que usa el resto del sistema:
+# CANALES_FILTRABLES, canal_asignado de Usuario, canales_marcados normalizado
+# por el motor) conviven en la base como si fueran canales distintos (Davor,
+# 2026-09-04: "Homologa autoservicio y autoservicios" -- salían como 2
+# opciones separadas en el filtro de Canal de Reporte diario). Ambas formas
+# deben tratarse como EL MISMO canal en cualquier comparación/filtro/scoping.
+CANAL_VARIANTES = {
+    "AUTOSERVICIO": ("AUTOSERVICIO", "AUTOSERVICIOS"),
+    "FARMACIA": ("FARMACIA", "FARMACIAS"),
+    "TRADICIONAL": ("TRADICIONAL", "TRADICIONALES"),
+}
+
+
+def canonizar_canal(valor):
+    """Devuelve la forma canónica (singular, MAYÚSCULAS) de un canal tipeado
+    libremente -- "Autoservicios"/"AUTOSERVICIOS" -> "AUTOSERVICIO", etc.
+    None/vacío se devuelve tal cual."""
+    if not valor:
+        return valor
+    v = valor.strip().upper()
+    for canonico, variantes in CANAL_VARIANTES.items():
+        if v in variantes:
+            return canonico
+    return v
+
 
 def condicion_canal(persona_model, canal):
     """Misma condición que el branch de canal_asignado en condicion_scope(),
     factorizada para reusar en el filtro de canal de admin (aplicar_filtros_extra) --
-    ve una Persona si su canal principal coincide O si tiene algún día de
-    PatronRecurrente en ese canal (mercaderistas compartidos entre canales)."""
-    canal_norm = canal.strip().upper()
-    dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia) == canal_norm)
-    return (func.upper(persona_model.canal) == canal_norm) | persona_model.dni.in_(dnis_con_ese_canal)
+    ve una Persona si su canal principal coincide (tolerando variantes de
+    CANAL_VARIANTES) O si tiene algún día de PatronRecurrente en ese canal
+    (mercaderistas compartidos entre canales)."""
+    canal_norm = canonizar_canal(canal)
+    variantes = CANAL_VARIANTES.get(canal_norm, (canal_norm,))
+    dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia).in_(variantes))
+    return (func.upper(persona_model.canal).in_(variantes)) | persona_model.dni.in_(dnis_con_ese_canal)
 
 
 def overrides_supervisor_canal(session, dnis, usuario_actual):
