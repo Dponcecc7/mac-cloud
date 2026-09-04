@@ -121,6 +121,23 @@ class PersonaSupervisorCanal(Base):
     __table_args__ = (UniqueConstraint("dni", "canal", name="uq_persona_supervisor_canal"),)
 
 
+class PersonaZonaCanal(Base):
+    """Override de zona por CANAL, mismo patrón que PersonaSupervisorCanal
+    (Davor, 2026-09-04: "Misma lógica para zonas, ya que tienen zonas por
+    canal también") -- un Multicanal puede trabajar una zona distinta según
+    el canal del día, fija por canal (no varía según qué día puntual le
+    toque, así que PatronRecurrente no sirve para esto). Sin fila acá = sin
+    override, sigue valiendo Persona.zona como hasta ahora."""
+    __tablename__ = "persona_zona_canal"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+    canal = Column(String(50), nullable=False)
+    zona = Column(String(150), nullable=False)
+
+    __table_args__ = (UniqueConstraint("dni", "canal", name="uq_persona_zona_canal"),)
+
+
 class VacanteSeguimiento(Base):
     """Solo los 2 campos que hoy se pierden en cada corrida de
     update_vacantes.py (Prioridad, Estado de cobertura) -- el resto de una

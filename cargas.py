@@ -16,7 +16,7 @@ from flask import Blueprint, flash, redirect, render_template, request, send_fil
 from flask_login import current_user
 from openpyxl.styles import Font
 
-from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
+from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal, get_session
 from github_actions import disparar_workflow
 from permisos import requiere_pagina
 from scoping import canonizar_canal
@@ -76,6 +76,10 @@ def _hora(valor):
 # el resto de los analistas sigue subiendo su Excel de siempre sin esto.
 COL_SUP_FARMACIA_AU = "Supervisor Farmacia/AU"
 COL_SUP_TRADICIONAL = "Supervisor Tradicional"
+# Mismo mecanismo para Zona (Davor, 2026-09-04: "Misma lógica para zonas,
+# ya que tienen zonas por canal también") -- ver dimension_models.PersonaZonaCanal.
+COL_ZONA_FARMACIA_AU = "Zona Farmacia/AU"
+COL_ZONA_TRADICIONAL = "Zona Tradicional"
 
 
 def _resolver_supervisor_por_nombre(supervisores, nombre):
@@ -283,6 +287,7 @@ def headcount_submit():
 
         pendientes_supervisor = []  # [(dni, supervisor_dni), ...] -- ver comentario mas abajo
         overrides_canal = []  # [(dni, canal, supervisor_dni), ...] -- ver COL_SUP_FARMACIA_AU/TRADICIONAL
+        overrides_canal_zona = []  # [(dni, canal, zona), ...] -- ver COL_ZONA_FARMACIA_AU/TRADICIONAL
         supervisores_no_encontrados = set()
         for _, row in m.iterrows():
             dni = _dni(row["DNI"])
@@ -322,6 +327,15 @@ def headcount_submit():
                     overrides_canal.extend((dni, canal, dni_sup) for canal in canales)
                 else:
                     supervisores_no_encontrados.add(nombre_sup)
+
+            # Overrides de zona por canal -- mismo mecanismo, columnas
+            # opcionales aparte (Davor, 2026-09-04).
+            for columna, canales in ((COL_ZONA_FARMACIA_AU, ("FARMACIA", "AUTOSERVICIO")), (COL_ZONA_TRADICIONAL, ("TRADICIONAL",))):
+                if columna not in m.columns:
+                    continue
+                zona_canal = _texto(row[columna])
+                if zona_canal:
+                    overrides_canal_zona.extend((dni, canal, zona_canal) for canal in canales)
 
             if es_compartido:
                 compartidos.append(dni)
@@ -392,6 +406,13 @@ def headcount_submit():
             else:
                 session.add(PersonaSupervisorCanal(dni=dni, canal=canal, supervisor_dni=supervisor_dni))
             n_overrides += 1
+
+        for dni, canal, zona_canal in overrides_canal_zona:
+            existente_zc = session.query(PersonaZonaCanal).filter_by(dni=dni, canal=canal).first()
+            if existente_zc:
+                existente_zc.zona = zona_canal
+            else:
+                session.add(PersonaZonaCanal(dni=dni, canal=canal, zona=zona_canal))
 
         n_patron = 0
         if p is not None:

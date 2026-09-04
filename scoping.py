@@ -23,7 +23,7 @@ todavía también ve todo -- para no romper accesos existentes en silencio;
 asignale un cliente_id_athena/dni_asociado en Usuarios para acotarlo."""
 from sqlalchemy import func, select
 
-from dimension_models import PatronRecurrente, PersonaSupervisorCanal
+from dimension_models import PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal
 from models import Usuario
 
 
@@ -145,6 +145,24 @@ def todos_overrides_supervisor_canal(session, dnis):
     resultado = {}
     for dni, canal, supervisor_dni in filas:
         resultado.setdefault(dni, []).append((canal, supervisor_dni))
+    return resultado
+
+
+def todos_overrides_zona_canal(session, dnis):
+    """{dni: [(canal, zona), ...]} -- mismo patrón que
+    todos_overrides_supervisor_canal(), para la pantalla Personal (Davor,
+    2026-09-04: "Misma lógica para zonas, ya que tienen zonas por canal
+    también")."""
+    if not dnis:
+        return {}
+    filas = (
+        session.query(PersonaZonaCanal.dni, PersonaZonaCanal.canal, PersonaZonaCanal.zona)
+        .filter(PersonaZonaCanal.dni.in_(dnis))
+        .all()
+    )
+    resultado = {}
+    for dni, canal, zona in filas:
+        resultado.setdefault(dni, []).append((canal, zona))
     return resultado
 
 

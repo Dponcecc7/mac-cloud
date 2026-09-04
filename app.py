@@ -25,14 +25,14 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 from extensions import csrf, db, limiter, login_manager
 from models import Usuario
-from dimension_models import Feriado, Persona, SUBCANALES
+from dimension_models import Feriado, Persona, PersonaZonaCanal, SUBCANALES
 from permisos import requiere_pagina, tiene_acceso
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
 from scoping import (
     CANALES_FILTRABLES, aplicar_filtros_extra, condicion_canal, condicion_scope,
-    todos_overrides_supervisor_canal,
+    todos_overrides_supervisor_canal, todos_overrides_zona_canal,
 )
 from vacaciones import calcular_viajes_vacaciones
 
@@ -600,6 +600,28 @@ def create_app():
             }
         return resultado
 
+    def _resolver_zonas(dim_session, personas):
+        """{dni: {"principal": zona_o_None, "principal_canal": etiqueta_o_None,
+        "overrides": [(canal, zona), ...]}} -- mismo patrón que
+        _resolver_supervisores() pero para Zona (Davor, 2026-09-04: "Misma
+        lógica para zonas, ya que tienen zonas por canal también")."""
+        overrides = todos_overrides_zona_canal(dim_session, [p.dni for p in personas])
+        resultado = {}
+        for p in personas:
+            overrides_p = [(canal.title(), zona) for canal, zona in overrides.get(p.dni, [])]
+            principal_canal = None
+            if overrides_p and p.zona:
+                cubiertos = {canal for canal, _ in overrides_p}
+                faltantes = [c for c in _TODOS_LOS_CANALES if c not in cubiertos]
+                if faltantes:
+                    principal_canal = ", ".join(faltantes)
+            resultado[p.dni] = {
+                "principal": p.zona,
+                "principal_canal": principal_canal,
+                "overrides": overrides_p,
+            }
+        return resultado
+
     @app.get("/personal")
     @requiere_pagina("personal")
     def personal():
@@ -612,6 +634,7 @@ def create_app():
             filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp, estados_disp, supervisores_disp = _filtros_personal(dim_session)
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
+            zonas_por_dni = _resolver_zonas(dim_session, personas)
         finally:
             dim_session.close()
         puede_editar = current_user.rol in ("admin", "analista")
@@ -622,6 +645,7 @@ def create_app():
             canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp, estados_disponibles=estados_disp,
             supervisores_disponibles=supervisores_disp,
             subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
+            zonas_por_dni=zonas_por_dni,
         )
 
     @app.post("/personal/editar")
@@ -638,7 +662,15 @@ def create_app():
             return redirect(url_for("personal"))
         dni = request.form.get("dni", "")
         subcanal = (request.form.get("subcanal") or "").strip()
+        # zona_modo="canal" (Davor, 2026-09-04: "Misma lógica para zonas...
+        # con la opción de editarlo en el maestro ahora") -- Multicanal
+        # manda 2 campos (Tradicional / Farmacia+AU) en vez del campo único
+        # "zona"; el resto de las personas sigue con el campo único de
+        # siempre, sin cambio de comportamiento.
+        zona_modo_canal = request.form.get("zona_modo") == "canal"
         zona = (request.form.get("zona") or "").strip()
+        zona_tradicional = (request.form.get("zona_tradicional") or "").strip()
+        zona_farmacia_au = (request.form.get("zona_farmacia_au") or "").strip()
         if subcanal and subcanal not in SUBCANALES:
             flash("Subcanal inválido.", "error")
             return redirect(url_for("personal"))
@@ -653,7 +685,21 @@ def create_app():
                 flash("No se encontró a esa persona en tu equipo.", "error")
                 return redirect(url_for("personal"))
             persona.subcanal = subcanal or None
-            persona.zona = zona or None
+            if zona_modo_canal:
+                persona.zona = zona_tradicional or None
+                if zona_farmacia_au:
+                    for canal in ("FARMACIA", "AUTOSERVICIO"):
+                        fila_zc = dim_session.query(PersonaZonaCanal).filter_by(dni=dni, canal=canal).first()
+                        if fila_zc:
+                            fila_zc.zona = zona_farmacia_au
+                        else:
+                            dim_session.add(PersonaZonaCanal(dni=dni, canal=canal, zona=zona_farmacia_au))
+                else:
+                    dim_session.query(PersonaZonaCanal).filter(
+                        PersonaZonaCanal.dni == dni, PersonaZonaCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
+                    ).delete(synchronize_session=False)
+            else:
+                persona.zona = zona or None
             dim_session.commit()
             flash(f"{persona.nombre_completo.title()} actualizado.", "ok")
         finally:
