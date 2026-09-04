@@ -854,7 +854,18 @@ def create_app():
                 persona.motivo_baja = None
                 persona.dado_de_baja_por = None
                 dim_session.commit()
-                flash(f"{persona.nombre_completo.title()} reactivado.", "ok")
+                # Misma cadena que dar_de_baja_submit()/reemplazo_submit()/
+                # headcount_nuevo_submit() (asistencia.py) -- el motor de
+                # clasificación lee el Excel Maestro exportado, no Postgres
+                # directo, así que sin esto la persona reactivada no
+                # aparecía en Reporte diario hasta el próximo ciclo
+                # automático de exportar_dimensiones.yml (cada 15 min) +
+                # pipeline_completo.yml (cada 5 min vía cron-job.org)
+                # (Davor, 2026-09-04: "No me aparecen los 2 mercaderistas
+                # de Farma que active").
+                ok_disparo, _ = disparar_workflow("exportar_dimensiones.yml")
+                sufijo = "" if ok_disparo else " (no se pudo iniciar la actualización automática -- puede tardar unos minutos en aparecer en Reporte diario igual)"
+                flash(f"{persona.nombre_completo.title()} reactivado.{sufijo}", "ok")
         finally:
             dim_session.close()
         return redirect(url_for("personal", **request.args))
