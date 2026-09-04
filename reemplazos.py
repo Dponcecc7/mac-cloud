@@ -9,7 +9,7 @@ via agregar_reemplazo.py.
 """
 import datetime as dt
 
-from dimension_models import Persona, PatronRecurrente, get_session
+from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
 
 # "analista_propietario" agregado 2026-08-27 -- sin esto, un reemplazo
 # quedaba con esa columna en NULL (nunca se seteaba en ningún lado para la
@@ -86,6 +86,27 @@ def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_
                     hora_entrada_prog=fila.hora_entrada_prog, hora_salida_prog=fila.hora_salida_prog,
                     canal_dia=fila.canal_dia, refrigerio=fila.refrigerio,
                 ))
+
+        # Si dni_vacante era supervisor de otras personas, esas personas
+        # deben pasar a reportarle al reemplazo, no seguir apuntando a
+        # alguien ya Inactivo (Davor, 2026-09-04: "si ingreso el reemplazo...
+        # la columna supervisor de los mercaderistas antiguos debe cambiar a
+        # su nuevo super, no mantenerse el antiguo"). Se repunta tanto
+        # Persona.supervisor_dni como los overrides de PersonaSupervisorCanal
+        # (Multicanal con supervisor distinto por Farmacia/AU vs Tradicional).
+        n_reportes = session.query(Persona).filter(Persona.supervisor_dni == dni_vacante).count()
+        n_overrides_sup = session.query(PersonaSupervisorCanal).filter(PersonaSupervisorCanal.supervisor_dni == dni_vacante).count()
+        if n_reportes or n_overrides_sup:
+            log.append(f"{dni_vacante} era supervisor de {n_reportes} persona(s) ({n_overrides_sup} override(s) de canal) -- se repuntan a {dni_nuevo}.")
+        if not dry_run:
+            if n_reportes:
+                session.query(Persona).filter(Persona.supervisor_dni == dni_vacante).update(
+                    {Persona.supervisor_dni: dni_nuevo}, synchronize_session=False,
+                )
+            if n_overrides_sup:
+                session.query(PersonaSupervisorCanal).filter(PersonaSupervisorCanal.supervisor_dni == dni_vacante).update(
+                    {PersonaSupervisorCanal.supervisor_dni: dni_nuevo}, synchronize_session=False,
+                )
 
         if not dry_run:
             session.commit()

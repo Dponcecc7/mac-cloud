@@ -34,7 +34,11 @@
     .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
     h1.title { font-size:20px; margin:0 0 6px; }
     .sub { color:var(--muted); font-size:12.5px; margin:0 0 18px; }
-    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:16px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 12px; }
+    .form-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:10px; align-items:end; }
+    @media (max-width:1300px) { .form-row { grid-template-columns:repeat(4, 1fr); } }
+    label.field { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
     table { border-collapse:collapse; width:100%; }
     th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
     th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); position:sticky; top:0; }
@@ -46,7 +50,6 @@
     a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
     a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-    .top-actions select { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .btn-descargar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--card); color:var(--brand); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
     .btn-descargar:hover { background:var(--brand); color:#fff; }
     .btn-guardar-todo { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--ok); background:var(--ok); color:#fff; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
@@ -70,14 +73,14 @@
        (asistencia.html), adaptado a un <form method="get"> real (acá el
        filtro sí vuelve a consultar la base, no solo esconde filas). */
     .ms { position:relative; }
-    .ms-toggle { font:inherit; font-size:13px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; white-space:nowrap; max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+    .ms-toggle { width:100%; text-align:left; font:inherit; font-size:12px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ms-toggle:hover { border-color:var(--brand); }
     .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(35,25,10,.18); padding:6px; min-width:200px; max-height:260px; overflow-y:auto; }
     .ms-panel.abierto { display:block; }
-    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
     .ms-opt:hover { background:var(--bg); }
     .ms-opt input { width:auto; margin:0; }
-    .btn-filtrar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; }
+    .btn-filtrar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; height:fit-content; }
     .btn-filtrar:hover { opacity:.9; }
 
     @media (max-width: 700px) {
@@ -128,72 +131,87 @@
         <div class="flash {{ category }}">{{ message }}</div>
       {% endfor %}
     {% endwith %}
-    <div class="top-actions">
-      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles %}
-      <form method="get" id="form-filtros">
+    {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles %}
+    <div class="panel">
+      <p class="panel-title">Filtros</p>
+      <form method="get" id="form-filtros" class="form-row">
         {% if regiones_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
-            {% if not filtro_args.region %}Región: todas{% elif filtro_args.region|length == 1 %}{{ filtro_args.region[0]|title }}{% else %}Región ({{ filtro_args.region|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-region">
-            {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
+        <label class="field">Región
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
+              {% if not filtro_args.region %}Todas{% elif filtro_args.region|length == 1 %}{{ filtro_args.region[0]|title }}{% else %}{{ filtro_args.region|length }} seleccionadas{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-region">
+              {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         {% if ciudades_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-ciudad" onclick="togglePanel('ciudad')">
-            {% if not filtro_args.ciudad %}Ciudad: todas{% elif filtro_args.ciudad|length == 1 %}{{ filtro_args.ciudad[0]|title }}{% else %}Ciudad ({{ filtro_args.ciudad|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-ciudad">
-            {% for c in ciudades_disponibles %}<label class="ms-opt"><input type="checkbox" name="ciudad" value="{{ c }}" {{ 'checked' if c in filtro_args.ciudad else '' }}> {{ c|title }}</label>{% endfor %}
+        <label class="field">Ciudad
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-ciudad" onclick="togglePanel('ciudad')">
+              {% if not filtro_args.ciudad %}Todas{% elif filtro_args.ciudad|length == 1 %}{{ filtro_args.ciudad[0]|title }}{% else %}{{ filtro_args.ciudad|length }} seleccionadas{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-ciudad">
+              {% for c in ciudades_disponibles %}<label class="ms-opt"><input type="checkbox" name="ciudad" value="{{ c }}" {{ 'checked' if c in filtro_args.ciudad else '' }}> {{ c|title }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         {% if canales_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-canal" onclick="togglePanel('canal')" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
-            {% if not filtro_args.canal %}Canal: todos{% elif filtro_args.canal|length == 1 %}{{ filtro_args.canal[0]|title }}{% else %}Canal ({{ filtro_args.canal|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-canal">
-            {% for c in canales_disponibles %}<label class="ms-opt"><input type="checkbox" name="canal" value="{{ c }}" {{ 'checked' if c in filtro_args.canal else '' }}> {{ c|title }}</label>{% endfor %}
+        <label class="field">Canal
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-canal" onclick="togglePanel('canal')" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+              {% if not filtro_args.canal %}Todos{% elif filtro_args.canal|length == 1 %}{{ filtro_args.canal[0]|title }}{% else %}{{ filtro_args.canal|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-canal">
+              {% for c in canales_disponibles %}<label class="ms-opt"><input type="checkbox" name="canal" value="{{ c }}" {{ 'checked' if c in filtro_args.canal else '' }}> {{ c|title }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         {% if subcanales_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-subcanal" onclick="togglePanel('subcanal')">
-            {% if not filtro_args.subcanal %}Subcanal: todos{% elif filtro_args.subcanal|length == 1 %}{{ filtro_args.subcanal[0] }}{% else %}Subcanal ({{ filtro_args.subcanal|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-subcanal">
-            {% for s in subcanales_disponibles %}<label class="ms-opt"><input type="checkbox" name="subcanal" value="{{ s }}" {{ 'checked' if s in filtro_args.subcanal else '' }}> {{ s }}</label>{% endfor %}
+        <label class="field">Subcanal
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-subcanal" onclick="togglePanel('subcanal')">
+              {% if not filtro_args.subcanal %}Todos{% elif filtro_args.subcanal|length == 1 %}{{ filtro_args.subcanal[0] }}{% else %}{{ filtro_args.subcanal|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-subcanal">
+              {% for s in subcanales_disponibles %}<label class="ms-opt"><input type="checkbox" name="subcanal" value="{{ s }}" {{ 'checked' if s in filtro_args.subcanal else '' }}> {{ s }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         {% if estados_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-estado" onclick="togglePanel('estado')">
-            {% if not filtro_args.estado %}Estado: todos{% elif filtro_args.estado|length == 1 %}{{ 'Dado de baja' if filtro_args.estado[0] == 'Vacante' else filtro_args.estado[0] }}{% else %}Estado ({{ filtro_args.estado|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-estado">
-            {% for e in estados_disponibles %}<label class="ms-opt"><input type="checkbox" name="estado" value="{{ e }}" {{ 'checked' if e in filtro_args.estado else '' }}> {{ 'Dado de baja' if e == 'Vacante' else e }}</label>{% endfor %}
+        <label class="field">Estado
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-estado" onclick="togglePanel('estado')">
+              {% if not filtro_args.estado %}Todos{% elif filtro_args.estado|length == 1 %}{{ 'Dado de baja' if filtro_args.estado[0] == 'Vacante' else filtro_args.estado[0] }}{% else %}{{ filtro_args.estado|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-estado">
+              {% for e in estados_disponibles %}<label class="ms-opt"><input type="checkbox" name="estado" value="{{ e }}" {{ 'checked' if e in filtro_args.estado else '' }}> {{ 'Dado de baja' if e == 'Vacante' else e }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         {% if supervisores_disponibles %}
-        <div class="ms">
-          <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
-            {% if not filtro_args.supervisor %}Supervisor: todos{% elif filtro_args.supervisor|length == 1 %}{{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}Supervisor ({{ filtro_args.supervisor|length }}){% endif %}
-          </button>
-          <div class="ms-panel" id="panel-supervisor">
-            {% for dni, nombre in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ dni }}" {{ 'checked' if dni in filtro_args.supervisor else '' }}> {{ nombre|title }}</label>{% endfor %}
+        <label class="field">Supervisor
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
+              {% if not filtro_args.supervisor %}Todos{% elif filtro_args.supervisor|length == 1 %}{{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}{{ filtro_args.supervisor|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-supervisor">
+              {% for dni, nombre in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ dni }}" {{ 'checked' if dni in filtro_args.supervisor else '' }}> {{ nombre|title }}</label>{% endfor %}
+            </div>
           </div>
-        </div>
+        </label>
         {% endif %}
         <button type="submit" class="btn-filtrar">Filtrar</button>
       </form>
-      {% endif %}
+    </div>
+    {% endif %}
+    <div class="top-actions">
       <a class="btn-descargar" href="{{ url_for('personal_exportar', **filtro_qs) }}">⬇ Descargar Excel</a>
       {% if puede_editar %}
       <form id="form-todos" method="post" action="{{ url_for('personal_editar_masivo', **filtro_qs) }}" style="margin:0;">
