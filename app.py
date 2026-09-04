@@ -510,9 +510,12 @@ def create_app():
             # filtrar solo activos") -- sin filtro, "Personal" siempre
             # mostro tambien Inactivo/Vacante mezclados con Activo.
             "estado": (request.args.get("estado") or "") if puede_filtrar else "",
+            # Supervisor (Davor, 2026-09-04: "Agregale filtro supervisor
+            # también") -- mismo patrón que asistencia.py::_filtros_marcar().
+            "supervisor": (request.args.get("supervisor") or "") if puede_filtrar else "",
         }
         if not puede_filtrar:
-            return filtro_args, [], [], [], [], []
+            return filtro_args, [], [], [], [], [], []
         cond_scope = condicion_scope(Persona, current_user)
 
         def _valores(columna):
@@ -527,7 +530,19 @@ def create_app():
         # Lista fija (no _valores(Persona.estado)) -- son solo estos 3
         # valores posibles en todo el sistema, ver dar_de_baja_submit()/cargas.py.
         estados_disponibles = ["Activo", "Inactivo", "Vacante"]
-        return filtro_args, regiones_disponibles, ciudades_disponibles, canales_disponibles, SUBCANALES, estados_disponibles
+        SupervisorPersona = aliased(Persona)
+        q_sup = (
+            dim_session.query(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
+            .join(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
+            .filter(Persona.supervisor_dni.isnot(None))
+        )
+        if cond_scope is not None:
+            q_sup = q_sup.filter(cond_scope)
+        supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
+        return (
+            filtro_args, regiones_disponibles, ciudades_disponibles, canales_disponibles, SUBCANALES,
+            estados_disponibles, supervisores_disponibles,
+        )
 
     def _consultar_personal(dim_session, filtro_args):
         query = dim_session.query(Persona)
@@ -537,18 +552,27 @@ def create_app():
         query = aplicar_filtros_extra(
             query, Persona, region_filtro=filtro_args["region"], ciudad_filtro=filtro_args["ciudad"],
             canal_filtro=filtro_args["canal"], subcanal_filtro=filtro_args["subcanal"],
-            estado_filtro=filtro_args["estado"],
+            estado_filtro=filtro_args["estado"], supervisor_filtro=filtro_args["supervisor"],
         )
         return query.order_by(Persona.estado, Persona.nombre_completo).all()
 
+    _TODOS_LOS_CANALES = ["Tradicional", "Farmacia", "Autoservicio"]
+
     def _resolver_supervisores(dim_session, personas):
-        """{dni: {"principal": nombre_o_None, "overrides": [(canal, nombre), ...]}}
-        (Davor, 2026-08-29: "que aparezca el nombre y también si hay 2
-        supers para ese mercaderista"). El nombre se busca SIN aplicar
-        condicion_scope() -- el supervisor "de otro canal" de un
-        compartido puede pertenecer a otro analista, y aun así hay que
-        poder mostrar su nombre acá (mismo criterio que ya usa
-        asistencia.py para este mismo problema)."""
+        """{dni: {"principal": nombre_o_None, "principal_canal": etiqueta_o_None,
+        "overrides": [(canal, nombre), ...]}} (Davor, 2026-08-29: "que
+        aparezca el nombre y también si hay 2 supers para ese
+        mercaderista"). El nombre se busca SIN aplicar condicion_scope() --
+        el supervisor "de otro canal" de un compartido puede pertenecer a
+        otro analista, y aun así hay que poder mostrar su nombre acá (mismo
+        criterio que ya usa asistencia.py para este mismo problema).
+
+        `principal_canal` (Davor, 2026-09-04: para un Multicanal con
+        overrides de Farmacia/AU, el principal ES el de Tradicional -- "Pon
+        en el item de supervisor... Tradicional: Daniela cabanillas") --
+        cuando hay overrides que cubren SOLO algunos canales, el principal
+        se etiqueta con el/los canal(es) que quedan sin override, en vez de
+        mostrarlo suelto sin aclarar a cuál corresponde."""
         overrides = todos_overrides_supervisor_canal(dim_session, [p.dni for p in personas])
         dnis_necesarios = {p.supervisor_dni for p in personas if p.supervisor_dni}
         for filas in overrides.values():
@@ -558,12 +582,21 @@ def create_app():
         ) if dnis_necesarios else {}
         resultado = {}
         for p in personas:
+            principal_nombre = (nombre_de.get(p.supervisor_dni) or p.supervisor_dni) if p.supervisor_dni else None
+            overrides_p = [
+                (canal.title(), nombre_de.get(sup_dni) or sup_dni)
+                for canal, sup_dni in overrides.get(p.dni, [])
+            ]
+            principal_canal = None
+            if overrides_p and principal_nombre:
+                cubiertos = {canal for canal, _ in overrides_p}
+                faltantes = [c for c in _TODOS_LOS_CANALES if c not in cubiertos]
+                if faltantes:
+                    principal_canal = ", ".join(faltantes)
             resultado[p.dni] = {
-                "principal": (nombre_de.get(p.supervisor_dni) or p.supervisor_dni) if p.supervisor_dni else None,
-                "overrides": [
-                    (canal.title(), nombre_de.get(sup_dni) or sup_dni)
-                    for canal, sup_dni in overrides.get(p.dni, [])
-                ],
+                "principal": principal_nombre,
+                "principal_canal": principal_canal,
+                "overrides": overrides_p,
             }
         return resultado
 
@@ -576,7 +609,7 @@ def create_app():
         # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
         dim_session = get_dim_session()
         try:
-            filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp, estados_disp = _filtros_personal(dim_session)
+            filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp, estados_disp, supervisores_disp = _filtros_personal(dim_session)
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
         finally:
@@ -587,6 +620,7 @@ def create_app():
             "personal.html", usuario=current_user, personas=personas,
             filtro_args=filtro_args, filtro_qs=filtro_qs, regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp,
             canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp, estados_disponibles=estados_disp,
+            supervisores_disponibles=supervisores_disp,
             subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
         )
 
@@ -669,7 +703,7 @@ def create_app():
     def personal_exportar():
         dim_session = get_dim_session()
         try:
-            filtro_args, _regiones_disp, _ciudades_disp, _canales_disp, _subcanales_disp, _estados_disp = _filtros_personal(dim_session)
+            filtro_args, _regiones_disp, _ciudades_disp, _canales_disp, _subcanales_disp, _estados_disp, _supervisores_disp = _filtros_personal(dim_session)
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
         finally:

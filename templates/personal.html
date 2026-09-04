@@ -110,7 +110,7 @@
       {% endfor %}
     {% endwith %}
     <div class="top-actions">
-      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles %}
+      {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles %}
       <form method="get">
         {% if regiones_disponibles %}
         <select name="region" onchange="this.form.submit()">
@@ -137,9 +137,15 @@
         </select>
         {% endif %}
         {% if estados_disponibles %}
-        <select name="estado" onchange="this.form.submit()" title="'Vacante' = alguien de baja cuya posición sigue sin reemplazo">
+        <select name="estado" onchange="this.form.submit()">
           <option value="">Estado: todos</option>
-          {% for e in estados_disponibles %}<option value="{{ e }}" {{ 'selected' if filtro_args.estado == e else '' }}>{{ e }}</option>{% endfor %}
+          {% for e in estados_disponibles %}<option value="{{ e }}" {{ 'selected' if filtro_args.estado == e else '' }}>{{ 'Dado de baja' if e == 'Vacante' else e }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        {% if supervisores_disponibles %}
+        <select name="supervisor" onchange="this.form.submit()">
+          <option value="">Supervisor: todos</option>
+          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
         </select>
         {% endif %}
       </form>
@@ -161,7 +167,7 @@
           <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
           <td>
             {% if p.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
-            {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Vacante</span>
+            {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Dado de baja</span>
             {% else %}<span class="estado-pill inactivo">Inactivo</span>{% endif %}
           </td>
           <td>{{ p.fecha_baja.strftime("%d/%m/%Y") if p.fecha_baja else "—" }}</td>
@@ -187,7 +193,7 @@
             {% endif %}
           </td>
           <td>
-            <span class="sup-principal">{{ (sup.principal or "—")|title }}</span>
+            <span class="sup-principal">{% if sup.principal_canal %}{{ sup.principal_canal }}: {% endif %}{{ (sup.principal or "—")|title }}</span>
             {% for canal, nombre in sup.overrides %}<span class="sup-extra">{{ canal }}: {{ nombre|title }}</span>{% endfor %}
           </td>
           <td>{{ p.correo or "—" }}</td>
