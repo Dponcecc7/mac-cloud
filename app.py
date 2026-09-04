@@ -687,91 +687,102 @@ def create_app():
             zonas_por_dni=zonas_por_dni,
         )
 
-    @app.post("/personal/editar")
+    @app.post("/personal/editar-masivo")
     @requiere_pagina("personal")
-    def personal_editar():
-        # Edición inline (Davor, 2026-08-29): Subcanal (lista fija) + Zona
-        # (texto libre) con un botón "Guardar" por fila -- antes Subcanal
-        # se guardaba solo con el cambio de select, pero al sumar Zona (un
-        # <input type=text> no dispara onchange de forma útil) hace falta
-        # un submit explícito. Se reusa condicion_scope() para que un
-        # analista solo pueda tocar DNIs de su propio equipo.
+    def personal_editar_masivo():
+        # Guarda TODAS las filas editadas en un solo POST/commit (Davor,
+        # 2026-09-04: "Puede haber un botón general para guardar todos los
+        # cambios y no fila x fila") -- reemplaza el guardado fila-por-fila
+        # de antes; un solo <form id="form-todos"> en personal.html cubre
+        # TODAS las filas, con cada campo sufijado por DNI (subcanal_<dni>,
+        # zona_<dni>, modo_canal_<dni>, etc.) para no pisarse entre sí. Se
+        # reusa condicion_scope() para que un analista solo pueda tocar
+        # DNIs de su propio equipo -- las filas fuera de su scope llegan
+        # igual en el POST (vinieron de su propia pantalla) pero se
+        # ignoran en silencio acá, mismo criterio que el guardado
+        # fila-por-fila anterior.
         if current_user.rol not in ("admin", "analista"):
             flash("No tenés permiso para editar Personal.", "error")
             return redirect(url_for("personal"))
-        dni = request.form.get("dni", "")
-        subcanal = (request.form.get("subcanal") or "").strip()
-        # modo_canal=1 (Davor, 2026-09-04: "Misma lógica para zonas... con
-        # la opción de editarlo en el maestro ahora" / "ponle editar a
-        # supervisores también") -- Multicanal manda 2 campos por canal
-        # (Tradicional / Farmacia+AU) tanto para Zona como para Supervisor,
-        # en vez del campo único de siempre; el resto de las personas
-        # (un solo canal) sigue con el campo único, sin cambio de
-        # comportamiento.
-        modo_canal = request.form.get("modo_canal") == "1"
-        zona = (request.form.get("zona") or "").strip()
-        zona_tradicional = (request.form.get("zona_tradicional") or "").strip()
-        zona_farmacia_au = (request.form.get("zona_farmacia_au") or "").strip()
-        supervisor = (request.form.get("supervisor") or "").strip()
-        supervisor_tradicional = (request.form.get("supervisor_tradicional") or "").strip()
-        supervisor_farmacia_au = (request.form.get("supervisor_farmacia_au") or "").strip()
-        if subcanal and subcanal not in SUBCANALES:
-            flash("Subcanal inválido.", "error")
-            return redirect(url_for("personal"))
+        dnis = request.form.getlist("dni")
+        if not dnis:
+            return redirect(url_for("personal", **request.args))
         dim_session = get_dim_session()
         try:
-            # Los DNI de supervisor vienen de un <select>, pero se validan
-            # igual antes de guardar (Persona.supervisor_dni es FK -- un
-            # valor inválido revienta el commit con un error feo en vez de
-            # un mensaje claro).
-            dnis_sup_pedidos = {v for v in (supervisor, supervisor_tradicional, supervisor_farmacia_au) if v}
+            query = dim_session.query(Persona).filter(Persona.dni.in_(dnis))
+            cond_scope = condicion_scope(Persona, current_user)
+            if cond_scope is not None:
+                query = query.filter(cond_scope)
+            personas = {p.dni: p for p in query.all()}
+
+            # Se arma y valida TODO antes de tocar nada -- si un supervisor
+            # o subcanal de CUALQUIER fila es inválido, se aborta el
+            # guardado completo en vez de dejar unas filas guardadas y
+            # otras no a medias.
+            datos_por_dni = {}
+            dnis_sup_pedidos = set()
+            for dni in dnis:
+                if dni not in personas:
+                    continue
+                modo_canal = request.form.get(f"modo_canal_{dni}") == "1"
+                datos = {"subcanal": (request.form.get(f"subcanal_{dni}") or "").strip(), "modo_canal": modo_canal}
+                if modo_canal:
+                    datos["zona_tradicional"] = (request.form.get(f"zona_tradicional_{dni}") or "").strip()
+                    datos["zona_farmacia_au"] = (request.form.get(f"zona_farmacia_au_{dni}") or "").strip()
+                    datos["supervisor_tradicional"] = (request.form.get(f"supervisor_tradicional_{dni}") or "").strip()
+                    datos["supervisor_farmacia_au"] = (request.form.get(f"supervisor_farmacia_au_{dni}") or "").strip()
+                    dnis_sup_pedidos.update(v for v in (datos["supervisor_tradicional"], datos["supervisor_farmacia_au"]) if v)
+                else:
+                    datos["zona"] = (request.form.get(f"zona_{dni}") or "").strip()
+                    datos["supervisor"] = (request.form.get(f"supervisor_{dni}") or "").strip()
+                    if datos["supervisor"]:
+                        dnis_sup_pedidos.add(datos["supervisor"])
+                if datos["subcanal"] and datos["subcanal"] not in SUBCANALES:
+                    flash(f"Subcanal inválido para {personas[dni].nombre_completo.title()}.", "error")
+                    return redirect(url_for("personal", **request.args))
+                datos_por_dni[dni] = datos
+
             if dnis_sup_pedidos:
                 dnis_validos = {
                     d for (d,) in dim_session.query(Persona.dni).filter(Persona.dni.in_(dnis_sup_pedidos)).all()
                 }
                 if dnis_sup_pedidos - dnis_validos:
-                    flash("Supervisor inválido.", "error")
-                    return redirect(url_for("personal"))
+                    flash("Uno de los supervisores elegidos ya no es válido.", "error")
+                    return redirect(url_for("personal", **request.args))
 
-            query = dim_session.query(Persona).filter(Persona.dni == dni)
-            cond_scope = condicion_scope(Persona, current_user)
-            if cond_scope is not None:
-                query = query.filter(cond_scope)
-            persona = query.first()
-            if persona is None:
-                flash("No se encontró a esa persona en tu equipo.", "error")
-                return redirect(url_for("personal"))
-            persona.subcanal = subcanal or None
-            if modo_canal:
-                persona.zona = zona_tradicional or None
-                persona.supervisor_dni = supervisor_tradicional or None
-                if zona_farmacia_au:
-                    for canal in ("FARMACIA", "AUTOSERVICIO"):
-                        fila_zc = dim_session.query(PersonaZonaCanal).filter_by(dni=dni, canal=canal).first()
-                        if fila_zc:
-                            fila_zc.zona = zona_farmacia_au
-                        else:
-                            dim_session.add(PersonaZonaCanal(dni=dni, canal=canal, zona=zona_farmacia_au))
+            for dni, datos in datos_por_dni.items():
+                persona = personas[dni]
+                persona.subcanal = datos["subcanal"] or None
+                if datos["modo_canal"]:
+                    persona.zona = datos["zona_tradicional"] or None
+                    persona.supervisor_dni = datos["supervisor_tradicional"] or None
+                    if datos["zona_farmacia_au"]:
+                        for canal in ("FARMACIA", "AUTOSERVICIO"):
+                            fila_zc = dim_session.query(PersonaZonaCanal).filter_by(dni=dni, canal=canal).first()
+                            if fila_zc:
+                                fila_zc.zona = datos["zona_farmacia_au"]
+                            else:
+                                dim_session.add(PersonaZonaCanal(dni=dni, canal=canal, zona=datos["zona_farmacia_au"]))
+                    else:
+                        dim_session.query(PersonaZonaCanal).filter(
+                            PersonaZonaCanal.dni == dni, PersonaZonaCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
+                        ).delete(synchronize_session=False)
+                    if datos["supervisor_farmacia_au"]:
+                        for canal in ("FARMACIA", "AUTOSERVICIO"):
+                            fila_sc = dim_session.query(PersonaSupervisorCanal).filter_by(dni=dni, canal=canal).first()
+                            if fila_sc:
+                                fila_sc.supervisor_dni = datos["supervisor_farmacia_au"]
+                            else:
+                                dim_session.add(PersonaSupervisorCanal(dni=dni, canal=canal, supervisor_dni=datos["supervisor_farmacia_au"]))
+                    else:
+                        dim_session.query(PersonaSupervisorCanal).filter(
+                            PersonaSupervisorCanal.dni == dni, PersonaSupervisorCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
+                        ).delete(synchronize_session=False)
                 else:
-                    dim_session.query(PersonaZonaCanal).filter(
-                        PersonaZonaCanal.dni == dni, PersonaZonaCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
-                    ).delete(synchronize_session=False)
-                if supervisor_farmacia_au:
-                    for canal in ("FARMACIA", "AUTOSERVICIO"):
-                        fila_sc = dim_session.query(PersonaSupervisorCanal).filter_by(dni=dni, canal=canal).first()
-                        if fila_sc:
-                            fila_sc.supervisor_dni = supervisor_farmacia_au
-                        else:
-                            dim_session.add(PersonaSupervisorCanal(dni=dni, canal=canal, supervisor_dni=supervisor_farmacia_au))
-                else:
-                    dim_session.query(PersonaSupervisorCanal).filter(
-                        PersonaSupervisorCanal.dni == dni, PersonaSupervisorCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
-                    ).delete(synchronize_session=False)
-            else:
-                persona.zona = zona or None
-                persona.supervisor_dni = supervisor or None
+                    persona.zona = datos["zona"] or None
+                    persona.supervisor_dni = datos["supervisor"] or None
             dim_session.commit()
-            flash(f"{persona.nombre_completo.title()} actualizado.", "ok")
+            flash(f"{len(datos_por_dni)} persona(s) actualizada(s).", "ok")
         finally:
             dim_session.close()
         return redirect(url_for("personal", **request.args))

@@ -49,6 +49,8 @@
     .top-actions select { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .btn-descargar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--card); color:var(--brand); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
     .btn-descargar:hover { background:var(--brand); color:#fff; }
+    .btn-guardar-todo { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--ok); background:var(--ok); color:#fff; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .btn-guardar-todo:hover { opacity:.9; }
     .flash { padding:9px 14px; border-radius:8px; margin-bottom:14px; font-size:13px; }
     .flash.error { background:var(--bad-bg); color:var(--bad); }
     .flash.ok { background:var(--ok-bg); color:var(--ok); }
@@ -153,6 +155,12 @@
       </form>
       {% endif %}
       <a class="btn-descargar" href="{{ url_for('personal_exportar', **filtro_qs) }}">⬇ Descargar Excel</a>
+      {% if puede_editar %}
+      <form id="form-todos" method="post" action="{{ url_for('personal_editar_masivo', **filtro_qs) }}" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn-guardar-todo">💾 Guardar todos los cambios</button>
+      </form>
+      {% endif %}
     </div>
     <div class="panel">
       <div class="table-wrap">
@@ -181,7 +189,8 @@
           <td>{{ (p.canal or "—")|title }}</td>
           <td>
             {% if puede_editar %}
-            <select name="subcanal" class="subcanal-select" form="form-{{ p.dni }}">
+            <input type="hidden" name="dni" value="{{ p.dni }}" form="form-todos">
+            <select name="subcanal_{{ p.dni }}" class="subcanal-select" form="form-todos">
               <option value="" {{ 'selected' if not p.subcanal else '' }}>—</option>
               {% for s in subcanales %}<option value="{{ s }}" {{ 'selected' if p.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
             </select>
@@ -193,11 +202,11 @@
           <td>{{ (p.ciudad or "—")|title }}</td>
           <td>
             {% if edicion_multicanal %}
-            <input type="hidden" name="modo_canal" value="1" form="form-{{ p.dni }}">
-            <label class="campo-mini-lbl">Tradicional<input type="text" name="zona_tradicional" class="zona-input" form="form-{{ p.dni }}" value="{{ p.zona or '' }}"></label>
-            <label class="campo-mini-lbl">Farmacia/AU<input type="text" name="zona_farmacia_au" class="zona-input" form="form-{{ p.dni }}" value="{{ zona_farmacia_au_actual }}"></label>
+            <input type="hidden" name="modo_canal_{{ p.dni }}" value="1" form="form-todos">
+            <label class="campo-mini-lbl">Tradicional<input type="text" name="zona_tradicional_{{ p.dni }}" class="zona-input" form="form-todos" value="{{ p.zona or '' }}"></label>
+            <label class="campo-mini-lbl">Farmacia/AU<input type="text" name="zona_farmacia_au_{{ p.dni }}" class="zona-input" form="form-todos" value="{{ zona_farmacia_au_actual }}"></label>
             {% elif puede_editar %}
-            <input type="text" name="zona" class="zona-input" form="form-{{ p.dni }}" value="{{ p.zona or '' }}">
+            <input type="text" name="zona_{{ p.dni }}" class="zona-input" form="form-todos" value="{{ p.zona or '' }}">
             {% else %}
             <span class="sup-principal">{% if zon.principal_canal %}{{ zon.principal_canal }}: {% endif %}{{ (zon.principal or "—")|title }}</span>
             {% for canal, zona in zon.overrides %}<span class="sup-extra">{{ canal }}: {{ zona|title }}</span>{% endfor %}
@@ -206,19 +215,19 @@
           <td>
             {% if edicion_multicanal %}
             <label class="campo-mini-lbl">Tradicional
-              <select name="supervisor_tradicional" class="zona-input" form="form-{{ p.dni }}">
+              <select name="supervisor_tradicional_{{ p.dni }}" class="zona-input" form="form-todos">
                 <option value="">—</option>
                 {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if p.supervisor_dni == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
               </select>
             </label>
             <label class="campo-mini-lbl">Farmacia/AU
-              <select name="supervisor_farmacia_au" class="zona-input" form="form-{{ p.dni }}">
+              <select name="supervisor_farmacia_au_{{ p.dni }}" class="zona-input" form="form-todos">
                 <option value="">—</option>
                 {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if supervisor_farmacia_au_dni_actual == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
               </select>
             </label>
             {% elif puede_editar %}
-            <select name="supervisor" class="zona-input" form="form-{{ p.dni }}">
+            <select name="supervisor_{{ p.dni }}" class="zona-input" form="form-todos">
               <option value="">—</option>
               {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if p.supervisor_dni == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
             </select>
@@ -231,11 +240,6 @@
           <td>{{ p.analista_propietario or "—" }}</td>
           {% if puede_editar %}
           <td>
-            <form id="form-{{ p.dni }}" method="post" action="{{ url_for('personal_editar', **filtro_qs) }}" style="margin:0;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="dni" value="{{ p.dni }}">
-              <button type="submit" class="btn-guardar">Guardar</button>
-            </form>
             {% if p.estado != "Activo" %}
             <form method="post" action="{{ url_for('personal_reactivar', **filtro_qs) }}" style="margin:0;"
                   onsubmit="return confirm('¿Reactivar a {{ p.nombre_completo|title }}? Vuelve a Activo, conservando su canal/zona/supervisor y patrón de horario actuales.');">
