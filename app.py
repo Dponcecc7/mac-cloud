@@ -518,26 +518,46 @@ def create_app():
             return filtro_args, [], [], [], [], [], []
         cond_scope = condicion_scope(Persona, current_user)
 
-        def _valores(columna):
-            q = dim_session.query(columna).filter(columna.isnot(None))
+        # Filtros cruzados (Davor, 2026-09-04: "Que sean filtros cruzados")
+        # -- las opciones de Región/Ciudad/Supervisor se calculan aplicando
+        # los DEMÁS filtros ya elegidos (todos menos el propio), no solo el
+        # scope base; sin esto, elegir Canal=Farmacia seguía mostrando en
+        # "Supervisor" a gente que no tiene NADIE en Farmacia. Canal/
+        # Subcanal/Estado quedan fuera a propósito -- son listas fijas de
+        # valores posibles (CANALES_FILTRABLES/SUBCANALES/3 estados), no
+        # "lo que hay ahora mismo", así que cruzarlas no aporta.
+        def _query_cruzada(excepto):
+            query = dim_session.query(Persona)
             if cond_scope is not None:
-                q = q.filter(cond_scope)
+                query = query.filter(cond_scope)
+            return aplicar_filtros_extra(
+                query, Persona,
+                region_filtro=None if excepto == "region" else filtro_args["region"],
+                ciudad_filtro=None if excepto == "ciudad" else filtro_args["ciudad"],
+                canal_filtro=None if excepto == "canal" else filtro_args["canal"],
+                subcanal_filtro=None if excepto == "subcanal" else filtro_args["subcanal"],
+                estado_filtro=None if excepto == "estado" else filtro_args["estado"],
+                supervisor_filtro=None if excepto == "supervisor" else filtro_args["supervisor"],
+            )
+
+        def _valores_cruzados(columna, excepto):
+            q = _query_cruzada(excepto).filter(columna.isnot(None)).with_entities(columna)
             return sorted({v for (v,) in q.distinct().all() if v})
 
-        regiones_disponibles = _valores(Persona.region)
-        ciudades_disponibles = _valores(Persona.ciudad)
+        regiones_disponibles = _valores_cruzados(Persona.region, "region")
+        ciudades_disponibles = _valores_cruzados(Persona.ciudad, "ciudad")
         canales_disponibles = CANALES_FILTRABLES if es_admin else []
-        # Lista fija (no _valores(Persona.estado)) -- son solo estos 3
-        # valores posibles en todo el sistema, ver dar_de_baja_submit()/cargas.py.
+        # Lista fija (no _valores_cruzados(Persona.estado, ...)) -- son solo
+        # estos 3 valores posibles en todo el sistema, ver
+        # dar_de_baja_submit()/cargas.py.
         estados_disponibles = ["Activo", "Inactivo", "Vacante"]
         SupervisorPersona = aliased(Persona)
         q_sup = (
-            dim_session.query(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
+            _query_cruzada("supervisor")
+            .with_entities(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
             .join(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
             .filter(Persona.supervisor_dni.isnot(None))
         )
-        if cond_scope is not None:
-            q_sup = q_sup.filter(cond_scope)
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
         return (
             filtro_args, regiones_disponibles, ciudades_disponibles, canales_disponibles, SUBCANALES,
