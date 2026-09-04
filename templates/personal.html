@@ -42,6 +42,9 @@
     table { border-collapse:collapse; width:100%; }
     th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
     th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); position:sticky; top:0; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
     .table-wrap { overflow-x:auto; max-height:75vh; overflow-y:auto; border-radius:8px; }
     .estado-pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }
     .estado-pill.activo { background:var(--ok); }
@@ -234,10 +237,11 @@
     </div>
     <div class="panel">
       <div class="table-wrap">
-      <table>
+      <table id="tabla-personal">
         <tr>
-          <th>DNI</th><th>Nombre</th><th>Estado</th><th>Fecha de baja</th><th>Rol</th><th>Canal</th><th>Subcanal</th>
-          <th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th><th>Correo</th><th>Analista</th>
+          {% for campo, etiqueta in [('dni','DNI'), ('nombre','Nombre'), ('estado','Estado'), ('fecha_baja','Fecha de baja'), ('rol','Rol'), ('canal','Canal'), ('subcanal','Subcanal'), ('region','Región'), ('ciudad','Ciudad'), ('zona','Zona'), ('supervisor','Supervisor'), ('correo','Correo'), ('analista','Analista')] %}
+          <th class="th-ordenable" onclick="ordenarPor('{{ campo }}')">{{ etiqueta }} <span class="flecha-orden" id="flecha-{{ campo }}"></span></th>
+          {% endfor %}
           {% if puede_editar %}<th>Acciones</th>{% endif %}
         </tr>
         {% for p in personas %}
@@ -246,7 +250,13 @@
         {% set edicion_multicanal = puede_editar and (p.canal or "")|upper == "MULTICANAL" %}
         {% set zona_farmacia_au_actual = zon.overrides[0][1] if zon.overrides else "" %}
         {% set supervisor_farmacia_au_dni_actual = sup.overrides[0][2] if sup.overrides else "" %}
-        <tr>
+        <tr data-orden-dni="{{ p.dni }}" data-orden-nombre="{{ (p.nombre_completo or '')|upper }}"
+            data-orden-estado="{{ p.estado or '' }}" data-orden-fecha_baja="{{ p.fecha_baja.isoformat() if p.fecha_baja else '' }}"
+            data-orden-rol="{{ (p.rol or '')|upper }}" data-orden-canal="{{ (p.canal or '')|upper }}"
+            data-orden-subcanal="{{ (p.subcanal or '')|upper }}" data-orden-region="{{ (p.region or '')|upper }}"
+            data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-zona="{{ (p.zona or '')|upper }}"
+            data-orden-supervisor="{{ (sup.principal or '')|upper }}" data-orden-correo="{{ (p.correo or '')|upper }}"
+            data-orden-analista="{{ (p.analista_propietario or '')|upper }}">
           <td>{{ p.dni }}</td>
           <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
           <td>
@@ -342,6 +352,32 @@ function togglePanel(campo) {
 document.addEventListener('click', function (e) {
   if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
 });
+
+// Ordenar por encabezado (Davor, 2026-09-04: "ponerle la opción de
+// ordenar a los encabezados, dandole click se ordena ascendente o
+// descendente") -- reordena las filas ya cargadas en el DOM (sin volver
+// a pedirle nada al servidor) para no perder ediciones sin guardar en
+// los <select>/<input> de Subcanal/Zona/Supervisor. El valor a comparar
+// sale de data-orden-<campo>, ya normalizado en mayúsculas (o ISO para
+// fecha_baja, o el DNI crudo) en vez del texto tal como se ve en pantalla.
+var ordenActual = { campo: null, asc: true };
+function ordenarPor(campo) {
+  var tabla = document.getElementById('tabla-personal');
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var asc = ordenActual.campo === campo ? !ordenActual.asc : true;
+  ordenActual = { campo: campo, asc: asc };
+  var esNumerico = campo === 'dni';
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = esNumerico ? (Number(va) - Number(vb)) : va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  document.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById('flecha-' + campo).textContent = asc ? '▲' : '▼';
+}
 </script>
 </body>
 </html>
