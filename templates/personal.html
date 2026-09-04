@@ -131,10 +131,22 @@
         <div class="flash {{ category }}">{{ message }}</div>
       {% endfor %}
     {% endwith %}
-    {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles %}
+    {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles or roles_disponibles %}
     <div class="panel">
       <p class="panel-title">Filtros</p>
       <form method="get" id="form-filtros" class="form-row">
+        {% if roles_disponibles %}
+        <label class="field">Rol
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-rol" onclick="togglePanel('rol')">
+              {% if not filtro_args.rol %}Todos{% elif filtro_args.rol|length == 1 %}{{ filtro_args.rol[0]|title }}{% else %}{{ filtro_args.rol|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-rol">
+              {% for r in roles_disponibles %}<label class="ms-opt"><input type="checkbox" name="rol" value="{{ r }}" {{ 'checked' if r in filtro_args.rol else '' }}> {{ r|title }}</label>{% endfor %}
+            </div>
+          </div>
+        </label>
+        {% endif %}
         {% if regiones_disponibles %}
         <label class="field">Región
           <div class="ms">

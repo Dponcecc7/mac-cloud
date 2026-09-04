@@ -516,9 +516,11 @@ def create_app():
             # Supervisor (Davor, 2026-09-04: "Agregale filtro supervisor
             # también") -- mismo patrón que asistencia.py::_filtros_marcar().
             "supervisor": request.args.getlist("supervisor") if puede_filtrar else [],
+            # Rol (Davor, 2026-09-04: "Agregar filtro Rol").
+            "rol": request.args.getlist("rol") if puede_filtrar else [],
         }
         if not puede_filtrar:
-            return filtro_args, [], [], [], [], [], []
+            return filtro_args, [], [], [], [], [], [], []
         cond_scope = condicion_scope(Persona, current_user)
 
         # Filtros cruzados (Davor, 2026-09-04: "Que sean filtros cruzados")
@@ -541,6 +543,7 @@ def create_app():
                 subcanal_filtro=None if excepto == "subcanal" else filtro_args["subcanal"],
                 estado_filtro=None if excepto == "estado" else filtro_args["estado"],
                 supervisor_filtro=None if excepto == "supervisor" else filtro_args["supervisor"],
+                rol_filtro=None if excepto == "rol" else filtro_args["rol"],
             )
 
         def _valores_cruzados(columna, excepto):
@@ -549,6 +552,7 @@ def create_app():
 
         regiones_disponibles = _valores_cruzados(Persona.region, "region")
         ciudades_disponibles = _valores_cruzados(Persona.ciudad, "ciudad")
+        roles_disponibles = _valores_cruzados(Persona.rol, "rol")
         canales_disponibles = CANALES_FILTRABLES if es_admin else []
         # Lista fija (no _valores_cruzados(Persona.estado, ...)) -- son solo
         # estos 3 valores posibles en todo el sistema, ver
@@ -564,7 +568,7 @@ def create_app():
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
         return (
             filtro_args, regiones_disponibles, ciudades_disponibles, canales_disponibles, SUBCANALES,
-            estados_disponibles, supervisores_disponibles,
+            estados_disponibles, supervisores_disponibles, roles_disponibles,
         )
 
     def _consultar_personal(dim_session, filtro_args):
@@ -576,6 +580,7 @@ def create_app():
             query, Persona, region_filtro=filtro_args["region"], ciudad_filtro=filtro_args["ciudad"],
             canal_filtro=filtro_args["canal"], subcanal_filtro=filtro_args["subcanal"],
             estado_filtro=filtro_args["estado"], supervisor_filtro=filtro_args["supervisor"],
+            rol_filtro=filtro_args["rol"],
         )
         return query.order_by(Persona.estado, Persona.nombre_completo).all()
 
@@ -659,7 +664,7 @@ def create_app():
         # agregar_reemplazo.py (CLI local) hasta que haya un formulario acá.
         dim_session = get_dim_session()
         try:
-            filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp, estados_disp, supervisores_disp = _filtros_personal(dim_session)
+            filtro_args, regiones_disp, ciudades_disp, canales_disp, subcanales_disp, estados_disp, supervisores_disp, roles_disp = _filtros_personal(dim_session)
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
             zonas_por_dni = _resolver_zonas(dim_session, personas)
@@ -686,6 +691,7 @@ def create_app():
             filtro_args=filtro_args, filtro_qs=filtro_qs, regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp,
             canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp, estados_disponibles=estados_disp,
             supervisores_disponibles=supervisores_disp, supervisores_editables=supervisores_editables,
+            roles_disponibles=roles_disp,
             subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
             zonas_por_dni=zonas_por_dni,
         )
@@ -833,7 +839,7 @@ def create_app():
     def personal_exportar():
         dim_session = get_dim_session()
         try:
-            filtro_args, _regiones_disp, _ciudades_disp, _canales_disp, _subcanales_disp, _estados_disp, _supervisores_disp = _filtros_personal(dim_session)
+            filtro_args, _regiones_disp, _ciudades_disp, _canales_disp, _subcanales_disp, _estados_disp, _supervisores_disp, _roles_disp = _filtros_personal(dim_session)
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
         finally:
