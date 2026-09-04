@@ -36,6 +36,7 @@ from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
+from sqlalchemy import func
 from sqlalchemy.orm import aliased
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -635,6 +636,64 @@ def _reemplazos_historico(usuario_actual, limite=100):
             "motivo_baja": motivo_baja, "fecha_baja": fecha_baja,
         }
         for dni_nuevo, nombre_nuevo, fecha_ingreso, dni_reemplazado, nombre_reemplazada, motivo_baja, fecha_baja in filas
+    ]
+
+
+def _headcount_historico(usuario_actual, limite=100):
+    """Altas recientes de headcount NUEVO (ver cargas.py::crear_persona_individual(),
+    llamada desde "Agregar headcount") -- Davor, 2026-09-04: "Agregar el
+    histórico de Agregar headcount y dar de baja". Excluye reemplazos
+    (reemplaza_a_dni no nulo) -- esos ya tienen su propio histórico en
+    "Agregar reemplazo"/_reemplazos_historico(). No distingue alta
+    individual vs. carga masiva por Excel (ambas usan los mismos campos
+    registrado_por/fecha_registro) -- muestra cualquier alta reciente."""
+    session = get_session()
+    try:
+        SupervisorPersona = aliased(Persona)
+        query = (
+            session.query(
+                Persona.dni, Persona.nombre_completo, Persona.rol, Persona.canal,
+                Persona.region, Persona.ciudad, Persona.fecha_ingreso, Persona.fecha_registro,
+                Persona.registrado_por, SupervisorPersona.nombre_completo,
+            )
+            .outerjoin(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
+            .filter(Persona.reemplaza_a_dni.is_(None), Persona.fecha_registro.isnot(None))
+        )
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas = query.order_by(Persona.fecha_registro.desc()).limit(limite).all()
+    finally:
+        session.close()
+    return [
+        {
+            "dni": dni, "nombre": nombre, "rol": rol, "canal": canal, "region": region, "ciudad": ciudad,
+            "fecha_ingreso": fecha_ingreso, "fecha_registro": fecha_registro,
+            "registrado_por": registrado_por, "supervisor": nombre_supervisor,
+        }
+        for dni, nombre, rol, canal, region, ciudad, fecha_ingreso, fecha_registro, registrado_por, nombre_supervisor in filas
+    ]
+
+
+def _dar_de_baja_historico(usuario_actual, limite=100):
+    """Bajas ya registradas (ver dar_de_baja_submit(), que estampa
+    fecha_baja/motivo_baja/dado_de_baja_por) -- Davor, 2026-09-04: "Agregar
+    el histórico de Agregar headcount y dar de baja"."""
+    session = get_session()
+    try:
+        query = session.query(
+            Persona.dni, Persona.nombre_completo, Persona.estado,
+            Persona.fecha_baja, Persona.motivo_baja, Persona.dado_de_baja_por,
+        ).filter(Persona.fecha_baja.isnot(None))
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas = query.order_by(Persona.fecha_baja.desc()).limit(limite).all()
+    finally:
+        session.close()
+    return [
+        {"dni": dni, "nombre": nombre, "estado": estado, "fecha_baja": fecha_baja, "motivo_baja": motivo_baja, "dado_de_baja_por": dado_de_baja_por}
+        for dni, nombre, estado, fecha_baja, motivo_baja, dado_de_baja_por in filas
     ]
 
 
@@ -1315,8 +1374,12 @@ def headcount_nuevo_form():
         ciudades_disponibles = _valores(Persona.ciudad)
         zonas_disponibles = _valores(Persona.zona)
 
+        # startswith("SUPERVISOR") y no == "SUPERVISORES" -- mismo bug que
+        # ya se encontró y corrigió en cargas.py::supervisores_propios
+        # (Davor, 2026-09-01): hay supervisores guardados con
+        # Rol="SUPERVISOR" en singular que el match exacto no encontraba.
         q_sup = session.query(Persona.dni, Persona.nombre_completo).filter(
-            Persona.rol == "SUPERVISORES", Persona.estado == "Activo"
+            func.upper(func.trim(Persona.rol)).startswith("SUPERVISOR"), Persona.estado == "Activo"
         )
         if cond_scope is not None:
             q_sup = q_sup.filter(cond_scope)
@@ -1324,12 +1387,15 @@ def headcount_nuevo_form():
     finally:
         session.close()
 
+    historico = _headcount_historico(current_user)
+
     return render_template(
         "asistencia_headcount_nuevo.html", usuario=current_user, activo="headcount_nuevo",
         hoy=dt.date.today().isoformat(), dias_patron=DIAS_PATRON,
         roles_disponibles=roles_disponibles, canales_disponibles=canales_disponibles,
         regiones_disponibles=regiones_disponibles, ciudades_disponibles=ciudades_disponibles,
         zonas_disponibles=zonas_disponibles, supervisores_disponibles=supervisores_disponibles,
+        historico=historico,
     )
 
 
@@ -1433,9 +1499,11 @@ def dar_de_baja_form():
     finally:
         session.close()
 
+    historico = _dar_de_baja_historico(current_user)
+
     return render_template(
         "asistencia_dar_de_baja.html", usuario=current_user, activo="dar_de_baja",
-        hoy=dt.date.today().isoformat(), activos=activos,
+        hoy=dt.date.today().isoformat(), activos=activos, historico=historico,
     )
 
 

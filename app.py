@@ -683,6 +683,16 @@ def create_app():
                 ),
                 key=lambda t: (t[1] or "").title(),
             ) if puede_editar else []
+            # Sugerencias para el <input list> de Rol (Davor, 2026-09-04:
+            # "cambiar de Rol a Aguilar Vasquez... ahora es Promotora") --
+            # todos los valores YA existentes (sin el cruce de filtros de
+            # roles_disponibles, para que no desaparezcan sugerencias según
+            # qué filtro esté activo), pero sigue siendo texto libre: un
+            # Rol nuevo (como "Promotora", la primera vez) se puede tipear
+            # igual.
+            roles_editables = sorted(
+                {r for (r,) in dim_session.query(Persona.rol).filter(Persona.rol.isnot(None)).distinct().all() if r}
+            ) if puede_editar else []
         finally:
             dim_session.close()
         filtro_qs = {k: v for k, v in filtro_args.items() if v}
@@ -691,7 +701,7 @@ def create_app():
             filtro_args=filtro_args, filtro_qs=filtro_qs, regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp,
             canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp, estados_disponibles=estados_disp,
             supervisores_disponibles=supervisores_disp, supervisores_editables=supervisores_editables,
-            roles_disponibles=roles_disp,
+            roles_disponibles=roles_disp, roles_editables=roles_editables,
             subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
             zonas_por_dni=zonas_por_dni,
         )
@@ -710,6 +720,8 @@ def create_app():
         # igual en el POST (vinieron de su propia pantalla) pero se
         # ignoran en silencio acá, mismo criterio que el guardado
         # fila-por-fila anterior.
+        from historial import registrar_cambio_rol
+
         if current_user.rol not in ("admin", "analista"):
             flash("No tenés permiso para editar Personal.", "error")
             return redirect(url_for("personal"))
@@ -734,7 +746,11 @@ def create_app():
                 if dni not in personas:
                     continue
                 modo_canal = request.form.get(f"modo_canal_{dni}") == "1"
-                datos = {"subcanal": (request.form.get(f"subcanal_{dni}") or "").strip(), "modo_canal": modo_canal}
+                datos = {
+                    "subcanal": (request.form.get(f"subcanal_{dni}") or "").strip(),
+                    "rol": (request.form.get(f"rol_{dni}") or "").strip(),
+                    "modo_canal": modo_canal,
+                }
                 if modo_canal:
                     datos["zona_tradicional"] = (request.form.get(f"zona_tradicional_{dni}") or "").strip()
                     datos["zona_farmacia_au"] = (request.form.get(f"zona_farmacia_au_{dni}") or "").strip()
@@ -762,6 +778,15 @@ def create_app():
             for dni, datos in datos_por_dni.items():
                 persona = personas[dni]
                 persona.subcanal = datos["subcanal"] or None
+                # Cambio de Rol -- se registra en Historial de cambios ANTES
+                # de pisar el valor viejo (Davor, 2026-09-04: "Adicionalmente
+                # cambiar de Rol a Aguilar Vasquez... agregar el cambio de
+                # Rol a los campos al historial de cambios"). Solo si
+                # realmente cambió -- no generar una fila de historial en
+                # cada guardado si el Rol quedó igual.
+                if datos["rol"] and datos["rol"] != (persona.rol or ""):
+                    registrar_cambio_rol(dim_session, dni, persona.rol, datos["rol"])
+                    persona.rol = datos["rol"]
                 if datos["modo_canal"]:
                     persona.zona = datos["zona_tradicional"] or None
                     persona.supervisor_dni = datos["supervisor_tradicional"] or None

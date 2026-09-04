@@ -45,6 +45,15 @@
     table.patron .dia { font-size:12.5px; font-weight:700; white-space:nowrap; padding-right:12px; }
     table.patron input, table.patron select { font:inherit; font-size:12.5px; padding:6px 8px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
     .table-wrap { overflow-x:auto; }
+    details summary { cursor:pointer; font-weight:700; font-size:14px; color:var(--brand); padding:12px 16px; background:var(--card); border-radius:14px; box-shadow:0 1px 3px rgba(35,25,10,.06); list-style:none; }
+    details summary::-webkit-details-marker { display:none; }
+    details summary::before { content:"+ "; }
+    details[open] summary::before { content:"− "; }
+    details[open] summary { border-radius:14px 14px 0 0; margin-bottom:0; }
+    .empty { color:var(--muted); font-size:13px; }
+    table.historico { border-collapse:collapse; width:100%; font-size:12.5px; }
+    table.historico th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); border-bottom:1px solid var(--line); }
+    table.historico td { padding:8px 10px; border-bottom:1px solid var(--line); }
 
     @media (max-width: 760px) {
       .wrap { padding:0 12px 40px; }
@@ -174,6 +183,33 @@
 
       <div class="actions"><button class="btn" type="submit">Agregar headcount</button></div>
     </form>
+
+    <details style="margin-top:14px;">
+      <summary>Histórico de headcount agregado ({{ historico|length }})</summary>
+      <div class="panel" style="border-radius:0 0 14px 14px; margin-top:0;">
+        {% if not historico %}
+        <p class="empty">Todavía no se agregó headcount nuevo.</p>
+        {% else %}
+        <div class="table-wrap">
+        <table class="historico">
+          <tr><th>Fecha de ingreso</th><th>Nombre</th><th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Supervisor</th><th>Registrado por</th></tr>
+          {% for r in historico %}
+          <tr>
+            <td>{{ r.fecha_ingreso.strftime("%d/%m/%Y") if r.fecha_ingreso else "—" }}</td>
+            <td>{{ (r.nombre or r.dni)|title }}</td>
+            <td>{{ (r.rol or "—")|title }}</td>
+            <td>{{ (r.canal or "—")|title }}</td>
+            <td>{{ (r.region or "—")|title }}</td>
+            <td>{{ (r.ciudad or "—")|title }}</td>
+            <td>{{ (r.supervisor or "—")|title }}</td>
+            <td>{{ r.registrado_por or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        </div>
+        {% endif %}
+      </div>
+    </details>
   </div>
 </body>
 </html>

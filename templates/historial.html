@@ -201,7 +201,7 @@
             <label>Campo</label>
             <select name="campo">
               <option value="">Todos</option>
-              {% for c in campos %}<option value="{{ c }}" {{ 'selected' if campo_filtro == c else '' }}>{{ c }}</option>{% endfor %}
+              {% for c in campos_filtro %}<option value="{{ c }}" {{ 'selected' if campo_filtro == c else '' }}>{{ c }}</option>{% endfor %}
             </select>
           </div>
           <button type="submit" class="ghost">Filtrar</button>

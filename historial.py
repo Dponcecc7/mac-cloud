@@ -39,6 +39,14 @@ CAMPOS_VALIDOS = [
     "Hora entrada programada", "Hora salida programada",
     "Canal", "Canal del día", "Supervisor", "Zona", "Refrigerio",
 ]
+# "Rol" en el FILTRO de "Cambios registrados" pero NO en CAMPOS_VALIDOS
+# (Davor, 2026-09-04: "quiero mapear en mi histórico desde que fecha
+# cambió de Rol... no chancar lo pasado") -- se le puede seguir el rastro
+# a un cambio de Rol ya ocurrido (ver registrar_cambio_rol(), llamado
+# desde Personal cuando se edita), pero sigue sin ofrecerse como Campo
+# elegible en el formulario manual/carga masiva -- ahí seguiría sin hacer
+# nada, es la misma razón de siempre.
+CAMPOS_FILTRABLES = CAMPOS_VALIDOS + ["Rol"]
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 # Un solo lugar para el formato esperado de "Valor nuevo" por Campo -- se
@@ -65,6 +73,22 @@ COLUMNAS_HISTORIAL_ESPERADAS = [
 # Historial es tan sensible como subir Headcount nuevo, así que se abre a
 # analista+admin, no solo admin.
 _analista_requerido = requiere_analista_admin()
+
+
+def registrar_cambio_rol(session, dni, rol_anterior, rol_nuevo):
+    """Deja un registro en Historial de cambios cuando el Rol de alguien
+    cambia -- SOLO informativo (Rol no está en CAMPOS_VALIDOS a propósito,
+    ver arriba). Davor, 2026-09-04: "quiero mapear en mi histórico desde
+    que fecha cambió de Rol y todo ese detalle, no chancar lo pasado" --
+    agrega una fila nueva por cada cambio, nunca edita ni borra una
+    anterior (a diferencia de Persona.rol, que solo guarda el valor
+    actual). No hace nada si rol_anterior == rol_nuevo (nada que
+    registrar) -- llamar solo cuando ya se confirmó que hay un cambio real
+    es responsabilidad de quien invoca esto."""
+    session.add(HistorialCambio(
+        dni=dni, campo="Rol", valor_nuevo=rol_nuevo, fecha_desde=dt.date.today(),
+        comentario=f"Antes: {rol_anterior or '(sin rol)'}",
+    ))
 
 
 def _persona_en_scope(session, dni):
@@ -246,7 +270,7 @@ def listar():
     cambios = [{"c": c, "nombre": nombre} for c, nombre in filas]
     return render_template(
         "historial.html", usuario=current_user, cambios=cambios,
-        campos=CAMPOS_VALIDOS, dias_semana=DIAS_SEMANA, formato_por_campo=FORMATO_POR_CAMPO,
+        campos=CAMPOS_VALIDOS, campos_filtro=CAMPOS_FILTRABLES, dias_semana=DIAS_SEMANA, formato_por_campo=FORMATO_POR_CAMPO,
         buscar=buscar, campo_filtro=campo_filtro,
     )
 

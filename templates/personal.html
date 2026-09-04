@@ -237,6 +237,11 @@
     </div>
     <div class="panel">
       <div class="table-wrap">
+      {% if puede_editar %}
+      <datalist id="lista-roles">
+        {% for r in roles_editables %}<option value="{{ r }}">{% endfor %}
+      </datalist>
+      {% endif %}
       <table id="tabla-personal">
         <tr>
           {% for campo, etiqueta in [('dni','DNI'), ('nombre','Nombre'), ('estado','Estado'), ('fecha_baja','Fecha de baja'), ('rol','Rol'), ('canal','Canal'), ('subcanal','Subcanal'), ('region','Región'), ('ciudad','Ciudad'), ('zona','Zona'), ('supervisor','Supervisor'), ('correo','Correo'), ('analista','Analista')] %}
@@ -265,7 +270,13 @@
             {% else %}<span class="estado-pill inactivo">Inactivo</span>{% endif %}
           </td>
           <td>{{ p.fecha_baja.strftime("%d/%m/%Y") if p.fecha_baja else "—" }}</td>
-          <td>{{ (p.rol or "—")|title }}</td>
+          <td>
+            {% if puede_editar %}
+            <input type="text" name="rol_{{ p.dni }}" class="zona-input" form="form-todos" list="lista-roles" value="{{ p.rol or '' }}">
+            {% else %}
+            {{ (p.rol or "—")|title }}
+            {% endif %}
+          </td>
           <td>{{ (p.canal or "—")|title }}</td>
           <td>
             {% if puede_editar %}
