@@ -511,15 +511,42 @@ def _matriz_tareo(desde, hasta, filtro_args):
     return personas, fechas, celdas
 
 
+# Rango de días para Tareo, no mes calendario completo (Davor, 2026-09-04:
+# "que el filtro fecha sea de rango de dias no mes completo, para
+# seleccionar inicio y fin") -- tope generoso (~3 meses) para no dejar
+# armar una tabla de miles de columnas por error, la misma idea que
+# HISTORICO_MAX_DIAS_RANGO pero con más margen porque acá se revisan
+# varias personas a la vez, no una sola.
+TAREO_MAX_DIAS_RANGO = 92
+
+
+def _rango_tareo_desde_query():
+    """Lee ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD -- sin ellos o inválidos,
+    default al mes calendario actual (mismo default que tenía el selector
+    de mes anterior)."""
+    hoy = dt.date.today()
+    try:
+        desde = dt.date.fromisoformat(request.args.get("desde", ""))
+        hasta = dt.date.fromisoformat(request.args.get("hasta", ""))
+    except ValueError:
+        desde = dt.date(hoy.year, hoy.month, 1)
+        hasta = dt.date(hoy.year, hoy.month, calendar.monthrange(hoy.year, hoy.month)[1])
+    if hasta < desde:
+        desde, hasta = hasta, desde
+    if (hasta - desde).days > TAREO_MAX_DIAS_RANGO:
+        hasta = desde + dt.timedelta(days=TAREO_MAX_DIAS_RANGO)
+    return desde, hasta
+
+
 @bp.get("/tareo")
 @requiere_pagina("reportes_tareo")
 def tareo():
-    desde, hasta, mes_str = _mes_desde_query()
+    desde, hasta = _rango_tareo_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
     return render_template(
         "reportes_tareo.html", usuario=current_user, activo="tareo",
-        mes_str=mes_str, desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
+        desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
         leyenda_tareo=LEYENDA_TAREO,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
@@ -540,7 +567,7 @@ _COLOR_TAREO = {
 @bp.get("/tareo/exportar")
 @requiere_pagina("reportes_tareo")
 def tareo_exportar():
-    desde, hasta, mes_str = _mes_desde_query()
+    desde, hasta = _rango_tareo_desde_query()
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     personas, fechas, celdas = _matriz_tareo(desde, hasta, filtro_args)
 
@@ -577,7 +604,7 @@ def tareo_exportar():
     wb.save(buf)
     buf.seek(0)
     return send_file(
-        buf, as_attachment=True, download_name=f"Tareo_{mes_str}.xlsx",
+        buf, as_attachment=True, download_name=f"Tareo_{desde.isoformat()}_a_{hasta.isoformat()}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 

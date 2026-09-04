@@ -126,23 +126,29 @@
       {% if tiene_acceso(usuario, 'reportes_alertas') %}<a href="{{ url_for('reportes.alertas') }}">Alertas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Marcaciones</a>{% endif %}
-      {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo', mes=mes_str) }}" class="active">Tareo</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}" class="active">Tareo</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_historico') %}<a href="{{ url_for('reportes.historico') }}">Histórico diario</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_perfil') %}<a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
     </nav>
 
     <div class="top-actions">
-      <form method="get">
-        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+      <form method="get" style="display:flex; gap:8px; align-items:center;">
+        <label style="font-size:11px; font-weight:700; color:var(--muted);">Desde
+          <input type="date" name="desde" value="{{ desde.isoformat() }}" onchange="this.form.submit()">
+        </label>
+        <label style="font-size:11px; font-weight:700; color:var(--muted);">Hasta
+          <input type="date" name="hasta" value="{{ hasta.isoformat() }}" onchange="this.form.submit()">
+        </label>
       </form>
-      <a class="btn ghost" href="{{ url_for('reportes.tareo_exportar', mes=mes_str) }}">↓ Exportar Excel</a>
+      <a class="btn ghost" href="{{ url_for('reportes.tareo_exportar', desde=desde.isoformat(), hasta=hasta.isoformat()) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
-        <input type="hidden" name="mes" value="{{ mes_str }}">
+        <input type="hidden" name="desde" value="{{ desde.isoformat() }}">
+        <input type="hidden" name="hasta" value="{{ hasta.isoformat() }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
