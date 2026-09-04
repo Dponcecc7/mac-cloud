@@ -603,6 +603,41 @@ def _reemplazos_hoy(fecha, usuario_actual):
     ]
 
 
+def _reemplazos_historico(usuario_actual, limite=100):
+    """Todos los reemplazos ya procesados (ver reemplazos.py::procesar_reemplazo(),
+    que estampa reemplaza_a_dni) -- Davor, 2026-09-04: "Mostrar también el
+    histórico de cambios" en "Agregar reemplazo", que hasta ahora solo
+    mostraba los pendientes de HOY reportados por la app (ver
+    _reemplazos_hoy()), sin ningún rastro de los ya confirmados. Incluye
+    motivo/fecha de baja de la persona reemplazada -- "por qué se fue"."""
+    session = get_session()
+    try:
+        Reemplazada = aliased(Persona)
+        query = (
+            session.query(
+                Persona.dni, Persona.nombre_completo, Persona.fecha_ingreso,
+                Persona.reemplaza_a_dni, Reemplazada.nombre_completo,
+                Reemplazada.motivo_baja, Reemplazada.fecha_baja,
+            )
+            .outerjoin(Reemplazada, Reemplazada.dni == Persona.reemplaza_a_dni)
+            .filter(Persona.reemplaza_a_dni.isnot(None))
+        )
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas = query.order_by(Persona.fecha_registro.desc()).limit(limite).all()
+    finally:
+        session.close()
+    return [
+        {
+            "nombre_nuevo": nombre_nuevo, "dni_nuevo": dni_nuevo, "fecha_ingreso": fecha_ingreso,
+            "dni_reemplazado": dni_reemplazado, "nombre_reemplazado": nombre_reemplazada or dni_reemplazado,
+            "motivo_baja": motivo_baja, "fecha_baja": fecha_baja,
+        }
+        for dni_nuevo, nombre_nuevo, fecha_ingreso, dni_reemplazado, nombre_reemplazada, motivo_baja, fecha_baja in filas
+    ]
+
+
 def _fecha_mas_reciente_con_datos():
     session = get_session()
     try:
@@ -1169,10 +1204,13 @@ def reemplazo_form():
         finally:
             session.close()
 
+    historico = _reemplazos_historico(current_user)
+
     return render_template(
         "asistencia_reemplazo.html", usuario=current_user, activo="reemplazo",
         hoy=hoy, pendientes=pendientes, error_pendientes=error_pendientes,
         dni_prellenado=dni_prellenado, nombre_prellenado=nombre_prellenado,
+        historico=historico,
     )
 
 

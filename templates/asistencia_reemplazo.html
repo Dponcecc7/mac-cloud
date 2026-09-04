@@ -49,6 +49,9 @@
     details[open] summary { border-radius:14px 14px 0 0; margin-bottom:0; }
     .empty { color:var(--muted); font-size:13px; }
     .error { color:var(--bad); background:var(--bad-bg); border-radius:8px; padding:10px 14px; font-size:12.5px; }
+    table.historico { border-collapse:collapse; width:100%; font-size:12.5px; }
+    table.historico th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); border-bottom:1px solid var(--line); }
+    table.historico td { padding:8px 10px; border-bottom:1px solid var(--line); }
   </style>
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
@@ -132,6 +135,30 @@
         </div>
         <div class="actions"><button class="btn" type="submit">Agregar reemplazo</button></div>
       </form>
+    </details>
+
+    <details style="margin-top:14px;">
+      <summary>Histórico de reemplazos ({{ historico|length }})</summary>
+      <div class="panel" style="border-radius:0 0 14px 14px; margin-top:0;">
+        {% if not historico %}
+        <p class="empty">Todavía no hay reemplazos confirmados.</p>
+        {% else %}
+        <div style="overflow-x:auto;">
+        <table class="historico">
+          <tr><th>Fecha de ingreso</th><th>Nuevo</th><th>Reemplazó a</th><th>Motivo de baja</th><th>Fecha de baja</th></tr>
+          {% for r in historico %}
+          <tr>
+            <td>{{ r.fecha_ingreso.strftime("%d/%m/%Y") if r.fecha_ingreso else "—" }}</td>
+            <td>{{ (r.nombre_nuevo or r.dni_nuevo)|title }}</td>
+            <td>{{ (r.nombre_reemplazado or r.dni_reemplazado)|title }}</td>
+            <td>{{ r.motivo_baja or "—" }}</td>
+            <td>{{ r.fecha_baja.strftime("%d/%m/%Y") if r.fecha_baja else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        </div>
+        {% endif %}
+      </div>
     </details>
   </div>
 </body>
