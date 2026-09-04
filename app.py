@@ -858,7 +858,7 @@ def create_app():
             celda.font = Font(bold=True)
         for p in personas:
             sup = supervisores_por_dni.get(p.dni, {"principal": None, "overrides": []})
-            adicionales = ", ".join(f"{c}: {n}" for c, n in sup["overrides"])
+            adicionales = ", ".join(f"{c}: {n}" for c, n, _sdni in sup["overrides"])
             ws.append([
                 p.dni, p.nombre_completo, p.estado, p.fecha_baja, p.rol, p.canal, p.subcanal,
                 p.region, p.ciudad, p.zona, sup["principal"], adicionales,
