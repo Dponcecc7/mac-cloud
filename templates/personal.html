@@ -85,6 +85,8 @@
     .ms-opt input { width:auto; margin:0; }
     .btn-filtrar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; height:fit-content; }
     .btn-filtrar:hover { opacity:.9; }
+    .btn-limpiar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--muted); text-decoration:none; height:fit-content; display:inline-flex; align-items:center; }
+    .btn-limpiar:hover { border-color:var(--bad); color:var(--bad); }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -223,6 +225,7 @@
         </label>
         {% endif %}
         <button type="submit" class="btn-filtrar">Filtrar</button>
+        {% if filtro_qs %}<a class="btn-limpiar" href="{{ url_for('personal') }}">✕ Limpiar filtro</a>{% endif %}
       </form>
     </div>
     {% endif %}
