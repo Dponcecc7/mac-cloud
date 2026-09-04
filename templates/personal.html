@@ -65,6 +65,21 @@
     .sup-principal { font-weight:600; }
     .sup-extra { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
 
+    /* Filtros multiple (Davor, 2026-09-04: "Agregar opción multiple en
+       los filtros") -- mismo componente que ya usa Reporte diario
+       (asistencia.html), adaptado a un <form method="get"> real (acá el
+       filtro sí vuelve a consultar la base, no solo esconde filas). */
+    .ms { position:relative; }
+    .ms-toggle { font:inherit; font-size:13px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; white-space:nowrap; max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+    .ms-toggle:hover { border-color:var(--brand); }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(35,25,10,.18); padding:6px; min-width:200px; max-height:260px; overflow-y:auto; }
+    .ms-panel.abierto { display:block; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt:hover { background:var(--bg); }
+    .ms-opt input { width:auto; margin:0; }
+    .btn-filtrar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--brand); color:#fff; cursor:pointer; }
+    .btn-filtrar:hover { opacity:.9; }
+
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -115,43 +130,68 @@
     {% endwith %}
     <div class="top-actions">
       {% if regiones_disponibles or ciudades_disponibles or canales_disponibles or subcanales_disponibles or estados_disponibles or supervisores_disponibles %}
-      <form method="get">
+      <form method="get" id="form-filtros">
         {% if regiones_disponibles %}
-        <select name="region" onchange="this.form.submit()">
-          <option value="">Región: todas</option>
-          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
+            {% if not filtro_args.region %}Región: todas{% elif filtro_args.region|length == 1 %}{{ filtro_args.region[0]|title }}{% else %}Región ({{ filtro_args.region|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-region">
+            {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if ciudades_disponibles %}
-        <select name="ciudad" onchange="this.form.submit()">
-          <option value="">Ciudad: todas</option>
-          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-ciudad" onclick="togglePanel('ciudad')">
+            {% if not filtro_args.ciudad %}Ciudad: todas{% elif filtro_args.ciudad|length == 1 %}{{ filtro_args.ciudad[0]|title }}{% else %}Ciudad ({{ filtro_args.ciudad|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-ciudad">
+            {% for c in ciudades_disponibles %}<label class="ms-opt"><input type="checkbox" name="ciudad" value="{{ c }}" {{ 'checked' if c in filtro_args.ciudad else '' }}> {{ c|title }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if canales_disponibles %}
-        <select name="canal" onchange="this.form.submit()" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
-          <option value="">Canal: todos</option>
-          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-canal" onclick="togglePanel('canal')" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+            {% if not filtro_args.canal %}Canal: todos{% elif filtro_args.canal|length == 1 %}{{ filtro_args.canal[0]|title }}{% else %}Canal ({{ filtro_args.canal|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-canal">
+            {% for c in canales_disponibles %}<label class="ms-opt"><input type="checkbox" name="canal" value="{{ c }}" {{ 'checked' if c in filtro_args.canal else '' }}> {{ c|title }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if subcanales_disponibles %}
-        <select name="subcanal" onchange="this.form.submit()">
-          <option value="">Subcanal: todos</option>
-          {% for s in subcanales_disponibles %}<option value="{{ s }}" {{ 'selected' if filtro_args.subcanal == s else '' }}>{{ s }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-subcanal" onclick="togglePanel('subcanal')">
+            {% if not filtro_args.subcanal %}Subcanal: todos{% elif filtro_args.subcanal|length == 1 %}{{ filtro_args.subcanal[0] }}{% else %}Subcanal ({{ filtro_args.subcanal|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-subcanal">
+            {% for s in subcanales_disponibles %}<label class="ms-opt"><input type="checkbox" name="subcanal" value="{{ s }}" {{ 'checked' if s in filtro_args.subcanal else '' }}> {{ s }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if estados_disponibles %}
-        <select name="estado" onchange="this.form.submit()">
-          <option value="">Estado: todos</option>
-          {% for e in estados_disponibles %}<option value="{{ e }}" {{ 'selected' if filtro_args.estado == e else '' }}>{{ 'Dado de baja' if e == 'Vacante' else e }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-estado" onclick="togglePanel('estado')">
+            {% if not filtro_args.estado %}Estado: todos{% elif filtro_args.estado|length == 1 %}{{ 'Dado de baja' if filtro_args.estado[0] == 'Vacante' else filtro_args.estado[0] }}{% else %}Estado ({{ filtro_args.estado|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-estado">
+            {% for e in estados_disponibles %}<label class="ms-opt"><input type="checkbox" name="estado" value="{{ e }}" {{ 'checked' if e in filtro_args.estado else '' }}> {{ 'Dado de baja' if e == 'Vacante' else e }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if supervisores_disponibles %}
-        <select name="supervisor" onchange="this.form.submit()">
-          <option value="">Supervisor: todos</option>
-          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
+            {% if not filtro_args.supervisor %}Supervisor: todos{% elif filtro_args.supervisor|length == 1 %}{{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}Supervisor ({{ filtro_args.supervisor|length }}){% endif %}
+          </button>
+          <div class="ms-panel" id="panel-supervisor">
+            {% for dni, nombre in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ dni }}" {{ 'checked' if dni in filtro_args.supervisor else '' }}> {{ nombre|title }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
+        <button type="submit" class="btn-filtrar">Filtrar</button>
       </form>
       {% endif %}
       <a class="btn-descargar" href="{{ url_for('personal_exportar', **filtro_qs) }}">⬇ Descargar Excel</a>
@@ -264,5 +304,14 @@
       </div>
     </div>
   </div>
+<script>
+function togglePanel(campo) {
+  document.querySelectorAll('.ms-panel').forEach(function (p) { if (p.id !== 'panel-' + campo) p.classList.remove('abierto'); });
+  document.getElementById('panel-' + campo).classList.toggle('abierto');
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
+});
+</script>
 </body>
 </html>

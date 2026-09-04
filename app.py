@@ -501,18 +501,21 @@ def create_app():
         # acotado por condicion_scope()).
         puede_filtrar = current_user.rol in ("admin", "analista")
         es_admin = current_user.rol == "admin"
+        # getlist() (Davor, 2026-09-04: "Agregar opción multiple en los
+        # filtros") -- cada filtro ahora puede traer varios valores
+        # (checkboxes con el mismo name), no solo uno.
         filtro_args = {
-            "region": (request.args.get("region") or "") if puede_filtrar else "",
-            "ciudad": (request.args.get("ciudad") or "") if puede_filtrar else "",
-            "canal": (request.args.get("canal") or "") if es_admin else "",
-            "subcanal": (request.args.get("subcanal") or "") if puede_filtrar else "",
+            "region": request.args.getlist("region") if puede_filtrar else [],
+            "ciudad": request.args.getlist("ciudad") if puede_filtrar else [],
+            "canal": request.args.getlist("canal") if es_admin else [],
+            "subcanal": request.args.getlist("subcanal") if puede_filtrar else [],
             # Estado (Davor, 2026-09-04: "agregar un filtro de Estado, para
             # filtrar solo activos") -- sin filtro, "Personal" siempre
             # mostro tambien Inactivo/Vacante mezclados con Activo.
-            "estado": (request.args.get("estado") or "") if puede_filtrar else "",
+            "estado": request.args.getlist("estado") if puede_filtrar else [],
             # Supervisor (Davor, 2026-09-04: "Agregale filtro supervisor
             # también") -- mismo patrón que asistencia.py::_filtros_marcar().
-            "supervisor": (request.args.get("supervisor") or "") if puede_filtrar else "",
+            "supervisor": request.args.getlist("supervisor") if puede_filtrar else [],
         }
         if not puede_filtrar:
             return filtro_args, [], [], [], [], [], []

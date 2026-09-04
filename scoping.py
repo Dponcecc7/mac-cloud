@@ -91,14 +91,30 @@ def canonizar_canal(valor):
     return v
 
 
+def _como_lista(valor):
+    """Normaliza un filtro que puede llegar como un solo valor (string,
+    la mayoría de los llamadores existentes) o como varios (lista/tupla,
+    Davor 2026-09-04: "Agregar opción multiple en los filtros", ver
+    Personal) -- así el resto del código no necesita distinguir los dos
+    casos."""
+    if not valor:
+        return []
+    return [valor] if isinstance(valor, str) else list(valor)
+
+
 def condicion_canal(persona_model, canal):
     """Misma condición que el branch de canal_asignado en condicion_scope(),
     factorizada para reusar en el filtro de canal de admin (aplicar_filtros_extra) --
     ve una Persona si su canal principal coincide (tolerando variantes de
     CANAL_VARIANTES) O si tiene algún día de PatronRecurrente en ese canal
-    (mercaderistas compartidos entre canales)."""
-    canal_norm = canonizar_canal(canal)
-    variantes = CANAL_VARIANTES.get(canal_norm, (canal_norm,))
+    (mercaderistas compartidos entre canales).
+
+    `canal` acepta un solo canal (string) o varios (lista/tupla) -- con
+    varios, es "cualquiera de ellos" (unión de variantes de todos)."""
+    variantes = set()
+    for c in _como_lista(canal):
+        canal_norm = canonizar_canal(c)
+        variantes.update(CANAL_VARIANTES.get(canal_norm, (canal_norm,)))
     dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia).in_(variantes))
     return (func.upper(persona_model.canal).in_(variantes)) | persona_model.dni.in_(dnis_con_ese_canal)
 
@@ -182,19 +198,24 @@ def aplicar_filtros_extra(query, persona_model, rol_filtro=None, region_filtro=N
     Persona.estado es Activo/Inactivo/Vacante ("Vacante" = alguien de baja
     cuya posición sigue sin reemplazo, ver dar_de_baja_submit() -- no es un
     error de datos, la fila se mantiene visible A PROPÓSITO para no perder
-    el hilo hasta que "Agregar reemplazo" la cubra)."""
+    el hilo hasta que "Agregar reemplazo" la cubra).
+
+    Cada filtro acepta un solo valor (string, uso histórico) o varios
+    (lista/tupla, Davor 2026-09-04: "Agregar opción multiple en los
+    filtros", ver Personal) -- via _como_lista()/condicion_canal(), sin
+    cambio para los llamadores que siguen pasando un solo valor."""
     if rol_filtro:
-        query = query.filter(persona_model.rol == rol_filtro)
+        query = query.filter(persona_model.rol.in_(_como_lista(rol_filtro)))
     if region_filtro:
-        query = query.filter(persona_model.region == region_filtro)
+        query = query.filter(persona_model.region.in_(_como_lista(region_filtro)))
     if supervisor_filtro:
-        query = query.filter(persona_model.supervisor_dni == supervisor_filtro)
+        query = query.filter(persona_model.supervisor_dni.in_(_como_lista(supervisor_filtro)))
     if ciudad_filtro:
-        query = query.filter(persona_model.ciudad == ciudad_filtro)
+        query = query.filter(persona_model.ciudad.in_(_como_lista(ciudad_filtro)))
     if canal_filtro:
         query = query.filter(condicion_canal(persona_model, canal_filtro))
     if subcanal_filtro:
-        query = query.filter(persona_model.subcanal == subcanal_filtro)
+        query = query.filter(persona_model.subcanal.in_(_como_lista(subcanal_filtro)))
     if estado_filtro:
-        query = query.filter(persona_model.estado == estado_filtro)
+        query = query.filter(persona_model.estado.in_(_como_lista(estado_filtro)))
     return query
