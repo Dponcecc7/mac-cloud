@@ -25,7 +25,7 @@ PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 from extensions import csrf, db, limiter, login_manager
 from models import Usuario
-from dimension_models import Feriado, Persona, PersonaZonaCanal, SUBCANALES
+from dimension_models import Feriado, Persona, PersonaSupervisorCanal, PersonaZonaCanal, SUBCANALES
 from permisos import requiere_pagina, tiene_acceso
 from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
@@ -560,10 +560,10 @@ def create_app():
 
     def _resolver_supervisores(dim_session, personas):
         """{dni: {"principal": nombre_o_None, "principal_canal": etiqueta_o_None,
-        "overrides": [(canal, nombre), ...]}} (Davor, 2026-08-29: "que
-        aparezca el nombre y también si hay 2 supers para ese
-        mercaderista"). El nombre se busca SIN aplicar condicion_scope() --
-        el supervisor "de otro canal" de un compartido puede pertenecer a
+        "overrides": [(canal, nombre, supervisor_dni), ...]}} (Davor,
+        2026-08-29: "que aparezca el nombre y también si hay 2 supers para
+        ese mercaderista"). El nombre se busca SIN aplicar condicion_scope()
+        -- el supervisor "de otro canal" de un compartido puede pertenecer a
         otro analista, y aun así hay que poder mostrar su nombre acá (mismo
         criterio que ya usa asistencia.py para este mismo problema).
 
@@ -572,7 +572,12 @@ def create_app():
         en el item de supervisor... Tradicional: Daniela cabanillas") --
         cuando hay overrides que cubren SOLO algunos canales, el principal
         se etiqueta con el/los canal(es) que quedan sin override, en vez de
-        mostrarlo suelto sin aclarar a cuál corresponde."""
+        mostrarlo suelto sin aclarar a cuál corresponde.
+
+        El `supervisor_dni` en cada override (Davor, 2026-09-04: "ponle
+        editar a supervisores también") es lo que necesita el <select> de
+        edición en Personal para preseleccionar la opción correcta -- el
+        nombre solo no alcanza para eso."""
         overrides = todos_overrides_supervisor_canal(dim_session, [p.dni for p in personas])
         dnis_necesarios = {p.supervisor_dni for p in personas if p.supervisor_dni}
         for filas in overrides.values():
@@ -584,12 +589,12 @@ def create_app():
         for p in personas:
             principal_nombre = (nombre_de.get(p.supervisor_dni) or p.supervisor_dni) if p.supervisor_dni else None
             overrides_p = [
-                (canal.title(), nombre_de.get(sup_dni) or sup_dni)
+                (canal.title(), nombre_de.get(sup_dni) or sup_dni, sup_dni)
                 for canal, sup_dni in overrides.get(p.dni, [])
             ]
             principal_canal = None
             if overrides_p and principal_nombre:
-                cubiertos = {canal for canal, _ in overrides_p}
+                cubiertos = {canal for canal, _, _ in overrides_p}
                 faltantes = [c for c in _TODOS_LOS_CANALES if c not in cubiertos]
                 if faltantes:
                     principal_canal = ", ".join(faltantes)
@@ -635,15 +640,29 @@ def create_app():
             personas = _consultar_personal(dim_session, filtro_args)
             supervisores_por_dni = _resolver_supervisores(dim_session, personas)
             zonas_por_dni = _resolver_zonas(dim_session, personas)
+            puede_editar = current_user.rol in ("admin", "analista")
+            # Lista GLOBAL (no acotada por condicion_scope), a propósito
+            # (Davor, 2026-09-04: "ponle editar a supervisores también") --
+            # un supervisor puede tener gente a cargo en el headcount de MÁS
+            # DE UN analista (ver cargas.py::supervisores_propios, mismo
+            # criterio), así que el <select> de edición debe poder asignar
+            # a cualquiera, no solo a los visibles en el scope de quien edita.
+            supervisores_editables = sorted(
+                (
+                    (dni, nombre) for dni, nombre, rol in
+                    dim_session.query(Persona.dni, Persona.nombre_completo, Persona.rol)
+                    if (rol or "").strip().upper().startswith("SUPERVISOR")
+                ),
+                key=lambda t: (t[1] or "").title(),
+            ) if puede_editar else []
         finally:
             dim_session.close()
-        puede_editar = current_user.rol in ("admin", "analista")
         filtro_qs = {k: v for k, v in filtro_args.items() if v}
         return render_template(
             "personal.html", usuario=current_user, personas=personas,
             filtro_args=filtro_args, filtro_qs=filtro_qs, regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp,
             canales_disponibles=canales_disp, subcanales_disponibles=subcanales_disp, estados_disponibles=estados_disp,
-            supervisores_disponibles=supervisores_disp,
+            supervisores_disponibles=supervisores_disp, supervisores_editables=supervisores_editables,
             subcanales=SUBCANALES, puede_editar=puede_editar, supervisores_por_dni=supervisores_por_dni,
             zonas_por_dni=zonas_por_dni,
         )
@@ -662,20 +681,38 @@ def create_app():
             return redirect(url_for("personal"))
         dni = request.form.get("dni", "")
         subcanal = (request.form.get("subcanal") or "").strip()
-        # zona_modo="canal" (Davor, 2026-09-04: "Misma lógica para zonas...
-        # con la opción de editarlo en el maestro ahora") -- Multicanal
-        # manda 2 campos (Tradicional / Farmacia+AU) en vez del campo único
-        # "zona"; el resto de las personas sigue con el campo único de
-        # siempre, sin cambio de comportamiento.
-        zona_modo_canal = request.form.get("zona_modo") == "canal"
+        # modo_canal=1 (Davor, 2026-09-04: "Misma lógica para zonas... con
+        # la opción de editarlo en el maestro ahora" / "ponle editar a
+        # supervisores también") -- Multicanal manda 2 campos por canal
+        # (Tradicional / Farmacia+AU) tanto para Zona como para Supervisor,
+        # en vez del campo único de siempre; el resto de las personas
+        # (un solo canal) sigue con el campo único, sin cambio de
+        # comportamiento.
+        modo_canal = request.form.get("modo_canal") == "1"
         zona = (request.form.get("zona") or "").strip()
         zona_tradicional = (request.form.get("zona_tradicional") or "").strip()
         zona_farmacia_au = (request.form.get("zona_farmacia_au") or "").strip()
+        supervisor = (request.form.get("supervisor") or "").strip()
+        supervisor_tradicional = (request.form.get("supervisor_tradicional") or "").strip()
+        supervisor_farmacia_au = (request.form.get("supervisor_farmacia_au") or "").strip()
         if subcanal and subcanal not in SUBCANALES:
             flash("Subcanal inválido.", "error")
             return redirect(url_for("personal"))
         dim_session = get_dim_session()
         try:
+            # Los DNI de supervisor vienen de un <select>, pero se validan
+            # igual antes de guardar (Persona.supervisor_dni es FK -- un
+            # valor inválido revienta el commit con un error feo en vez de
+            # un mensaje claro).
+            dnis_sup_pedidos = {v for v in (supervisor, supervisor_tradicional, supervisor_farmacia_au) if v}
+            if dnis_sup_pedidos:
+                dnis_validos = {
+                    d for (d,) in dim_session.query(Persona.dni).filter(Persona.dni.in_(dnis_sup_pedidos)).all()
+                }
+                if dnis_sup_pedidos - dnis_validos:
+                    flash("Supervisor inválido.", "error")
+                    return redirect(url_for("personal"))
+
             query = dim_session.query(Persona).filter(Persona.dni == dni)
             cond_scope = condicion_scope(Persona, current_user)
             if cond_scope is not None:
@@ -685,8 +722,9 @@ def create_app():
                 flash("No se encontró a esa persona en tu equipo.", "error")
                 return redirect(url_for("personal"))
             persona.subcanal = subcanal or None
-            if zona_modo_canal:
+            if modo_canal:
                 persona.zona = zona_tradicional or None
+                persona.supervisor_dni = supervisor_tradicional or None
                 if zona_farmacia_au:
                     for canal in ("FARMACIA", "AUTOSERVICIO"):
                         fila_zc = dim_session.query(PersonaZonaCanal).filter_by(dni=dni, canal=canal).first()
@@ -698,8 +736,20 @@ def create_app():
                     dim_session.query(PersonaZonaCanal).filter(
                         PersonaZonaCanal.dni == dni, PersonaZonaCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
                     ).delete(synchronize_session=False)
+                if supervisor_farmacia_au:
+                    for canal in ("FARMACIA", "AUTOSERVICIO"):
+                        fila_sc = dim_session.query(PersonaSupervisorCanal).filter_by(dni=dni, canal=canal).first()
+                        if fila_sc:
+                            fila_sc.supervisor_dni = supervisor_farmacia_au
+                        else:
+                            dim_session.add(PersonaSupervisorCanal(dni=dni, canal=canal, supervisor_dni=supervisor_farmacia_au))
+                else:
+                    dim_session.query(PersonaSupervisorCanal).filter(
+                        PersonaSupervisorCanal.dni == dni, PersonaSupervisorCanal.canal.in_(("FARMACIA", "AUTOSERVICIO")),
+                    ).delete(synchronize_session=False)
             else:
                 persona.zona = zona or None
+                persona.supervisor_dni = supervisor or None
             dim_session.commit()
             flash(f"{persona.nombre_completo.title()} actualizado.", "ok")
         finally:

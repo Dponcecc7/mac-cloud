@@ -165,8 +165,9 @@
         {% for p in personas %}
         {% set sup = supervisores_por_dni.get(p.dni, {"principal": None, "overrides": []}) %}
         {% set zon = zonas_por_dni.get(p.dni, {"principal": None, "principal_canal": None, "overrides": []}) %}
-        {% set zona_por_canal = puede_editar and (p.canal or "")|upper == "MULTICANAL" %}
+        {% set edicion_multicanal = puede_editar and (p.canal or "")|upper == "MULTICANAL" %}
         {% set zona_farmacia_au_actual = zon.overrides[0][1] if zon.overrides else "" %}
+        {% set supervisor_farmacia_au_dni_actual = sup.overrides[0][2] if sup.overrides else "" %}
         <tr>
           <td>{{ p.dni }}</td>
           <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
@@ -191,8 +192,8 @@
           <td>{{ (p.region or "—")|title }}</td>
           <td>{{ (p.ciudad or "—")|title }}</td>
           <td>
-            {% if zona_por_canal %}
-            <input type="hidden" name="zona_modo" value="canal" form="form-{{ p.dni }}">
+            {% if edicion_multicanal %}
+            <input type="hidden" name="modo_canal" value="1" form="form-{{ p.dni }}">
             <label class="campo-mini-lbl">Tradicional<input type="text" name="zona_tradicional" class="zona-input" form="form-{{ p.dni }}" value="{{ p.zona or '' }}"></label>
             <label class="campo-mini-lbl">Farmacia/AU<input type="text" name="zona_farmacia_au" class="zona-input" form="form-{{ p.dni }}" value="{{ zona_farmacia_au_actual }}"></label>
             {% elif puede_editar %}
@@ -203,8 +204,28 @@
             {% endif %}
           </td>
           <td>
+            {% if edicion_multicanal %}
+            <label class="campo-mini-lbl">Tradicional
+              <select name="supervisor_tradicional" class="zona-input" form="form-{{ p.dni }}">
+                <option value="">—</option>
+                {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if p.supervisor_dni == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="campo-mini-lbl">Farmacia/AU
+              <select name="supervisor_farmacia_au" class="zona-input" form="form-{{ p.dni }}">
+                <option value="">—</option>
+                {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if supervisor_farmacia_au_dni_actual == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
+              </select>
+            </label>
+            {% elif puede_editar %}
+            <select name="supervisor" class="zona-input" form="form-{{ p.dni }}">
+              <option value="">—</option>
+              {% for sdni, nombre in supervisores_editables %}<option value="{{ sdni }}" {{ 'selected' if p.supervisor_dni == sdni else '' }}>{{ nombre|title }}</option>{% endfor %}
+            </select>
+            {% else %}
             <span class="sup-principal">{% if sup.principal_canal %}{{ sup.principal_canal }}: {% endif %}{{ (sup.principal or "—")|title }}</span>
-            {% for canal, nombre in sup.overrides %}<span class="sup-extra">{{ canal }}: {{ nombre|title }}</span>{% endfor %}
+            {% for canal, nombre, sdni in sup.overrides %}<span class="sup-extra">{{ canal }}: {{ nombre|title }}</span>{% endfor %}
+            {% endif %}
           </td>
           <td>{{ p.correo or "—" }}</td>
           <td>{{ p.analista_propietario or "—" }}</td>
