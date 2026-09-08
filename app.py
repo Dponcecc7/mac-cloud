@@ -257,6 +257,17 @@ def create_app():
                     q = q.filter(condicion_canal(Persona, canal_filtro))
                 return q
 
+            # Excluir días en/después de fecha_baja (Davor, 2026-09-05,
+            # caso real Casas Cornejo Ruddy Raquel: "le di de baja el 01,
+            # no debería aparecer ahí" en Faltas por motivo) -- mismo
+            # criterio que ya usa asistencia.py::_cargar_reporte() para
+            # Reporte diario/Marcar asistencia ("no habría por qué tenerla
+            # ese día"), que el Dashboard nunca tuvo: sin esto, el último
+            # día de alguien (o cualquier día ya vencido con datos
+            # rezagados) seguía sumando como Falta/Tardanza real en las
+            # estadísticas del equipo.
+            condicion_no_baja = (Persona.fecha_baja.is_(None)) | (Persona.fecha_baja > ClasificacionDiaria.fecha)
+
             query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
@@ -264,6 +275,7 @@ def create_app():
                                    ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
+                .filter(condicion_no_baja)
             )
             filas = _con_filtros(query).all()
 
@@ -274,6 +286,7 @@ def create_app():
                 dim_session.query(ClasificacionDiaria.estado)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha == hoy_peru)
+                .filter(condicion_no_baja)
             )
             filas_hoy = _con_filtros(query_hoy).all()
 
