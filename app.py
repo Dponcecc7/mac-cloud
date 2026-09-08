@@ -449,7 +449,18 @@ def create_app():
                 pcts_dia.append(round(asistio / total_dia * 100, 1) if total_dia else None)
             if all(p is None for p in pcts_dia):
                 continue  # este canal no tiene NADA de datos en el periodo/filtro actual
-            series_canal.append({"canal": canal.title(), "color": COLOR_CANAL[canal], "pcts": pcts_dia})
+            # Acumulado del periodo completo (Davor, 2026-09-05: "la leyenda
+            # del tendencial por canal debería ser el indicador acumulado
+            # de los filtros") -- % de efectividad de TODO el rango elegido
+            # para ese canal, no el del último día (que es lo que mostraba
+            # antes).
+            filas_canal = r[r["canal"] == canal]
+            total_canal = len(filas_canal)
+            asistio_canal = (filas_canal["estado_base"].isin(["ASISTIÓ A TIEMPO", "TARDANZA"])).sum()
+            pct_acumulado = round(asistio_canal / total_canal * 100, 1) if total_canal else None
+            series_canal.append({
+                "canal": canal.title(), "color": COLOR_CANAL[canal], "pcts": pcts_dia, "pct_acumulado": pct_acumulado,
+            })
             todos_los_pct += [p for p in pcts_dia if p is not None]
 
         if series_canal and todos_los_pct:
@@ -462,15 +473,22 @@ def create_app():
             n = len(dias_ordenados)
             for serie in series_canal:
                 xy = []
+                puntos_detalle = []
                 for i, pct in enumerate(serie["pcts"]):
                     if pct is None:
                         continue
                     x = round(i / (n - 1) * 100, 2) if n > 1 else 50.0
                     y = round(100 - (pct - min_pct) / (max_pct - min_pct) * 100, 1)
                     xy.append(f"{x},{y}")
+                    # Puntos para el tooltip por día (Davor, 2026-09-05:
+                    # "Tendencia por canal, falta el tooltip por día") --
+                    # mismo mecanismo que "Tendencia diaria" (un <div>
+                    # posicionado en % con title=), replicado por canal.
+                    puntos_detalle.append({
+                        "x": x, "y": y, "dia": dias_ordenados[i].strftime("%d/%m"), "pct": pct,
+                    })
                 serie["puntos_svg"] = " ".join(xy)
-                ultimos = [p for p in serie["pcts"] if p is not None]
-                serie["pct_ultimo"] = ultimos[-1] if ultimos else None
+                serie["puntos_detalle"] = puntos_detalle
         dias_tendencia_canal = [d.strftime("%d/%m") for d in dias_ordenados]
 
         # Ratio de asistencia por Región/Ciudad (Davor, 2026-09-05) -- mismo

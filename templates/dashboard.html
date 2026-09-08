@@ -323,13 +323,18 @@
             <polyline points="{{ serie.puntos_svg }}" class="chart-line-path" style="stroke:{{ serie.color }};"></polyline>
             {% endfor %}
           </svg>
+          {% for serie in data.series_canal %}
+          {% for p in serie.puntos_detalle %}
+          <div class="chart-line-dot" style="left:{{ p.x }}%; top:{{ p.y }}%; border-color:{{ serie.color }};" title="{{ serie.canal }} · {{ p.dia }} · {{ p.pct }}% efectividad"></div>
+          {% endfor %}
+          {% endfor %}
         </div>
         <div class="chart-days-line">
           {% for d in data.dias_tendencia_canal %}<span class="chart-day">{{ d }}</span>{% endfor %}
         </div>
         <div class="legend">
           {% for serie in data.series_canal %}
-          <span><span class="swatch" style="background:{{ serie.color }};"></span> {{ serie.canal }}{% if serie.pct_ultimo is not none %} ({{ serie.pct_ultimo }}%){% endif %}</span>
+          <span><span class="swatch" style="background:{{ serie.color }};"></span> {{ serie.canal }}{% if serie.pct_acumulado is not none %} ({{ serie.pct_acumulado }}%){% endif %}</span>
           {% endfor %}
         </div>
         {% else %}
@@ -337,7 +342,7 @@
         {% endif %}
       </div>
 
-      <div class="grid2">
+      <div class="grid2" style="grid-template-columns:1fr 1.7fr;">
         <div>
           <h2 class="section">Ratio de asistencia por región</h2>
           <div class="panel">
