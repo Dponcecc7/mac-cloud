@@ -1301,6 +1301,16 @@ def reemplazo_submit():
         # "Agregar reemplazo" resuelve el futuro (quien entra) pero la
         # persona saliente seguia apareciendo en "Pendientes de marcar"
         # porque su Falta de hoy nunca queda justificada por separado.
+        # "Falta - Cese: {motivo}" (no "Falta - {motivo}" a secas) -- Davor,
+        # 2026-09-05, caso real Jahirziño Solis Mamani: "ese fue el motivo
+        # de cese, no motivo de falta... poner que siempre la prioridad sea
+        # el cese". El día sigue clasificando FALTA igual (el motor solo
+        # mira que el comentario empiece con "Falta", no le importa el
+        # resto del texto) -- el prefijo "Cese:" es lo que "Faltas por
+        # motivo" del Dashboard usa para excluirlo (ver app.py), mismo
+        # criterio que ya existía para "Tiene reemplazo -" (reportado desde
+        # la app móvil para un reemplazo todavía PENDIENTE, este es el caso
+        # de cuando el reemplazo YA se procesó).
         try:
             hoy = dt.date.today()
             ok_lock, _ = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
@@ -1308,12 +1318,12 @@ def reemplazo_submit():
                 try:
                     wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
                     ws = wb["Registro diario supervisor"]
-                    _agregar_fila_tabla3(ws, ws.max_row + 1, dni_vacante, hoy, f"Falta - {motivo_baja or 'Reemplazo'}")
+                    _agregar_fila_tabla3(ws, ws.max_row + 1, dni_vacante, hoy, f"Falta - Cese: {motivo_baja or 'Reemplazo'}")
                     subir_in_place(TABLA3_RUTA_GRAPH, wb)
                     session = get_session()
                     try:
                         session.add(CorreccionWeb(
-                            dni=dni_vacante, fecha=hoy, comentario_entrada=f"Falta - {motivo_baja or 'Reemplazo'}",
+                            dni=dni_vacante, fecha=hoy, comentario_entrada=f"Falta - Cese: {motivo_baja or 'Reemplazo'}",
                             registrado_por=current_user.email,
                         ))
                         session.commit()

@@ -413,9 +413,20 @@ def create_app():
         # móvil (ver reporte_diario_9am.py::comentarios_supervisor_dia()),
         # que queda como comentario en los días que la persona sale Falta
         # hasta que se procesa el reemplazo. No cuenta como "motivo".
+        #
+        # "Falta - Cese: {motivo}" tampoco -- lo escribe reemplazo_submit()
+        # (asistencia.py) para cerrar el "Pendiente de marcar" del día en
+        # que se PROCESA un reemplazo (a diferencia de "Tiene reemplazo",
+        # que es de un reemplazo todavía pendiente); reusa el motivo de
+        # BAJA de la persona saliente, que no tiene nada que ver con por
+        # qué faltó ese día puntual (Davor, 2026-09-05, caso real
+        # Jahirziño Solis Mamani: "ese fue el motivo de cese, no motivo de
+        # falta").
+        comentario_norm = r["comentario"].astype(str).str.strip().str.lower()
         faltas_sin_reemplazo = r[
             (r["estado_base"] == "FALTA")
-            & ~r["comentario"].astype(str).str.strip().str.lower().str.startswith("tiene reemplazo")
+            & ~comentario_norm.str.startswith("tiene reemplazo")
+            & ~comentario_norm.str.startswith("falta - cese:")
         ]
         motivo_falta = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio)
         faltas_por_motivo = motivo_falta.value_counts().head(8)
