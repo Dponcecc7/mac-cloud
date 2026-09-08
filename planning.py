@@ -156,14 +156,23 @@ def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, superv
         session.close()
 
 
-def visitas_tradicional(desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def visitas_tradicional(desde, hasta, usuario_actual):
     """Igual que cobertura._cargar_visitas(), pero forzando canal Tradicional
-    -- esta pestaña no tiene selector de canal, siempre es Tradicional."""
-    return _cargar_visitas(
-        desde, hasta, usuario_actual,
-        region_filtro=region_filtro, ciudad_filtro=ciudad_filtro, supervisor_filtro=supervisor_filtro,
-        canal_filtro=["TRADICIONAL"],
-    )
+    -- esta pestaña no tiene selector de canal, siempre es Tradicional.
+
+    A propósito SIN región/ciudad/supervisor -- esos filtros acotan cuáles
+    PDVs del Planning se muestran (ver planning_del_periodo(), que sí los
+    aplica sobre PlanningPdv, texto libre del Excel), pero acá se necesita
+    el universo COMPLETO de visitas Tradicional para poder responder "¿este
+    CO_LI lo visitó alguien?" sin importar el filtro de pantalla. Antes se
+    reusaban region_filtro/ciudad_filtro/supervisor_filtro de
+    aplicar_filtros_extra(), que filtran sobre Persona (supervisor_dni es un
+    DNI) -- al pasarle el NOMBRE de supervisor del Planning (texto libre,
+    "Ana Carbajal") esa comparación nunca matcheaba ningún DNI real y la
+    consulta de visitas volvía vacía en silencio, mostrando 0% de
+    cumplimiento aunque sí hubiera visitas reales (2026-09-08, reporte real
+    de Davor: "es imposible que ningun PDV se haya visitado hasta ahora")."""
+    return _cargar_visitas(desde, hasta, usuario_actual, canal_filtro=["TRADICIONAL"])
 
 
 def periodos_disponibles():

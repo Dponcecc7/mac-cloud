@@ -443,7 +443,7 @@ def planning():
     # colgaba el worker con el volumen real de datos (502 en producción,
     # 2026-09-08).
     planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
-    v = visitas_tradicional(desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    v = visitas_tradicional(desde, hasta, current_user)
 
     resumen = resumen_planning(planning_periodo, v)
     pendientes = pdvs_pendientes(planning_periodo, v)
@@ -555,7 +555,7 @@ def planning_exportar():
         supervisor_f = request.args.get("supervisor") or None
 
     planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
-    v = visitas_tradicional(desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    v = visitas_tradicional(desde, hasta, current_user)
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)
