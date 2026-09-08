@@ -206,11 +206,18 @@ def valores_filtrables(periodo):
 
 def resumen_planning(planning, v):
     """KPIs del período: headcount con planning asignado, PDVs en planning,
-    PDVs visitados (de ese planning), % cumplimiento -- agrupado por DNI
-    antes de intersectar (no por CO_LI), mismo criterio que
-    analisis_visitas_planning.py: un CO_LI puede estar asignado a más de un
-    mercaderista (turnos rotativos), así que agrupar por CO_LI a secas
-    subcuenta visitas reales.
+    PDVs visitados (de ese planning), % cumplimiento -- cruce por CO_LI
+    nomás, sin importar quién hizo la visita (Davor, 2026-09-08: "no
+    importa si lo visito el mercaderista asignado, la idea es que haya
+    sido visitado"). Antes cruzaba por (dni_asignado, co_li) -- mismo
+    criterio que analisis_visitas_planning.py, pensado para no "compartir"
+    una visita entre 2 mercaderistas con el mismo CO_LI en turnos
+    rotativos -- pero eso significaba que un PDV SÍ visitado (por
+    cualquiera) contaba como pendiente si no fue justo el DNI asignado en
+    el Excel quien lo visitó, dando un % de cumplimiento más bajo que el
+    real y, peor, INCONSISTENTE con pdvs_pendientes()/pdvs_detalle() (que
+    siempre cruzaron por CO_LI a secas) -- mismo cruce en las 4 funciones
+    ahora.
 
     `planning` (lista de PlanningPdv) y `v` (DataFrame de visitas_tradicional)
     se cargan UNA sola vez en la ruta que llama a esta función (y a
@@ -220,21 +227,11 @@ def resumen_planning(planning, v):
     colgaba el worker con el volumen real de datos (502 en producción,
     2026-09-08)."""
     dnis_planning = {p.dni_asignado for p in planning if p.dni_asignado}
-    planning_por_dni = {}
-    for p in planning:
-        if p.dni_asignado:
-            planning_por_dni.setdefault(p.dni_asignado, set()).add(p.co_li)
+    co_lis_planning = {p.co_li for p in planning}
+    co_lis_visitados = set(v["punto_venta_id"].astype(str)) if len(v) else set()
 
-    visitas_por_dni = {}
-    if len(v):
-        for dni, grupo in v.groupby("dni")["punto_venta_id"]:
-            visitas_por_dni[dni] = set(grupo.astype(str))
-
-    n_planning = len({p.co_li for p in planning})
-    visitados_del_planning = set()
-    for dni, co_lis in planning_por_dni.items():
-        visitados_del_planning |= (co_lis & visitas_por_dni.get(dni, set()))
-    n_visitados = len(visitados_del_planning)
+    n_planning = len(co_lis_planning)
+    n_visitados = len(co_lis_planning & co_lis_visitados)
     pct_cumplimiento = round(n_visitados / n_planning * 100, 1) if n_planning else None
 
     return {
