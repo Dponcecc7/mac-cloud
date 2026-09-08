@@ -69,11 +69,6 @@ def _tabla_normalizada(df, tipo):
     return salida
 
 
-def _primero_no_nulo(serie):
-    no_nulos = serie.dropna()
-    return no_nulos.iloc[0] if len(no_nulos) else None
-
-
 def _consolidar_por_pdv(df):
     """Un mismo CO_LI puede aparecer en MÁS DE UNA fila del Planning --
     distintas actividades/semanas del mismo PDV en el mes, mismo criterio
@@ -81,13 +76,21 @@ def _consolidar_por_pdv(df):
     = suma de ese conteo por fila", ver comentario de _dias_programados).
     Sin agrupar acá, la 2da fila del mismo CO_LI+tipo rompía la restricción
     UNIQUE(periodo, co_li, tipo) al guardar -- error real en producción,
-    2026-09-08 ("me sale error 500 al cargar el planning")."""
+    2026-09-08 ("me sale error 500 al cargar el planning").
+
+    "first" (no una función Python propia) a propósito: GroupBy.first() ya
+    toma el primer valor NO NULO de cada columna (skipna=True por default)
+    con la implementación vectorizada de pandas -- una función Python
+    personalizada en .agg() fuerza el camino "pure python" (una llamada por
+    grupo, en Python puro, no vectorizado), que con el volumen real del
+    Excel de Planning (miles de filas) tardaba tanto que gunicorn mataba el
+    worker por timeout -- WORKER TIMEOUT real en producción, 2026-09-08."""
     if not len(df):
         return df
     return df.groupby(["co_li", "tipo"], as_index=False).agg({
-        "nombre_pdv": _primero_no_nulo, "ciudad": _primero_no_nulo, "region": _primero_no_nulo,
-        "subcanal": _primero_no_nulo, "mercado": _primero_no_nulo, "dni_asignado": _primero_no_nulo,
-        "mercaderista_nombre": _primero_no_nulo, "supervisor": _primero_no_nulo,
+        "nombre_pdv": "first", "ciudad": "first", "region": "first",
+        "subcanal": "first", "mercado": "first", "dni_asignado": "first",
+        "mercaderista_nombre": "first", "supervisor": "first",
         "dias_programados": "sum",
     })
 
