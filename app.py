@@ -270,6 +270,7 @@ def create_app():
 
             query = (
                 dim_session.query(ClasificacionDiaria.dni, Persona.nombre_completo, Persona.region,
+                                   Persona.ciudad, Persona.canal,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
                                    ClasificacionDiaria.entrada_real,
                                    ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor)
@@ -335,11 +336,13 @@ def create_app():
             )
 
         r = pd.DataFrame(filas, columns=[
-            "dni", "nombre", "region", "fecha", "estado", "entrada_real", "salida_real", "comentario",
+            "dni", "nombre", "region", "ciudad", "canal", "fecha", "estado", "entrada_real", "salida_real", "comentario",
         ])
         r["fecha"] = pd.to_datetime(r["fecha"])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
         r["region"] = r["region"].fillna("Sin región")
+        r["ciudad"] = r["ciudad"].fillna("Sin ciudad")
+        r["canal"] = r["canal"].fillna("Sin canal")
 
         hoy_es = [f.split(" (")[0] for (f,) in filas_hoy]
         resumen_hoy = {
@@ -420,6 +423,73 @@ def create_app():
             tendencia_puntos = " ".join(f"{d['x']},{d['y']}" for d in serie_tendencia)
         else:
             tendencia_puntos = ""
+
+        # Tendencia por canal, todos en el mismo gráfico (Davor, 2026-09-05:
+        # "Tendencial de ratio de asistencia por canal todos en un mismo
+        # gráfico") -- misma métrica y misma técnica de dibujo que la
+        # tendencia general de arriba (líneas via SVG + puntos <div>
+        # posicionados en %), pero UNA serie por canal, compartiendo la
+        # MISMA escala vertical (si cada canal usara su propio min/max no
+        # se podrían comparar entre sí a simple vista).
+        CANALES_TENDENCIA = ["TRADICIONAL", "FARMACIA", "AUTOSERVICIO", "MULTICANAL"]
+        COLOR_CANAL = {"TRADICIONAL": "#2f6fb0", "FARMACIA": "#16a34a", "AUTOSERVICIO": "#d97706", "MULTICANAL": "#9333ea"}
+        dias_ordenados = sorted(r["fecha"].dt.date.unique())
+        tendencia_canal_raw = r.groupby([r["fecha"].dt.date, "canal"])["estado_base"].value_counts().unstack(fill_value=0)
+        series_canal = []
+        todos_los_pct = []
+        for canal in CANALES_TENDENCIA:
+            pcts_dia = []
+            for d in dias_ordenados:
+                if (d, canal) not in tendencia_canal_raw.index:
+                    pcts_dia.append(None)
+                    continue
+                fila_dia = tendencia_canal_raw.loc[(d, canal)]
+                total_dia = int(fila_dia.sum())
+                asistio = int(fila_dia.get("ASISTIÓ A TIEMPO", 0)) + int(fila_dia.get("TARDANZA", 0))
+                pcts_dia.append(round(asistio / total_dia * 100, 1) if total_dia else None)
+            if all(p is None for p in pcts_dia):
+                continue  # este canal no tiene NADA de datos en el periodo/filtro actual
+            series_canal.append({"canal": canal.title(), "color": COLOR_CANAL[canal], "pcts": pcts_dia})
+            todos_los_pct += [p for p in pcts_dia if p is not None]
+
+        if series_canal and todos_los_pct:
+            min_pct, max_pct = min(todos_los_pct), max(todos_los_pct)
+            if max_pct == min_pct:
+                min_pct, max_pct = max(0.0, min_pct - 5), min(100.0, max_pct + 5)
+            else:
+                margen = (max_pct - min_pct) * 0.15
+                min_pct, max_pct = max(0.0, min_pct - margen), min(100.0, max_pct + margen)
+            n = len(dias_ordenados)
+            for serie in series_canal:
+                xy = []
+                for i, pct in enumerate(serie["pcts"]):
+                    if pct is None:
+                        continue
+                    x = round(i / (n - 1) * 100, 2) if n > 1 else 50.0
+                    y = round(100 - (pct - min_pct) / (max_pct - min_pct) * 100, 1)
+                    xy.append(f"{x},{y}")
+                serie["puntos_svg"] = " ".join(xy)
+                ultimos = [p for p in serie["pcts"] if p is not None]
+                serie["pct_ultimo"] = ultimos[-1] if ultimos else None
+        dias_tendencia_canal = [d.strftime("%d/%m") for d in dias_ordenados]
+
+        # Ratio de asistencia por Región/Ciudad (Davor, 2026-09-05) -- mismo
+        # % de efectividad de arriba, pero UN NÚMERO por región/ciudad para
+        # todo el periodo elegido (no día a día), ordenado de mejor a peor.
+        def _ratio_por(columna):
+            grp = r.groupby(columna)["estado_base"].value_counts().unstack(fill_value=0)
+            total = grp.sum(axis=1)
+            asistio = grp.get("ASISTIÓ A TIEMPO", 0) + grp.get("TARDANZA", 0)
+            pct = (asistio / total * 100).round(1)
+            filas_ratio = [
+                {"nombre": nombre, "pct": float(pct[nombre]), "total": int(total[nombre])}
+                for nombre in pct.index if nombre and total[nombre] > 0
+            ]
+            filas_ratio.sort(key=lambda f: f["pct"], reverse=True)
+            return filas_ratio
+
+        ratio_por_region = _ratio_por("region")
+        ratio_por_ciudad = _ratio_por("ciudad")
 
         # "Tiene reemplazo - {motivo cese}" no es un motivo de falta -- es el
         # reporte de baja/reemplazo que un supervisor manda desde la app
@@ -531,6 +601,10 @@ def create_app():
             "top_tardanza": top_tardanza,
             "vacaciones_detalle": vacaciones_detalle,
             "vacantes_detalle": vacantes_detalle,
+            "series_canal": series_canal,
+            "dias_tendencia_canal": dias_tendencia_canal,
+            "ratio_por_region": ratio_por_region,
+            "ratio_por_ciudad": ratio_por_ciudad,
         }
         return render_template(
             "dashboard.html", usuario=current_user, hay_datos=True, data=data,
