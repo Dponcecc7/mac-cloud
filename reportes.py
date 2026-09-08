@@ -24,8 +24,8 @@ from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from permisos import requiere_pagina
 from planning import (
-    guardar_planning, parsear_planning, pdvs_detalle, pdvs_fuera_planning,
-    pdvs_pendientes, periodos_disponibles, resumen_planning, valores_filtrables,
+    guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle, pdvs_fuera_planning,
+    pdvs_pendientes, periodos_disponibles, resumen_planning, valores_filtrables, visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
@@ -435,10 +435,18 @@ def planning():
         supervisor_f = request.args.get("supervisor") or None
     regiones_disp, ciudades_disp, supervisores_disp = valores_filtrables(periodo)
 
-    resumen = resumen_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
-    pendientes = pdvs_pendientes(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
-    detalle = pdvs_detalle(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
-    fuera = pdvs_fuera_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    # Una sola carga de planning/visitas para las 4 vistas de abajo -- antes
+    # cada función hacía su propia consulta completa a Postgres (4 veces la
+    # misma carga de visitas del canal Tradicional por cada request), lo que
+    # colgaba el worker con el volumen real de datos (502 en producción,
+    # 2026-09-08).
+    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
+    v = visitas_tradicional(desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+
+    resumen = resumen_planning(planning_periodo, v)
+    pendientes = pdvs_pendientes(planning_periodo, v)
+    detalle = pdvs_detalle(planning_periodo, v)
+    fuera = pdvs_fuera_planning(planning_periodo, v)
 
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
@@ -492,9 +500,11 @@ def planning_exportar():
         ciudad_f = request.args.get("ciudad") or None
         supervisor_f = request.args.get("supervisor") or None
 
-    pendientes = pdvs_pendientes(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
-    detalle = pdvs_detalle(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
-    fuera = pdvs_fuera_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
+    v = visitas_tradicional(desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    pendientes = pdvs_pendientes(planning_periodo, v)
+    detalle = pdvs_detalle(planning_periodo, v)
+    fuera = pdvs_fuera_planning(planning_periodo, v)
 
     wb = openpyxl.Workbook()
     ws1 = wb.active

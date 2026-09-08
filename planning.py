@@ -138,7 +138,7 @@ def guardar_planning(df, periodo, cargado_por):
         session.close()
 
 
-def _planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
     session = get_session()
     try:
         query = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
@@ -153,7 +153,7 @@ def _planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, super
         session.close()
 
 
-def _visitas_tradicional(desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def visitas_tradicional(desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
     """Igual que cobertura._cargar_visitas(), pero forzando canal Tradicional
     -- esta pestaña no tiene selector de canal, siempre es Tradicional."""
     return _cargar_visitas(
@@ -192,16 +192,21 @@ def valores_filtrables(periodo):
         session.close()
 
 
-def resumen_planning(periodo, desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def resumen_planning(planning, v):
     """KPIs del período: headcount con planning asignado, PDVs en planning,
     PDVs visitados (de ese planning), % cumplimiento -- agrupado por DNI
     antes de intersectar (no por CO_LI), mismo criterio que
     analisis_visitas_planning.py: un CO_LI puede estar asignado a más de un
     mercaderista (turnos rotativos), así que agrupar por CO_LI a secas
-    subcuenta visitas reales."""
-    planning = _planning_del_periodo(periodo, region_filtro, ciudad_filtro, supervisor_filtro)
-    v = _visitas_tradicional(desde, hasta, usuario_actual, region_filtro, ciudad_filtro, supervisor_filtro)
+    subcuenta visitas reales.
 
+    `planning` (lista de PlanningPdv) y `v` (DataFrame de visitas_tradicional)
+    se cargan UNA sola vez en la ruta que llama a esta función (y a
+    pdvs_pendientes/pdvs_detalle/pdvs_fuera_planning) -- antes cada una hacía
+    su propia consulta completa a Postgres, 4 veces la misma carga de
+    visitas del canal Tradicional por cada vista de la página, lo que
+    colgaba el worker con el volumen real de datos (502 en producción,
+    2026-09-08)."""
     dnis_planning = {p.dni_asignado for p in planning if p.dni_asignado}
     planning_por_dni = {}
     for p in planning:
@@ -228,11 +233,9 @@ def resumen_planning(periodo, desde, hasta, usuario_actual, region_filtro=None, 
     }
 
 
-def pdvs_pendientes(periodo, desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def pdvs_pendientes(planning, v):
     """PDVs del planning que NO tienen ninguna visita (de nadie) en el
     período -- responde "qué me falta visitar"."""
-    planning = _planning_del_periodo(periodo, region_filtro, ciudad_filtro, supervisor_filtro)
-    v = _visitas_tradicional(desde, hasta, usuario_actual, region_filtro, ciudad_filtro, supervisor_filtro)
     visitados = set(v["punto_venta_id"].astype(str)) if len(v) else set()
 
     pendientes = [p for p in planning if p.co_li not in visitados]
@@ -243,7 +246,7 @@ def pdvs_pendientes(periodo, desde, hasta, usuario_actual, region_filtro=None, c
     } for p in pendientes]
 
 
-def pdvs_detalle(periodo, desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def pdvs_detalle(planning, v):
     """Por cada CO_LI del planning: golpes de visita PLANIFICADOS (columnas
     de fecha marcadas en el Excel, `dias_programados` -- ver
     _consolidar_por_pdv()) vs REALIZADOS (cualquier persona) y fecha de la
@@ -251,9 +254,6 @@ def pdvs_detalle(periodo, desde, hasta, usuario_actual, region_filtro=None, ciud
     verdad" (Davor, 2026-09-08). % cumplimiento por PDV, no confundir con
     el % cumplimiento del resumen (ese es binario -- visitado sí/no -- este
     es realizados/planificados)."""
-    planning = _planning_del_periodo(periodo, region_filtro, ciudad_filtro, supervisor_filtro)
-    v = _visitas_tradicional(desde, hasta, usuario_actual, region_filtro, ciudad_filtro, supervisor_filtro)
-
     conteo, ultima = {}, {}
     if len(v):
         v = v.copy()
@@ -276,15 +276,13 @@ def pdvs_detalle(periodo, desde, hasta, usuario_actual, region_filtro=None, ciud
     return filas
 
 
-def pdvs_fuera_planning(periodo, desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def pdvs_fuera_planning(planning, v):
     """Visitas Tradicional del período cuyo punto_venta_id no está en el
     planning de ese período -- responde "hay visitas de clientes que no
     están en el planning". Simplificación conocida del MVP: no audita contra
     Athena (dim_lf_general_campana_pdv) si el punto_venta_id es un PDV real
     de campaña Tradicional -- ver plan."""
-    planning = _planning_del_periodo(periodo, region_filtro, ciudad_filtro, supervisor_filtro)
     co_lis_planning = {p.co_li for p in planning}
-    v = _visitas_tradicional(desde, hasta, usuario_actual, region_filtro, ciudad_filtro, supervisor_filtro)
     if not len(v):
         return []
 
