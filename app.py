@@ -420,6 +420,29 @@ def create_app():
         motivo_falta = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio)
         faltas_por_motivo = motivo_falta.value_counts().head(8)
 
+        # Detalle por motivo -- Davor, 2026-09-05: "que me bote quienes son
+        # las personas que tienen ese motivo con su fecha y todo el
+        # detalle con la opción para editar si lo amerita" (al hacer clic
+        # en una barra de "Faltas por motivo"). "Editar" lleva a Reporte
+        # diario de ESE día -- ahí ya existe la edición real de
+        # comentario/hora, no se duplica acá.
+        faltas_detalle_por_motivo = {}
+        for (dni, nombre, fecha, comentario), motivo in zip(
+            faltas_sin_reemplazo[["dni", "nombre", "fecha", "comentario"]].itertuples(index=False, name=None),
+            motivo_falta,
+        ):
+            if motivo not in faltas_por_motivo.index:
+                continue  # fuera del top 8 -- no hace falta detalle que nadie va a ver
+            faltas_detalle_por_motivo.setdefault(motivo, []).append({
+                "dni": dni, "nombre": nombre, "fecha": fecha.strftime("%d/%m/%Y"),
+                # pd.isna() -- comentario llega como NaN (float) de pandas
+                # cuando la fila no tiene texto, no None; sin esto salía
+                # literal "nan" en la pantalla en vez de quedar vacío.
+                "fecha_iso": fecha.strftime("%Y-%m-%d"), "comentario": None if pd.isna(comentario) else comentario,
+            })
+        for lista in faltas_detalle_por_motivo.values():
+            lista.sort(key=lambda f: f["fecha_iso"], reverse=True)
+
         # Tabla "Faltas" del detalle del periodo: descanso médico y licencia
         # son ausencias justificadas y programadas, no fallas de asistencia
         # -- no deben sumar al ranking de faltas por persona (pedido
@@ -479,6 +502,7 @@ def create_app():
             "tendencia": serie_tendencia,
             "tendencia_puntos": tendencia_puntos,
             "faltas_por_motivo": list(faltas_por_motivo.items()),
+            "faltas_detalle_por_motivo": faltas_detalle_por_motivo,
             "top_falta": top_falta,
             "top_tardanza": top_tardanza,
             "vacaciones_detalle": vacaciones_detalle,

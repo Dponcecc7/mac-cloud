@@ -124,12 +124,22 @@
     .legend span { display:inline-flex; align-items:center; gap:5px; }
     .swatch { width:9px; height:9px; border-radius:3px; display:inline-block; }
 
-    .motivo-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; }
+    .motivo-row { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12px; cursor:pointer; }
     .motivo-row:last-child { margin-bottom:0; }
+    .motivo-row:hover .motivo-nombre { color:var(--brand); }
     .motivo-nombre { width:auto; min-width:88px; max-width:150px; flex-shrink:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .motivo-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:8px; overflow:hidden; }
     .motivo-barra { background:linear-gradient(90deg, #c85f52, var(--bad)); height:100%; border-radius:6px; }
     .motivo-n { width:34px; text-align:right; flex-shrink:0; color:var(--muted); font-weight:700; font-size:11.5px; }
+    .motivo-detalle { margin:0 0 12px; padding:8px 10px; background:var(--bg); border-radius:8px; font-size:11.5px; }
+    .motivo-detalle-fila { display:flex; align-items:center; gap:10px; padding:4px 0; border-bottom:1px solid var(--line); }
+    .motivo-detalle-fila:last-child { border-bottom:none; }
+    .motivo-detalle-fecha { color:var(--muted); width:72px; flex-shrink:0; }
+    .motivo-detalle-fila a.nombre { color:var(--ink); font-weight:600; text-decoration:none; flex-shrink:0; }
+    .motivo-detalle-fila a.nombre:hover { color:var(--brand); text-decoration:underline; }
+    .motivo-detalle-comentario { color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .motivo-detalle-editar { color:var(--brand); text-decoration:none; font-weight:700; flex-shrink:0; }
+    .motivo-detalle-editar:hover { text-decoration:underline; }
 
     table { border-collapse:collapse; width:100%; }
     th { text-align:left; padding:0 6px 6px; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); }
@@ -279,10 +289,20 @@
             {% if data.faltas_por_motivo %}
               {% set max_motivo = data.faltas_por_motivo[0][1] %}
               {% for motivo, n in data.faltas_por_motivo %}
-              <div class="motivo-row">
+              <div class="motivo-row" onclick="toggleMotivo({{ loop.index0 }})">
                 <div class="motivo-nombre" title="{{ motivo }}">{{ motivo }}</div>
                 <div class="motivo-barra-wrap"><div class="motivo-barra" style="width: {{ (n / max_motivo * 100)|round(0,'floor') }}%;"></div></div>
                 <div class="motivo-n">{{ n }}</div>
+              </div>
+              <div class="motivo-detalle" id="motivo-detalle-{{ loop.index0 }}" hidden>
+                {% for f in data.faltas_detalle_por_motivo.get(motivo, []) %}
+                <div class="motivo-detalle-fila">
+                  <span class="motivo-detalle-fecha">{{ f.fecha }}</span>
+                  <a class="nombre" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ (f.nombre or f.dni)|title }}</a>
+                  <span class="motivo-detalle-comentario" title="{{ f.comentario or '' }}">{{ f.comentario or '' }}</span>
+                  <a class="motivo-detalle-editar" href="{{ url_for('asistencia.reporte', fecha=f.fecha_iso) }}">Editar</a>
+                </div>
+                {% endfor %}
               </div>
               {% endfor %}
             {% else %}
@@ -356,5 +376,11 @@
       </div>
     {% endif %}
   </div>
+<script>
+function toggleMotivo(i) {
+  var el = document.getElementById('motivo-detalle-' + i);
+  if (el) el.hidden = !el.hidden;
+}
+</script>
 </body>
 </html>
