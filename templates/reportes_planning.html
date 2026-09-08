@@ -90,6 +90,10 @@
       .panel { padding:12px !important; border-radius:12px; }
       .kpis { grid-template-columns:repeat(2, 1fr); }
       .carga-form { flex-direction:column; align-items:stretch; }
+      .carga-form input[type=month], .carga-form input[type=file] { width:100%; min-height:44px; font-size:15px; }
+      .carga-form .btn { width:100%; min-height:44px; text-align:center; }
+      table { font-size:11px; }
+      th, td { padding:6px 7px; }
     }
   </style>
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
