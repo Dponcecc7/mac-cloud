@@ -506,13 +506,13 @@ def planning_exportar():
         ws1.append(fila_segura([p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"]]))
 
     ws2 = wb.create_sheet("PDVs Detalle")
-    ws2.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor", "Visitas realizadas", "Última visita"])
+    ws2.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor", "Golpes planificados", "Golpes realizados", "% Cumplimiento", "Última visita"])
     for celda in ws2[1]:
         celda.font = Font(bold=True)
     for p in detalle:
         ws2.append(fila_segura([
             p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"],
-            p["visitas_realizadas"], p["fecha_ultima_visita"],
+            p["visitas_planificadas"], p["visitas_realizadas"], p["pct_cumplimiento"], p["fecha_ultima_visita"],
         ]))
 
     ws3 = wb.create_sheet("Fuera de Planning")

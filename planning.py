@@ -244,8 +244,13 @@ def pdvs_pendientes(periodo, desde, hasta, usuario_actual, region_filtro=None, c
 
 
 def pdvs_detalle(periodo, desde, hasta, usuario_actual, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
-    """Por cada CO_LI del planning: visitas realizadas (cualquier persona) y
-    fecha de la última -- responde "cuántas veces se visita"."""
+    """Por cada CO_LI del planning: golpes de visita PLANIFICADOS (columnas
+    de fecha marcadas en el Excel, `dias_programados` -- ver
+    _consolidar_por_pdv()) vs REALIZADOS (cualquier persona) y fecha de la
+    última -- responde "le programamos 10 golpes, cuántos tiene de
+    verdad" (Davor, 2026-09-08). % cumplimiento por PDV, no confundir con
+    el % cumplimiento del resumen (ese es binario -- visitado sí/no -- este
+    es realizados/planificados)."""
     planning = _planning_del_periodo(periodo, region_filtro, ciudad_filtro, supervisor_filtro)
     v = _visitas_tradicional(desde, hasta, usuario_actual, region_filtro, ciudad_filtro, supervisor_filtro)
 
@@ -256,13 +261,18 @@ def pdvs_detalle(periodo, desde, hasta, usuario_actual, region_filtro=None, ciud
         conteo = v.groupby("punto_venta_id").size().to_dict()
         ultima = v.groupby("punto_venta_id")["fecha_inicio"].max().to_dict()
 
-    filas = [{
-        "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-        "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
-        "visitas_realizadas": int(conteo.get(p.co_li, 0)),
-        "fecha_ultima_visita": ultima.get(p.co_li).date() if p.co_li in ultima and pd.notna(ultima.get(p.co_li)) else None,
-    } for p in planning]
-    filas.sort(key=lambda f: f["visitas_realizadas"])
+    filas = []
+    for p in planning:
+        realizadas = int(conteo.get(p.co_li, 0))
+        planificadas = int(p.dias_programados or 0)
+        filas.append({
+            "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
+            "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
+            "visitas_planificadas": planificadas, "visitas_realizadas": realizadas,
+            "pct_cumplimiento": round(realizadas / planificadas * 100, 1) if planificadas else None,
+            "fecha_ultima_visita": ultima.get(p.co_li).date() if p.co_li in ultima and pd.notna(ultima.get(p.co_li)) else None,
+        })
+    filas.sort(key=lambda f: (f["pct_cumplimiento"] if f["pct_cumplimiento"] is not None else -1))
     return filas
 
 

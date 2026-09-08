@@ -233,21 +233,26 @@
             <th>CO_LI</th>
             <th>Ciudad</th>
             <th class="th-ordenable" onclick="ordenarPor('detalle', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-detalle-mercaderista"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'visitas')" data-numerico>Visitas realizadas <span class="flecha-orden" id="flecha-detalle-visitas"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'planificadas')" data-numerico>Golpes planificados <span class="flecha-orden" id="flecha-detalle-planificadas"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'visitas')" data-numerico>Golpes realizados <span class="flecha-orden" id="flecha-detalle-visitas"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'cumplimiento')" data-numerico>% Cumplimiento <span class="flecha-orden" id="flecha-detalle-cumplimiento"></span></th>
             <th>Última visita</th>
           </tr>
           {% for p in detalle %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-visitas="{{ p.visitas_realizadas }}">
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}">
             <td>{{ p.nombre_pdv or '—' }}</td>
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.mercaderista or '—')|title }}</td>
+            <td>{{ p.visitas_planificadas }}</td>
             <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
+            <td {{ 'class=celda-cero' if p.pct_cumplimiento is not none and p.pct_cumplimiento < 50 else '' }}>{{ (p.pct_cumplimiento ~ '%') if p.pct_cumplimiento is not none else '—' }}</td>
             <td>{{ p.fecha_ultima_visita.strftime('%d/%m/%Y') if p.fecha_ultima_visita else '—' }}</td>
           </tr>
           {% endfor %}
         </table>
       </div>
+      <p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). Ordenado por % de cumplimiento, los más bajos primero.</p>
       {% endif %}
     </div>
 
@@ -293,7 +298,7 @@ function ordenarPor(tabla_id, campo) {
   var actual = ordenActual[tabla_id];
   var asc = (actual && actual.campo === campo) ? !actual.asc : true;
   ordenActual[tabla_id] = { campo: campo, asc: asc };
-  var esNumerico = campo === 'visitas' || campo === 'veces';
+  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento';
   filas.sort(function (a, b) {
     var va = a.getAttribute('data-orden-' + campo) || '';
     var vb = b.getAttribute('data-orden-' + campo) || '';
