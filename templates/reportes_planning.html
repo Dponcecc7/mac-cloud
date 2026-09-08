@@ -47,6 +47,9 @@
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:18px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 10px; }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
+    .flash { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; font-weight:700; }
+    .flash.error { background:var(--bad-bg); color:var(--bad); }
+    .flash.ok { background:var(--ok-bg); color:var(--ok); }
 
     .kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
     .kpi { background:var(--bg); border-radius:10px; padding:14px 16px; }
@@ -131,6 +134,12 @@
 
     </nav>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for categoria, mensaje in messages %}
+        <div class="flash {{ 'error' if categoria == 'error' else 'ok' }}">{{ '✓' if categoria != 'error' else '✕' }} {{ mensaje }}</div>
+      {% endfor %}
+    {% endwith %}
+
     <div class="top-actions">
       <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <input type="month" name="mes" value="{{ periodo_str }}">
@@ -159,12 +168,6 @@
       </form>
     </div>
     {% endif %}
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for categoria, mensaje in messages %}
-        <div class="note" style="border-left-color: {{ 'var(--bad)' if categoria == 'error' else 'var(--ok)' }}; margin-bottom:14px;">{{ mensaje }}</div>
-      {% endfor %}
-    {% endwith %}
 
     <div class="panel">
       <p class="panel-title">Cargar Planning del mes ({{ periodo_str }})</p>
