@@ -10,6 +10,7 @@ import datetime as dt
 import io
 import os
 import re
+import traceback
 from zoneinfo import ZoneInfo
 
 import openpyxl
@@ -162,6 +163,32 @@ def create_app():
         # la próxima página que sí los muestre.
         destino = "dashboard" if current_user.is_authenticated else "auth.login"
         return redirect(url_for(destino))
+
+    @app.errorhandler(500)
+    def _error_interno(e):
+        # Davor, 2026-09-08: la página default de Flask/Werkzeug para un 500
+        # ("Internal Server Error" en blanco, sin detalle) no daba NINGÚN
+        # rastro de qué había fallado -- ni a Davor ni a mí sin acceso a los
+        # logs de Render. Esto captura CUALQUIER excepción no atrapada en
+        # CUALQUIER ruta (no solo /reportes/planning), la imprime completa a
+        # stdout (Render la muestra en sus logs) y devuelve una página
+        # mínima con el tipo/mensaje del error -- para poder diagnosticar de
+        # una sin tener que adivinar ruta por ruta.
+        original = getattr(e, "original_exception", None) or e
+        print(f"[500] {request.method} {request.path} -> {type(original).__name__}: {original}")
+        traceback.print_exc()
+        # Detalle del error solo para analista/admin (info de excepciones --
+        # nombres de columnas, fragmentos de SQL -- no debería mostrarse a
+        # cualquier usuario logueado, solo a quien puede reportarlo/arreglarlo).
+        mostrar_detalle = current_user.is_authenticated and current_user.rol in ("analista", "admin")
+        detalle_html = f"<p><b>Detalle:</b> {type(original).__name__}: {original}</p>" if mostrar_detalle else ""
+        return (
+            "<h1>Error interno</h1>"
+            f"<p><b>Ruta:</b> {request.method} {request.path}</p>"
+            f"{detalle_html}"
+            '<p><a href="/">Volver al inicio</a></p>',
+            500,
+        )
 
     @app.get("/health")
     def health():
