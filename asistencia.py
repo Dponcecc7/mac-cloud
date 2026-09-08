@@ -952,10 +952,20 @@ def guardar():
                 "entrada_corr": entrada_corr, "salida_corr": salida_corr, "salida_corr_hoy": salida_corr_hoy,
             })
 
+    # "volver" explícito (Davor, 2026-09-05, "Histórico diario": "con la
+    # opción de editar el motivo de falta y el estado") -- Histórico diario
+    # no tiene un endpoint_vista propio con un solo parámetro "fecha" (sus
+    # filtros son mercaderista/desde/hasta/etc.), así que en vez de sumar
+    # una vista más al mapeo de abajo, la página de origen manda su propia
+    # URL completa (mismo patrón que ya usa "Editar hora programada" acá
+    # mismo, que postea a historial.crear). Sin "volver", sigue el mapeo de
+    # siempre (Reporte diario/Marcar asistencia/Enviar a cliente).
+    volver_explicito = request.form.get("volver")
     endpoint_vista = {"cliente": "asistencia.cliente", "marcar": "asistencia.marcar_vista"}.get(vista, "asistencia.reporte")
+    volver = volver_explicito or url_for(endpoint_vista, fecha=fecha_str)
 
     if not ediciones:
-        return redirect(url_for(endpoint_vista, fecha=fecha_str))
+        return redirect(volver)
 
     ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
     if not ok_lock:
@@ -963,7 +973,7 @@ def guardar():
             "asistencia_resultado.html", usuario=current_user, activo=vista,
             titulo="No se pudo guardar", ok=False,
             detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for(endpoint_vista, fecha=fecha_str),
+            volver=volver,
         )
     try:
         wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
@@ -1032,7 +1042,7 @@ def guardar():
         titulo="Correcciones guardadas", ok=True,
         detalle=(f"Se guardaron los cambios de {len(ediciones)} {plural}. Se van a reflejar en el reporte en "
                  "unos minutos -- si querés verlos ya, usá \"Actualizar ahora\"."),
-        volver=url_for(endpoint_vista, fecha=fecha_str),
+        volver=volver,
     )
 
 

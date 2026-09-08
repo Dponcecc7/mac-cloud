@@ -104,7 +104,10 @@
     details.edit-hora[open] summary { margin-bottom:4px; }
     details.edit-hora form { display:flex; gap:4px; align-items:center; }
     details.edit-hora input[type=time] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:78px; }
+    details.edit-hora input[type=text] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:140px; }
     details.edit-hora button { font-size:10px; font-weight:700; padding:3px 8px; border-radius:5px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
+    details.edit-hora .chk-borrar { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; color:var(--muted); white-space:nowrap; }
+    details.edit-hora .chk-borrar input { width:auto; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -218,6 +221,12 @@
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
         {% endif %}
+        {% if estados_disponibles %}
+        <select name="estado">
+          <option value="">Estado: todos</option>
+          {% for e in estados_disponibles %}<option value="{{ e }}" {{ 'selected' if estado_filtro == e else '' }}>{{ e }}</option>{% endfor %}
+        </select>
+        {% endif %}
         <label class="chk-incidencias">
           <input type="checkbox" name="solo_incidencias" value="1" {{ 'checked' if solo_incidencias else '' }}>
           Solo tardanzas y salidas antes de hora
@@ -314,7 +323,22 @@
           </td>
           <td class="{{ 'tarde' if eb == 'TARDANZA' else '' }}">{{ f.entrada_real or '—' }}{% if eb == 'TARDANZA' %} ⚠{% endif %}</td>
           <td><span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span></td>
-          <td>{{ f.comentario_entrada or '—' }}</td>
+          <td>
+            {{ f.comentario_entrada or '—' }}
+            <details class="edit-hora">
+              <summary>Editar</summary>
+              <form method="post" action="{{ url_for('asistencia.guardar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="fecha" value="{{ fila_fecha }}">
+                <input type="hidden" name="vista" value="historico">
+                <input type="hidden" name="dni" value="{{ f.dni }}">
+                <input type="hidden" name="volver" value="{{ request.full_path }}">
+                <input type="text" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}" placeholder="ej. Falta - Motivo personal">
+                <label class="chk-borrar"><input type="checkbox" name="borrar_entrada_{{ f.dni }}"> Borrar</label>
+                <button type="submit">Guardar</button>
+              </form>
+            </details>
+          </td>
           <td>
             {{ f.salida_prog or '—' }}
             <details class="edit-hora">

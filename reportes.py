@@ -880,6 +880,16 @@ def ficha(dni):
 
 HISTORICO_MAX_DIAS_RANGO = 31  # ~1 mes -- cada dia es una consulta aparte (ver mas abajo), un rango gigante seria muy lento
 
+# Mismo mapeo que ya usa reportes_historico.html/asistencia.html en Jinja
+# para el badge de Estado -- copiado acá para el filtro server-side de
+# "Estado" (Davor, 2026-09-05: "Agregar filtro estado").
+_EB_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA": "Falta"}
+
+
+def _eb_corto(estado):
+    eb = (estado or "").split(" (")[0]
+    return _EB_CORTO.get(eb, eb.title())
+
 
 @bp.get("/historico")
 @requiere_pagina("reportes_historico")
@@ -914,6 +924,12 @@ def historico():
 
     filtro_args, roles_disponibles, regiones_disponibles, supervisores_disponibles, ciudades_disponibles, canales_disponibles = _filtros_admin()
     solo_incidencias = request.args.get("solo_incidencias") == "1"
+    # Estado (Davor, 2026-09-05: "Agregar filtro estado") -- mismo criterio
+    # que solo_incidencias: filtra las filas YA cargadas, no la consulta a
+    # la base. Las opciones salen de lo que realmente aparece ese día/rango
+    # (mismo criterio que el resto de los desplegables acá), no una lista
+    # fija -- así no se ofrece "Vacante"/"Descanso" si nunca aparecen.
+    estado_filtro = request.args.get("estado") or ""
 
     # El filtro de mercaderista y el rango de fechas son solo para quien YA
     # tiene los demas filtros (admin/analista) -- mismo criterio que
@@ -954,8 +970,11 @@ def historico():
     if mercaderista_filtro:
         filas, ultima_sync = historico_persona(mercaderista_filtro, desde, hasta, usuario_actual=current_user)
         hay_datos_del_dia = bool(filas)
+        estados_disponibles = sorted({_eb_corto(f["estado"]) for f in filas}) if filas else []
         if solo_incidencias and filas:
             filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
+        if estado_filtro and filas:
+            filas = [f for f in filas if _eb_corto(f["estado"]) == estado_filtro]
         mercaderista_nombre = dict(mercaderistas_disponibles).get(mercaderista_filtro, mercaderista_filtro)
         return render_template(
             "reportes_historico.html", usuario=current_user, activo="historico",
@@ -967,6 +986,7 @@ def historico():
             filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
             supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
             canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
+            estado_filtro=estado_filtro, estados_disponibles=estados_disponibles,
         )
 
     # Sin mercaderista elegido: "todos en un solo dia" -- para admin/analista
@@ -982,6 +1002,7 @@ def historico():
         salida_mismo_dia=True,
     )
     hay_datos_del_dia = bool(filas)
+    estados_disponibles = sorted({_eb_corto(f["estado"]) for f in filas}) if filas else []
     # "Solo tardanzas y salidas antes de hora" (Davor, 2026-08-29) --
     # checkbox sobre las filas ya cargadas, no un filtro de _cargar_reporte()
     # (no acota qué se trae de la base, solo qué se muestra) -- el resumen
@@ -989,6 +1010,8 @@ def historico():
     # completo, sin importar el check.
     if solo_incidencias and filas:
         filas = [f for f in filas if _estado_base(f["estado"]) == "TARDANZA" or f["salida_temprana"]]
+    if estado_filtro and filas:
+        filas = [f for f in filas if _eb_corto(f["estado"]) == estado_filtro]
     fecha_reciente = None if hay_datos_del_dia else _fecha_mas_reciente_con_datos()
     fecha_str_efectiva = dia_efectivo.isoformat()
     return render_template(
@@ -1000,6 +1023,7 @@ def historico():
         filtro_args=filtro_args, roles_disponibles=roles_disponibles, regiones_disponibles=regiones_disponibles,
         supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
         canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
+        estado_filtro=estado_filtro, estados_disponibles=estados_disponibles,
     )
 
 
