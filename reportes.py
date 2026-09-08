@@ -470,7 +470,12 @@ def planning_cargar():
         flash(f"Error leyendo el Excel de Planning: {e}", "error")
         return redirect(url_for("reportes.planning", mes=periodo_str))
 
-    n = guardar_planning(df, periodo, current_user.email)
+    try:
+        n = guardar_planning(df, periodo, current_user.email)
+    except Exception as e:
+        flash(f"Error guardando el Planning: {e}", "error")
+        return redirect(url_for("reportes.planning", mes=periodo_str))
+
     flash(f"Planning de {periodo_carga_str} cargado: {n} PDVs.", "ok")
     return redirect(url_for("reportes.planning", mes=periodo_carga_str))
 

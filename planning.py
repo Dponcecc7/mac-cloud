@@ -69,12 +69,37 @@ def _tabla_normalizada(df, tipo):
     return salida
 
 
+def _primero_no_nulo(serie):
+    no_nulos = serie.dropna()
+    return no_nulos.iloc[0] if len(no_nulos) else None
+
+
+def _consolidar_por_pdv(df):
+    """Un mismo CO_LI puede aparecer en MÁS DE UNA fila del Planning --
+    distintas actividades/semanas del mismo PDV en el mes, mismo criterio
+    que ya documentaba analisis_visitas_planning.py ("Visitas_planificadas
+    = suma de ese conteo por fila", ver comentario de _dias_programados).
+    Sin agrupar acá, la 2da fila del mismo CO_LI+tipo rompía la restricción
+    UNIQUE(periodo, co_li, tipo) al guardar -- error real en producción,
+    2026-09-08 ("me sale error 500 al cargar el planning")."""
+    if not len(df):
+        return df
+    return df.groupby(["co_li", "tipo"], as_index=False).agg({
+        "nombre_pdv": _primero_no_nulo, "ciudad": _primero_no_nulo, "region": _primero_no_nulo,
+        "subcanal": _primero_no_nulo, "mercado": _primero_no_nulo, "dni_asignado": _primero_no_nulo,
+        "mercaderista_nombre": _primero_no_nulo, "supervisor": _primero_no_nulo,
+        "dias_programados": "sum",
+    })
+
+
 def parsear_planning(archivo):
     """`archivo`: ruta o file-like (BytesIO de un upload), igual que
     parseo_headcount.parsear_maestro(). Lee las hojas "Mayorista" (header en
     la fila 1) y "Minorista" (header en la fila 4 -- 3 filas de título arriba,
     mismo formato real que ya usaba el Excel de Planning en MAC/Planning/REPORTES/).
-    Devuelve un DataFrame combinado, una fila por (co_li, tipo)."""
+    Devuelve un DataFrame combinado, UNA fila por (co_li, tipo) -- ver
+    _consolidar_por_pdv() para el caso de un CO_LI repetido dentro del mismo
+    archivo."""
     mayorista = pd.read_excel(archivo, sheet_name="Mayorista", header=0)
     validar_columnas(mayorista, COLUMNAS_MAYORISTA_ESPERADAS, "Mayorista")
     minorista = pd.read_excel(archivo, sheet_name="Minorista", header=3)
@@ -84,7 +109,7 @@ def parsear_planning(archivo):
         _tabla_normalizada(mayorista, "Mayorista"),
         _tabla_normalizada(minorista, "Minorista"),
     ], ignore_index=True)
-    return combinado
+    return _consolidar_por_pdv(combinado)
 
 
 def guardar_planning(df, periodo, cargado_por):
