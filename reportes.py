@@ -6,6 +6,7 @@ import calendar
 import datetime as dt
 import io
 import re
+import traceback
 
 import openpyxl
 import pandas as pd
@@ -24,6 +25,7 @@ from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from permisos import requiere_pagina
 from planning import (
+    COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle, pdvs_fuera_planning,
     pdvs_pendientes, periodos_disponibles, resumen_planning, valores_filtrables, visitas_tradicional,
 )
@@ -457,6 +459,48 @@ def planning():
     )
 
 
+def _plantilla_planning():
+    """Plantilla descargable con el formato exacto que espera
+    parsear_planning() -- hoja "Mayorista" con encabezados en la fila 1,
+    hoja "Minorista" con encabezados en la fila 4 (3 filas de título arriba,
+    mismo formato real que ya usaba el Excel de Planning). CO_LI de ejemplo
+    = "EJEMPLO" (no numérico) a propósito, igual que las plantillas de
+    Headcount -- si no se borra la fila de ejemplo, se descarta sola sin
+    crear un PDV fantasma (ver _tabla_normalizada, filtro de CO_LI numérico)."""
+    hoy = dt.date.today()
+    primer_dia = hoy.replace(day=1)
+    cols_fecha = [f"{(primer_dia + dt.timedelta(days=i)).day}/{primer_dia.month:02d}/{primer_dia.year}" for i in range(3)]
+    fila_ejemplo_mayorista = ["EJEMPLO", "NOMBRE DEL PDV", "LIMA", "LIMA", "PDV MAYORISTA", "NOMBRE DEL MERCADO", "12345678", "APELLIDOS NOMBRES", "NOMBRE DEL SUPERVISOR", 1, 1, None]
+    fila_ejemplo_minorista = ["EJEMPLO", "NOMBRE DEL PDV", "LIMA", "LIMA", "PDV MINORISTA", "NOMBRE DEL MERCADO", "87654321", "APELLIDOS NOMBRES", "NOMBRE DEL SUPERVISOR", 1, None, 1]
+
+    wb = openpyxl.Workbook()
+
+    ws1 = wb.active
+    ws1.title = "Mayorista"
+    encabezado1 = COLUMNAS_MAYORISTA_ESPERADAS + cols_fecha
+    ws1.append(encabezado1)
+    for celda in ws1[1]:
+        celda.font = Font(bold=True)
+    ws1.append(fila_ejemplo_mayorista)
+    for i, col in enumerate(encabezado1, start=1):
+        ws1.column_dimensions[ws1.cell(row=1, column=i).column_letter].width = max(14, len(str(col)) + 2)
+
+    ws2 = wb.create_sheet("Minorista")
+    ws2.cell(row=1, column=1, value="Plantilla en blanco -- completá una fila por PDV y subila en \"Cobertura vs Planning\".")
+    encabezado2 = COLUMNAS_MINORISTA_ESPERADAS + cols_fecha
+    for i, col in enumerate(encabezado2, start=1):
+        celda = ws2.cell(row=4, column=i, value=col)
+        celda.font = Font(bold=True)
+        ws2.column_dimensions[celda.column_letter].width = max(14, len(str(col)) + 2)
+    for i, valor in enumerate(fila_ejemplo_minorista, start=1):
+        ws2.cell(row=5, column=i, value=valor)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
 @bp.post("/planning/cargar")
 @requiere_pagina("reportes_planning")
 def planning_cargar():
@@ -466,26 +510,36 @@ def planning_cargar():
         flash("Tenés que subir el archivo Excel de Planning.", "error")
         return redirect(url_for("reportes.planning", mes=periodo_str))
 
-    periodo_carga_str = request.form.get("periodo") or periodo_str
-    if not re.match(r"^\d{4}-\d{2}$", periodo_carga_str):
-        periodo_carga_str = periodo_str
-    anio, mes = int(periodo_carga_str[:4]), int(periodo_carga_str[5:7])
-    periodo = dt.date(anio, mes, 1)
-
+    # Todo lo de acá para abajo envuelto en un único try/except -- antes solo
+    # el parseo y el guardado tenían su propio try/except, así que cualquier
+    # otra falla (ej. el parseo del período del form) salía como un 500 en
+    # blanco en vez de un mensaje (2026-09-08, error real reportado).
     try:
+        periodo_carga_str = request.form.get("periodo") or periodo_str
+        if not re.match(r"^\d{4}-\d{2}$", periodo_carga_str):
+            periodo_carga_str = periodo_str
+        anio, mes = int(periodo_carga_str[:4]), int(periodo_carga_str[5:7])
+        periodo = dt.date(anio, mes, 1)
+
         df = parsear_planning(io.BytesIO(archivo.read()))
-    except Exception as e:
-        flash(f"Error leyendo el Excel de Planning: {e}", "error")
-        return redirect(url_for("reportes.planning", mes=periodo_str))
-
-    try:
         n = guardar_planning(df, periodo, current_user.email)
     except Exception as e:
-        flash(f"Error guardando el Planning: {e}", "error")
+        print(f"[reportes.planning_cargar] {type(e).__name__}: {e}")
+        traceback.print_exc()
+        flash(f"Error cargando el Excel de Planning: {type(e).__name__}: {e}", "error")
         return redirect(url_for("reportes.planning", mes=periodo_str))
 
     flash(f"Planning de {periodo_carga_str} cargado: {n} PDVs.", "ok")
     return redirect(url_for("reportes.planning", mes=periodo_carga_str))
+
+
+@bp.get("/planning/plantilla.xlsx")
+@requiere_pagina("reportes_planning")
+def planning_plantilla():
+    return send_file(
+        _plantilla_planning(), as_attachment=True, download_name="Plantilla_Planning.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @bp.get("/planning/exportar")

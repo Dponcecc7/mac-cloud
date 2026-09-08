@@ -177,8 +177,9 @@
           <input type="file" name="excel" accept=".xlsx" required>
         </label>
         <button class="btn primary" type="submit">Cargar</button>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_plantilla') }}">↓ Descargar plantilla</a>
       </form>
-      <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes.</p>
+      <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes. Si no estás seguro del formato, descargá la plantilla y compará las columnas contra tu archivo.</p>
     </div>
 
     <div class="panel">
