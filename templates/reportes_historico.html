@@ -163,6 +163,7 @@
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas programadas vs trabajadas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
     </nav>
 
     <div class="note"><b>A diferencia de Reporte diario</b>, acá la Salida es la del MISMO día que la entrada (no la de ayer) -- pensado para mirar un día puntual del pasado, no para mandar un reporte a media tarde. La Hora entrada/salida <b>programada</b> se puede editar acá mismo para ese día puntual (queda registrado en Historial de cambios). Elegí un <b>mercaderista</b> abajo para ver su detalle día por día en un rango de fechas (hasta 31 días).</div>

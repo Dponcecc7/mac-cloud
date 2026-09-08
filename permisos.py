@@ -56,6 +56,7 @@ PAGINAS_REPORTES = [
     ("reportes_historico", "Histórico diario"),
     ("reportes_perfil", "Perfil mercaderista"),
     ("reportes_proyecciones", "Proyecciones"),
+    ("reportes_planning", "Cobertura vs Planning"),
 ]
 
 TODAS_LAS_CLAVES = [c for c, _ in PAGINAS_TOP] + [c for c, _ in PAGINAS_REPORTES]
@@ -72,7 +73,17 @@ _SOLO_ANALISTA_ADMIN = ["cargar_headcount", "historial"]
 # proyectada por persona es mas sensible que un reporte operativo, no
 # abierto a supervisores por defecto.
 _SOLO_ANALISTA_ADMIN_REPORTES = ("reportes_historico", "reportes_proyecciones")
-_REPORTES_ABIERTOS_A_TODOS = [c for c, _ in PAGINAS_REPORTES if c not in _SOLO_ANALISTA_ADMIN_REPORTES]
+# "reportes_planning" (Davor, 2026-09-07: "Cobertura vs Planning", canal
+# Tradicional) es un tier más restrictivo todavía -- no "analista/admin sí,
+# supervisor no" como los de arriba, sino UNA persona puntual (Kevin Llanos,
+# el analista de Tradicional) más admin. Por eso queda AFUERA de
+# DEFAULT_POR_ROL por completo (ningún rol la trae por default, ni
+# "analista") -- se habilita a mano por usuario desde Usuarios, como
+# cualquier otra clave que un admin decida togglear.
+_RESTRINGIDO_INDIVIDUAL = ("reportes_planning",)
+_REPORTES_ABIERTOS_A_TODOS = [
+    c for c, _ in PAGINAS_REPORTES if c not in _SOLO_ANALISTA_ADMIN_REPORTES and c not in _RESTRINGIDO_INDIVIDUAL
+]
 
 # Reproduce el acceso que cada rol YA tenía antes de este sistema (ver
 # docstring de más arriba).

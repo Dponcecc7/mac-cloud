@@ -130,6 +130,7 @@
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}" class="active">Tareo</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas programadas vs trabajadas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
     </nav>
 
     <div class="top-actions">

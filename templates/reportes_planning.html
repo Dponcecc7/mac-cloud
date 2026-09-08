@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Reportes</title>
+  <style>
+    :root {
+      --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef;
+      --brand:#2f6fb0; --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e0ecf8; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#a8c3dc; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e0ecf8; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+
+    .top-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
+    .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
+
+    .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:18px; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 10px; }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
+
+    .kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+    .kpi { background:var(--bg); border-radius:10px; padding:14px 16px; }
+    .kpi .valor { font-size:24px; font-weight:800; }
+    .kpi .label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+
+    .carga-form { display:flex; align-items:end; gap:12px; flex-wrap:wrap; }
+    .carga-form label { font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:5px; font-weight:600; }
+    .carga-form input[type=month], .carga-form input[type=file] { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+
+    .table-wrap { overflow-x:auto; max-height:60vh; }
+    table { border-collapse:collapse; width:100%; font-size:12px; }
+    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
+    td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    th.th-ordenable { cursor:pointer; user-select:none; }
+    th.th-ordenable:hover { color:var(--brand); }
+    .flecha-orden { display:inline-block; width:10px; }
+    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+    .celda-cero { color:var(--bad); font-weight:700; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+      nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
+      nav.tabs a { padding:8px 12px; white-space:nowrap; }
+      .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
+      .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
+      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
+      .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
+      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
+      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .panel { padding:12px !important; border-radius:12px; }
+      .kpis { grid-template-columns:repeat(2, 1fr); }
+      .carga-form { flex-direction:column; align-items:stretch; }
+    }
+  </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Reportes</h1>
+    <nav class="tabs">
+      {% if tiene_acceso(usuario, 'reportes_alertas') %}<a href="{{ url_for('reportes.alertas') }}">Alertas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_recomendaciones') %}<a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_perfil') %}<a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_historico') %}<a href="{{ url_for('reportes.historico') }}">Histórico de asistencia</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Ruta mercaderista</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas programadas vs trabajadas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}" class="active">Cobertura vs Planning</a>{% endif %}
+
+    </nav>
+
+    <div class="top-actions">
+      <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <input type="month" name="mes" value="{{ periodo_str }}">
+        <button class="btn primary" type="submit">Ver</button>
+      </form>
+      <a class="btn ghost" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
+    </div>
+
+    {% if regiones_disponibles or ciudades_disponibles or supervisores_disponibles %}
+    <div class="filtros-admin">
+      <form method="get" style="display:contents;">
+        <input type="hidden" name="mes" value="{{ periodo_str }}">
+        <select name="region">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if region_filtro == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="ciudad">
+          <option value="">Ciudad: todas</option>
+          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if ciudad_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        <select name="supervisor">
+          <option value="">Supervisor: todos</option>
+          {% for s in supervisores_disponibles %}<option value="{{ s }}" {{ 'selected' if supervisor_filtro == s else '' }}>{{ s|title }}</option>{% endfor %}
+        </select>
+        <button class="btn primary" type="submit">Aplicar filtros</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for categoria, mensaje in messages %}
+        <div class="note" style="border-left-color: {{ 'var(--bad)' if categoria == 'error' else 'var(--ok)' }}; margin-bottom:14px;">{{ mensaje }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="panel">
+      <p class="panel-title">Cargar Planning del mes ({{ periodo_str }})</p>
+      <form class="carga-form" method="post" action="{{ url_for('reportes.planning_cargar') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Mes del planning
+          <input type="month" name="periodo" value="{{ periodo_str }}">
+        </label>
+        <label>Excel de Planning (hojas "Mayorista" y "Minorista")
+          <input type="file" name="excel" accept=".xlsx" required>
+        </label>
+        <button class="btn primary" type="submit">Cargar</button>
+      </form>
+      <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes.</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Resumen del período</p>
+      <div class="kpis">
+        <div class="kpi"><div class="valor">{{ resumen.headcount }}</div><div class="label">Headcount con Planning</div></div>
+        <div class="kpi"><div class="valor">{{ resumen.pdvs_planning }}</div><div class="label">PDVs en Planning</div></div>
+        <div class="kpi"><div class="valor">{{ resumen.pdvs_visitados }}</div><div class="label">PDVs visitados</div></div>
+        <div class="kpi"><div class="valor">{{ (resumen.pct_cumplimiento ~ '%') if resumen.pct_cumplimiento is not none else '—' }}</div><div class="label">% Cumplimiento</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</p>
+      {% if not pendientes %}
+        <p class="empty">Sin planning cargado para este período, o todos los PDVs ya tienen al menos una visita.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-pendientes">
+          <tr>
+            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-pendientes-nombre"></span></th>
+            <th>CO_LI</th>
+            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-pendientes-ciudad"></span></th>
+            <th>Región</th>
+            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-pendientes-mercaderista"></span></th>
+            <th>Supervisor</th>
+          </tr>
+          {% for p in pendientes %}
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}">
+            <td>{{ p.nombre_pdv or '—' }}</td>
+            <td>{{ p.co_li }}</td>
+            <td>{{ (p.ciudad or '—')|title }}</td>
+            <td>{{ (p.region or '—')|title }}</td>
+            <td>{{ (p.mercaderista or '—')|title }}</td>
+            <td>{{ (p.supervisor or '—')|title }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">PDVs Detalle — planificados vs visitados ({{ detalle|length }})</p>
+      {% if not detalle %}
+        <p class="empty">Sin planning cargado para este período.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-detalle">
+          <tr>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-detalle-nombre"></span></th>
+            <th>CO_LI</th>
+            <th>Ciudad</th>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-detalle-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('detalle', 'visitas')" data-numerico>Visitas realizadas <span class="flecha-orden" id="flecha-detalle-visitas"></span></th>
+            <th>Última visita</th>
+          </tr>
+          {% for p in detalle %}
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-visitas="{{ p.visitas_realizadas }}">
+            <td>{{ p.nombre_pdv or '—' }}</td>
+            <td>{{ p.co_li }}</td>
+            <td>{{ (p.ciudad or '—')|title }}</td>
+            <td>{{ (p.mercaderista or '—')|title }}</td>
+            <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
+            <td>{{ p.fecha_ultima_visita.strftime('%d/%m/%Y') if p.fecha_ultima_visita else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Visitas fuera del Planning ({{ fuera_planning|length }})</p>
+      {% if not fuera_planning %}
+        <p class="empty">No hay visitas Tradicional a PDVs fuera del Planning en este período.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-fuera">
+          <tr>
+            <th class="th-ordenable" onclick="ordenarPor('fuera', 'punto')">Punto de venta <span class="flecha-orden" id="flecha-fuera-punto"></span></th>
+            <th>Punto venta ID</th>
+            <th class="th-ordenable" onclick="ordenarPor('fuera', 'nombre')">Mercaderista <span class="flecha-orden" id="flecha-fuera-nombre"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('fuera', 'veces')" data-numerico>Veces visitado <span class="flecha-orden" id="flecha-fuera-veces"></span></th>
+            <th>Primera visita</th>
+            <th>Última visita</th>
+          </tr>
+          {% for f in fuera_planning %}
+          <tr data-orden-punto="{{ (f.punto_venta or '')|upper }}" data-orden-nombre="{{ (f.nombre or '')|upper }}" data-orden-veces="{{ f.veces_visitado }}">
+            <td>{{ f.punto_venta or '—' }}</td>
+            <td>{{ f.punto_venta_id }}</td>
+            <td>{{ (f.nombre or '—')|title }}</td>
+            <td>{{ f.veces_visitado }}</td>
+            <td>{{ f.primera_visita.strftime('%d/%m/%Y') }}</td>
+            <td>{{ f.ultima_visita.strftime('%d/%m/%Y') }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <p class="note">Simplificación conocida: se calcula solo contra el Planning cargado en la MAC, sin auditar contra Athena si el punto de venta es realmente parte de una campaña Tradicional vigente.</p>
+      {% endif %}
+    </div>
+  </div>
+
+<script>
+var ordenActual = {};
+function ordenarPor(tabla_id, campo) {
+  var tabla = document.getElementById('tabla-' + tabla_id);
+  var filas = Array.prototype.slice.call(tabla.querySelectorAll('tr[data-orden-' + campo + ']'));
+  if (!filas.length) return;
+  var clave = tabla_id + '-' + campo;
+  var actual = ordenActual[tabla_id];
+  var asc = (actual && actual.campo === campo) ? !actual.asc : true;
+  ordenActual[tabla_id] = { campo: campo, asc: asc };
+  var esNumerico = campo === 'visitas' || campo === 'veces';
+  filas.sort(function (a, b) {
+    var va = a.getAttribute('data-orden-' + campo) || '';
+    var vb = b.getAttribute('data-orden-' + campo) || '';
+    var cmp = esNumerico ? (Number(va) - Number(vb)) : va.localeCompare(vb, 'es');
+    return asc ? cmp : -cmp;
+  });
+  filas.forEach(function (fila) { tabla.appendChild(fila); });
+  tabla.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
+  document.getElementById('flecha-' + clave).textContent = asc ? '▲' : '▼';
+}
+</script>
+</body>
+</html>

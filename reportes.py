@@ -23,6 +23,10 @@ from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from permisos import requiere_pagina
+from planning import (
+    guardar_planning, parsear_planning, pdvs_detalle, pdvs_fuera_planning,
+    pdvs_pendientes, periodos_disponibles, resumen_planning, valores_filtrables,
+)
 from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
@@ -414,6 +418,113 @@ def cobertura_exportar():
     buf.seek(0)
     return send_file(
         buf, as_attachment=True, download_name=f"Cobertura_Diaria_{desde}_a_{hasta}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@bp.get("/planning")
+@requiere_pagina("reportes_planning")
+def planning():
+    desde, hasta, periodo_str = _mes_desde_query()
+    periodo = desde
+    if current_user.rol == "supervisor":
+        region_f = ciudad_f = supervisor_f = None
+    else:
+        region_f = request.args.get("region") or None
+        ciudad_f = request.args.get("ciudad") or None
+        supervisor_f = request.args.get("supervisor") or None
+    regiones_disp, ciudades_disp, supervisores_disp = valores_filtrables(periodo)
+
+    resumen = resumen_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    pendientes = pdvs_pendientes(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    detalle = pdvs_detalle(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    fuera = pdvs_fuera_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+
+    return render_template(
+        "reportes_planning.html", usuario=current_user, activo="planning",
+        periodo_str=periodo_str, periodos_disponibles=periodos_disponibles(),
+        region_filtro=region_f or "", ciudad_filtro=ciudad_f or "", supervisor_filtro=supervisor_f or "",
+        regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
+        resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
+    )
+
+
+@bp.post("/planning/cargar")
+@requiere_pagina("reportes_planning")
+def planning_cargar():
+    desde, hasta, periodo_str = _mes_desde_query()
+    archivo = request.files.get("excel")
+    if not archivo or archivo.filename == "":
+        flash("Tenés que subir el archivo Excel de Planning.", "error")
+        return redirect(url_for("reportes.planning", mes=periodo_str))
+
+    periodo_carga_str = request.form.get("periodo") or periodo_str
+    if not re.match(r"^\d{4}-\d{2}$", periodo_carga_str):
+        periodo_carga_str = periodo_str
+    anio, mes = int(periodo_carga_str[:4]), int(periodo_carga_str[5:7])
+    periodo = dt.date(anio, mes, 1)
+
+    try:
+        df = parsear_planning(io.BytesIO(archivo.read()))
+    except Exception as e:
+        flash(f"Error leyendo el Excel de Planning: {e}", "error")
+        return redirect(url_for("reportes.planning", mes=periodo_str))
+
+    n = guardar_planning(df, periodo, current_user.email)
+    flash(f"Planning de {periodo_carga_str} cargado: {n} PDVs.", "ok")
+    return redirect(url_for("reportes.planning", mes=periodo_carga_str))
+
+
+@bp.get("/planning/exportar")
+@requiere_pagina("reportes_planning")
+def planning_exportar():
+    desde, hasta, periodo_str = _mes_desde_query()
+    periodo = desde
+    if current_user.rol == "supervisor":
+        region_f = ciudad_f = supervisor_f = None
+    else:
+        region_f = request.args.get("region") or None
+        ciudad_f = request.args.get("ciudad") or None
+        supervisor_f = request.args.get("supervisor") or None
+
+    pendientes = pdvs_pendientes(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    detalle = pdvs_detalle(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+    fuera = pdvs_fuera_planning(periodo, desde, hasta, current_user, region_f, ciudad_f, supervisor_f)
+
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "PDVs Pendientes"
+    ws1.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor"])
+    for celda in ws1[1]:
+        celda.font = Font(bold=True)
+    for p in pendientes:
+        ws1.append(fila_segura([p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"]]))
+
+    ws2 = wb.create_sheet("PDVs Detalle")
+    ws2.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor", "Visitas realizadas", "Última visita"])
+    for celda in ws2[1]:
+        celda.font = Font(bold=True)
+    for p in detalle:
+        ws2.append(fila_segura([
+            p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"],
+            p["visitas_realizadas"], p["fecha_ultima_visita"],
+        ]))
+
+    ws3 = wb.create_sheet("Fuera de Planning")
+    ws3.append(["Punto de venta ID", "Nombre PDV", "DNI", "Nombre", "Veces visitado", "Primera visita", "Última visita"])
+    for celda in ws3[1]:
+        celda.font = Font(bold=True)
+    for p in fuera:
+        ws3.append(fila_segura([
+            p["punto_venta_id"], p["punto_venta"], p["dni"], p["nombre"],
+            p["veces_visitado"], p["primera_visita"], p["ultima_visita"],
+        ]))
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, as_attachment=True, download_name=f"Cobertura_vs_Planning_{periodo_str}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 

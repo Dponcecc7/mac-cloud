@@ -252,6 +252,37 @@ class Visita(Base):
     )
 
 
+class PlanningPdv(Base):
+    """Fase 7 (2026-09-07): asignación mensual de PDVs del canal Tradicional
+    (hojas "Mayorista"/"Minorista" del Excel de Planning que antes solo vivía
+    en MAC/Planning/REPORTES/, ver MAC/cruce_planning_pdv.py) -- una fila por
+    (periodo, co_li, tipo). `co_li` se guarda como String igual que
+    Visita.punto_venta_id para que el cruce en planning.py sea comparación
+    de string contra string sin sorpresas de tipo (el Excel trae CO_LI
+    numérico, pero LiveTrade/Athena expone punto_venta_id como texto)."""
+    __tablename__ = "planning_pdv"
+
+    id = Column(Integer, primary_key=True)
+    periodo = Column(Date, nullable=False, index=True)
+    co_li = Column(String(50), nullable=False)
+    tipo = Column(String(15), nullable=False)
+    nombre_pdv = Column(String(200))
+    ciudad = Column(String(80))
+    region = Column(String(50))
+    subcanal = Column(String(50))
+    mercado = Column(String(150))
+    dni_asignado = Column(String(15))
+    mercaderista_nombre = Column(String(150))
+    supervisor = Column(String(150))
+    dias_programados = Column(Integer)
+    cargado_por = Column(String(150))
+    cargado_en = Column(Date)
+
+    __table_args__ = (
+        UniqueConstraint("periodo", "co_li", "tipo", name="uq_planning_pdv"),
+    )
+
+
 VACANTES_VIEW_SQL = """
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,

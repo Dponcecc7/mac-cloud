@@ -189,6 +189,7 @@
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas programadas vs trabajadas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
     </nav>
     <h1 class="title">{{ persona.nombre_completo|title }}</h1>
     <p class="subtitulo">{{ (persona.rol or '—')|title }} · {{ (persona.ciudad or '—')|title }} · DNI {{ persona.dni }}</p>
