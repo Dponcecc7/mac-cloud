@@ -116,6 +116,9 @@
     .alerta-mini:last-child { border-bottom:none; }
     .alerta-mini .tipo { font-size:15px; }
     .empty { color:var(--muted); font-size:12.5px; padding:6px 0; }
+    .note { font-size:12px; color:var(--muted); background:var(--bg); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:8px 12px; margin-top:10px; }
+    .fila-sin-patron td { color:var(--muted); }
+    .badge-cambio { background:var(--warn-bg); color:var(--warn); font-size:12px; font-weight:700; padding:3px 9px; border-radius:6px; }
     .insight-mini { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
     .insight-mini:last-child { border-bottom:none; }
     .insight-mini .icono { font-size:14px; }
@@ -446,6 +449,38 @@
         </div>
         {% endfor %}
       {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Patrón recurrente actual</p>
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Día</th><th>Horario</th><th>Canal del día</th><th>Vigente hoy</th>
+          </tr>
+          {% for d in patron_semanal %}
+          <tr {{ 'class=fila-sin-patron' if not d.trabaja else '' }}>
+            <td>{{ d.dia }}</td>
+            {% if not d.trabaja %}
+              <td colspan="3" class="empty">No trabaja este día (sin fila en Patrón Recurrente)</td>
+            {% else %}
+              <td>{{ d.entrada }} – {{ d.salida }}</td>
+              <td>{{ d.canal or "—" }}</td>
+              <td>
+                {% if d.hubo_cambio %}
+                  <span class="badge-cambio" title="Patrón base: {{ d.entrada }}–{{ d.salida }}, {{ d.canal or '—' }}">
+                    ⚠ {{ d.entrada_efectiva }}–{{ d.salida_efectiva }}, {{ d.canal_efectivo or "—" }}
+                  </span>
+                {% else %}
+                  <span class="empty">Sin cambios</span>
+                {% endif %}
+              </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <p class="note">"Vigente hoy" muestra el valor EFECTIVO si hay un cambio de "Historial de cambios" corriendo para ese día (ej. un horario o canal distinto desde cierta fecha) -- si no hay ninguno, coincide con el Patrón base.</p>
     </div>
 
     <div class="panel">

@@ -5,7 +5,9 @@ trabajador (#6) se agregan en los siguientes pasos del mismo plan."""
 import calendar
 import datetime as dt
 import io
+import os
 import re
+import sys
 import traceback
 
 import openpyxl
@@ -18,11 +20,12 @@ from sqlalchemy.orm import aliased
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
 from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
-from dimension_models import HistorialCambio, Persona, get_session
+from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
 from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
+from patron_recurrente import sin_acentos
 from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
@@ -33,6 +36,10 @@ from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
+
+_AQUI = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
+from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 
 bp = Blueprint("reportes", __name__, url_prefix="/reportes")
 
@@ -891,6 +898,47 @@ def ficha(dni):
             .order_by(HistorialCambio.fecha_desde.desc())
             .all()
         )
+
+        # Patrón Recurrente semanal (Davor, 2026-09-14: "puedes agregar en
+        # la parte inferior su patrón recurrente actual, horario, canal que
+        # ve ese día, si hubo cambio también") -- una fila por día de la
+        # semana con lo que dice el Patrón base, más el valor EFECTIVO hoy
+        # (mismo valor_efectivo() que ya usa el motor/Horas semanales/
+        # Cobertura para aplicar un override de Historial de cambios) --
+        # si difieren, se marca visualmente que hay un cambio vigente.
+        patron_por_dia = {sin_acentos(p.dia_semana): p for p in session.query(PatronRecurrente).filter_by(dni=dni).all()}
+        idx_historial = cargar_historial()
+        hoy_patron = dt.date.today()
+        patron_semanal = []
+        for wd, dia_es in enumerate(DIAS_ES):
+            dia_norm = sin_acentos(dia_es)
+            fila = patron_por_dia.get(dia_norm)
+            # Fecha real más reciente que cae en ese día de semana -- hace
+            # falta una fecha concreta para que valor_efectivo() pueda
+            # evaluar si un override "solo los lunes" está vigente hoy.
+            fecha_ref = hoy_patron - dt.timedelta(days=(hoy_patron.weekday() - wd) % 7)
+
+            entrada_base = fila.hora_entrada_prog.strftime("%H:%M") if fila and fila.hora_entrada_prog else None
+            salida_base = fila.hora_salida_prog.strftime("%H:%M") if fila and fila.hora_salida_prog else None
+            canal_base = fila.canal_dia if fila else None
+
+            entrada_efectiva = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha_ref, entrada_base)
+            salida_efectiva = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha_ref, salida_base)
+            canal_efectivo = valor_efectivo(idx_historial, dni, "Canal del día", fecha_ref, canal_base)
+            entrada_efectiva = entrada_efectiva[:5] if entrada_efectiva else None
+            salida_efectiva = salida_efectiva[:5] if salida_efectiva else None
+
+            hubo_cambio = (
+                (entrada_efectiva or "") != (entrada_base or "")
+                or (salida_efectiva or "") != (salida_base or "")
+                or (canal_efectivo or "").strip().upper() != (canal_base or "").strip().upper()
+            )
+            patron_semanal.append({
+                "dia": dia_es, "trabaja": fila is not None,
+                "entrada": entrada_base, "salida": salida_base, "canal": canal_base,
+                "hubo_cambio": hubo_cambio,
+                "entrada_efectiva": entrada_efectiva, "salida_efectiva": salida_efectiva, "canal_efectivo": canal_efectivo,
+            })
     finally:
         session.close()
 
@@ -1055,6 +1103,7 @@ def ficha(dni):
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
         historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
+        patron_semanal=patron_semanal,
     )
 
 
