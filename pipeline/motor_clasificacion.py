@@ -244,6 +244,17 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
         elif comentario_sup_norm.startswith("FALTA") and "VACACIONES" in comentario_sup_norm and sin_marcacion_valida:
             estado_base = "VACACIONES (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
+        elif comentario_sup_norm.startswith("FALTA") and "AMANECIDA" in comentario_sup_norm:
+            # "Amanecida" ya está catalogada como motivo de categoría
+            # "Descanso" (catalogo_motivos), pero puede llegar tipeada como
+            # "Falta - Amanecida" desde la app móvil (texto libre, no pasa
+            # por el desplegable separado por categoría de mac_cloud) --
+            # Davor, 2026-09-14: "amanecida también es como un descanso", no
+            # debería contar como falta. Mismo estado que la rama DESCANSO
+            # de más abajo (no cuenta negativo en el Indicador).
+            estado_base = "DESCANSO (comentario supervisor)"
+            fuente = "Aplicativo (con comentario de supervisor)"
+            salida_anticipada = None
         elif comentario_sup_norm.startswith("FALTA"):
             estado_base = "FALTA (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
@@ -263,6 +274,15 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             fuente = "Aplicativo (con comentario de supervisor)"
         elif sin_marcacion_valida and "VACACIONES" in comentario_sup_norm:
             estado_base = "VACACIONES (comentario supervisor)"
+            fuente = "Aplicativo (con comentario de supervisor)"
+        elif sin_marcacion_valida and "AMANECIDA" in comentario_sup_norm:
+            # Mismo caso que el "FALTA ... AMANECIDA" de más arriba, pero
+            # para cuando el comentario llega SIN ningún prefijo Falta/
+            # Descanso -- hallazgo real: DNI 44914722, 2026-09-02,
+            # comentario_supervisor literal "Amanecida" (sin prefijo),
+            # quedaba en "FALTA (sin marcación)" (el default inicial, línea
+            # ~158) porque no matcheaba ninguna rama de arriba.
+            estado_base = "DESCANSO (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
         elif sin_marcacion_valida and not pd.isna(registro_sup.get("Estado reportado")) and str(registro_sup.get("Estado reportado")).strip():
             estado_reportado_norm = str(registro_sup.get("Estado reportado")).strip().upper()
