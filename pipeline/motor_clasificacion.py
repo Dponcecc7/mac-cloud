@@ -281,6 +281,25 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
                 # ".split(' (')[0]" ya los recupera bien sin importar qué
                 # vaya en el paréntesis.
                 estado_base = "ASISTIÓ A TIEMPO"
+                # Salida asumida = programada (Davor, 2026-09-14): "Asistió"
+                # confirmado por acá (botón "Marcar asistencia", sin
+                # marcación real de la app) deja entrada/salida en blanco --
+                # si nunca llega una marcación real y el analista no corrige
+                # la hora de salida a mano (pasa seguido, "el analista se
+                # olvida"), horas_semanales.py exige AMBAS no-nulas para
+                # calcular horas trabajadas (línea "con_marcacion = ...notna()
+                # & ...notna()"), así que un día realmente trabajado
+                # aparecía con 0h. Se asume el horario programado como
+                # salida real (y entrada, si tampoco hubiera) -- en cuanto
+                # llegue una marcación real de la app o una corrección
+                # manual, la próxima corrida recalcula todo desde cero y
+                # esta suposición deja de usarse sola, no queda pegada para
+                # siempre (alerta_analista ya queda en True más abajo, así
+                # que sigue siendo visible que es un dato asumido, no real).
+                if pd.isna(entrada_real):
+                    entrada_real = pd.to_timedelta(str(entrada_esp))
+                if pd.isna(salida_real):
+                    salida_real = pd.to_timedelta(str(salida_esp))
             else:
                 estado_base = f"{estado_reportado_norm} (según supervisor, sin marcación app)"
             fuente = "Supervisor (sin marcación app)"
