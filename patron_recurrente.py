@@ -5,13 +5,15 @@ propia copia idéntica de WD_NORM/_sin_acentos() y del query +
 dict-comprehension para leer el patrón (hallazgo de revisión de código,
 2026-08-24: "parseo de Patrón Recurrente duplicado en 3 archivos").
 
-WD_NORM no incluye domingo (6) a propósito, igual que las 3 copias
-originales -- ningún mercaderista tiene patrón de domingo hoy en la
-práctica, y cambiar ese comportamiento es una decisión de negocio, no un
-bug a corregir en silencio de paso con esta consolidación."""
+WD_NORM SÍ incluye domingo (6) desde 2026-09-14 (Davor: el equipo de
+Autoservicio trabaja domingo, y debe contar "en todos los análisis, si el
+analista lo sube en su patrón recurrente") -- guiado 100% por los datos:
+alguien sin fila de domingo en su propio Patrón Recurrente simplemente no
+tiene nada que este mapeo pueda resolver para ese día, así que agregar la
+clave acá no cambia nada para quien no lo tenga cargado."""
 from dimension_models import PatronRecurrente
 
-WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado"}
+WD_NORM = {0: "lunes", 1: "martes", 2: "miercoles", 3: "jueves", 4: "viernes", 5: "sabado", 6: "domingo"}
 
 
 def sin_acentos(s):

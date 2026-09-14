@@ -15,8 +15,9 @@ import datetime as dt
 
 import pandas as pd
 
-from dimension_models import Persona, get_session
+from dimension_models import Persona, PatronRecurrente, get_session
 from fact_models import ClasificacionDiaria
+from patron_recurrente import sin_acentos
 from recomendaciones import insights_equipo
 from scoping import aplicar_filtros_extra, condicion_scope
 
@@ -172,9 +173,11 @@ def necesidad_contratacion(usuario_actual, rol_filtro=None, region_filtro=None, 
 def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
     """% de Falta y % de Tardanza por día de la semana, desde INICIO_SISTEMA
     -- para reforzar equipo o anticipar cobertura los días que históricamente
-    concentran más incidencias. Domingo no aparece (el motor no genera fila
-    ese día). Solo desglose por día de semana -- día del mes/estacionalidad
-    anual todavía no tiene suficiente historia (ver docstring del módulo)."""
+    concentran más incidencias. Domingo entra igual que cualquier otro día
+    desde 2026-09-14 -- aparece solo si alguien del filtro elegido tiene
+    fila de domingo en su Patrón Recurrente (Autoservicio). Solo desglose
+    por día de semana -- día del mes/estacionalidad anual todavía no tiene
+    suficiente historia (ver docstring del módulo)."""
     session = get_session()
     try:
         query = (
@@ -195,7 +198,10 @@ def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, s
     df = pd.DataFrame(filas, columns=["dia_semana", "estado"])
     df["estado_base"] = df["estado"].apply(lambda s: (s or "").split(" (")[0])
 
-    orden_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    # "Domingo" agregado 2026-09-14 (Autoservicio trabaja domingo) -- si
+    # nadie en el filtro elegido tiene datos de domingo todavía, la fila
+    # simplemente no aparece (`if not total: continue` de abajo).
+    orden_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     resultado = []
     for dia in orden_dias:
         grupo = df[df["dia_semana"] == dia]
@@ -317,15 +323,16 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     falte en la semana"). Reemplaza la versión anterior (que combinaba
     estacionalidad+riesgo de rotación+incidencias recientes en un solo
     score) -- ahora es directo: % histórico de falta de esa persona, por
-    cada día lunes-sábado, de la semana en curso o la próxima.
+    cada día lunes-sábado (más domingo si esa persona trabaja domingo, ver
+    dnis_con_domingo más abajo), de la semana en curso o la próxima.
 
     Semana a mostrar: la actual (lunes-sábado) si hoy es lunes-jueves: si
     hoy es viernes, sábado o domingo (casi no quedan días útiles) salta
     directo a la semana siguiente, que es más accionable.
 
-    Cada fila: {dni, nombre, dias: [{dia, fecha, pct}, ...] lunes a sábado,
-    pct_max} -- ordenado por `pct_max` descendente (a quién prestarle
-    atención esta semana, y qué día en particular).
+    Cada fila: {dni, nombre, dias: [{dia, fecha, pct}, ...] lunes a sábado
+    (+domingo si aplica), pct_max} -- ordenado por `pct_max` descendente (a
+    quién prestarle atención esta semana, y qué día en particular).
 
     `estacionalidad_equipo`: si ya se calculó afuera (ver
     reportes.py::proyecciones()), se reusa -- mismo motivo que en
@@ -337,7 +344,21 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     hoy = dt.date.today()
     lunes_esta_semana = hoy - dt.timedelta(days=hoy.weekday())
     lunes_semana = lunes_esta_semana + dt.timedelta(days=7) if hoy.weekday() >= 4 else lunes_esta_semana
-    dias_semana_fechas = [lunes_semana + dt.timedelta(days=i) for i in range(6)]  # lunes..sábado
+    dias_semana_fechas = [lunes_semana + dt.timedelta(days=i) for i in range(7)]  # lunes..domingo
+
+    # Domingo agregado 2026-09-14 (Autoservicio) -- PERO solo para quien
+    # tenga esa fila en su PROPIO Patrón Recurrente: sin este chequeo, el
+    # fallback de la línea de abajo (pct_equipo_por_dia) le mostraría
+    # "riesgo de falta el domingo" a cualquiera que ni siquiera trabaje ese
+    # día, apenas existiera algún dato real de domingo en el equipo.
+    session_dias = get_session()
+    try:
+        dnis_con_domingo = {
+            dni for dni, dia in session_dias.query(PatronRecurrente.dni, PatronRecurrente.dia_semana).all()
+            if sin_acentos(dia) == "domingo"
+        }
+    finally:
+        session_dias.close()
 
     estacionalidad_individual = _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
     if estacionalidad_equipo is None:
@@ -350,6 +371,8 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
         pct_max = 0.0
         for fecha_dia in dias_semana_fechas:
             dia_semana = DIAS_ES[fecha_dia.weekday()]
+            if dia_semana == "Domingo" and p.dni not in dnis_con_domingo:
+                continue
             pct = estacionalidad_individual.get(p.dni, {}).get(dia_semana, pct_equipo_por_dia.get(dia_semana, 0))
             pct = round(min(pct, 100.0), 1)
             dias.append({"dia": dia_semana, "fecha": fecha_dia.isoformat(), "pct": pct})

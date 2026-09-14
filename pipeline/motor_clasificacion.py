@@ -407,7 +407,7 @@ def main():
     p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
     p["DNI"] = p["DNI"].astype(str).str.strip()
     p["Dia"] = p["Dia"].astype(str).str.strip().str.lower()
-    dia_map = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5}
+    dia_map = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5, "domingo": 6}
     p["weekday"] = p["Dia"].map(dia_map)
     col_ent = [c for c in p.columns if "entrada" in c.lower()][0]
     col_sal = [c for c in p.columns if "salida" in c.lower()][0]
@@ -474,7 +474,15 @@ def main():
         fecha_baja = persona.get("Fecha de baja")
         for fecha in calendario:
             weekday = fecha.weekday()
-            if weekday == 6 or fecha.date() in feriados_set:
+            # Domingo (6) YA NO se salta a ciegas -- Davor, 2026-09-14: el
+            # equipo de Autoservicio sí trabaja domingo, y debe contar "para
+            # todos los análisis, si el analista lo sube en su patrón
+            # recurrente". El check de más abajo (`key_pat not in
+            # p_idx.index: continue`) ya excluye correctamente a cualquiera
+            # sin fila de domingo en su Patrón Recurrente -- es el MISMO
+            # mecanismo que ya usa cualquier otro día, así que sacar este
+            # bloqueo puntual alcanza sin lógica nueva por canal/persona.
+            if fecha.date() in feriados_set:
                 continue
             if pd.notna(fecha_ingreso) and fecha < pd.Timestamp(fecha_ingreso):
                 continue

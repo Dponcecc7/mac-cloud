@@ -1356,9 +1356,12 @@ def reemplazo_submit():
     )
 
 
-# Sin domingo -- mismo criterio que WD_NORM en horas_semanales.py, ningún
-# módulo del pipeline espera un día de semana "Domingo" en PatronRecurrente.
-DIAS_PATRON = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+# Con domingo desde 2026-09-14 (Davor: Autoservicio trabaja domingo, debe
+# contar "en todos los análisis, si el analista lo sube en su patrón
+# recurrente") -- el motor y WD_NORM (patron_recurrente.py) ya lo procesan
+# igual que cualquier otro día; sin esta opción acá, la única forma de
+# cargar un domingo seguía siendo una intervención directa a la base.
+DIAS_PATRON = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 
 def _hora_form(valor):

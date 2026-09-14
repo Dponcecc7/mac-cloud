@@ -37,13 +37,21 @@ CIERRE_AUTOMATICO_STR = "23:30:00"  # mismo criterio que reporte_diario_9am.py -
 
 
 def semana_iso(anio, num_semana):
-    """Lunes a sábado de la semana ISO `num_semana` del año `anio`."""
+    """Lunes a domingo de la semana ISO `num_semana` del año `anio` --
+    hasta 2026-09-14 llegaba solo a sábado; se extendió a domingo (Davor:
+    Autoservicio trabaja domingo y debe contar "en todos los análisis")
+    porque este es el único punto que alimenta el rango [desde, hasta] de
+    calcular_detalle_semana() en los 4 lugares donde se usa (Horas
+    semanales, Desempeño, Ficha del trabajador x2) -- alguien sin fila de
+    domingo en su Patrón Recurrente simplemente no tiene fila ese día,
+    domingo extra no cambia nada para el resto del equipo."""
     lunes = dt.date.fromisocalendar(anio, num_semana, 1)
-    sabado = dt.date.fromisocalendar(anio, num_semana, 6)
-    return lunes, sabado
+    domingo = dt.date.fromisocalendar(anio, num_semana, 7)
+    return lunes, domingo
 
 
-def _horas_esperadas_dia(fecha, feriados_set):
+def _horas_esperadas_dia(row, feriados_set):
+    fecha = row["fecha"].date() if hasattr(row["fecha"], "date") else row["fecha"]
     if fecha in feriados_set:
         return 0.0
     wd = fecha.weekday()
@@ -51,7 +59,20 @@ def _horas_esperadas_dia(fecha, feriados_set):
         return HORAS_LV
     if wd == 5:
         return HORAS_SABADO
-    return 0.0  # domingo -- el motor ni genera fila, pero por si acaso
+    # Domingo (Davor, 2026-09-14: Autoservicio trabaja domingo, debe contar
+    # "si el analista lo sube en su patrón recurrente") -- a propósito SIN
+    # una constante fija tipo HORAS_LV/HORAS_SABADO: se deriva de la
+    # entrada/salida esperada YA CLASIFICADA para esa fila (que el motor
+    # sacó del propio Patrón Recurrente de esa persona), menos el
+    # refrigerio. Sin fila de domingo en su Patrón, el motor nunca generó
+    # esta fila -- no hay nada que sumar, mismo resultado 0.0 de siempre
+    # para cualquiera que no lo tenga cargado.
+    entrada_td = pd.to_timedelta(str(row["entrada_esperada"]), errors="coerce")
+    salida_td = pd.to_timedelta(str(row["salida_esperada"]), errors="coerce")
+    if pd.isna(entrada_td) or pd.isna(salida_td):
+        return 0.0
+    refrigerio_td = pd.to_timedelta(row.get("_refrigerio_min", 0), unit="m")
+    return round(max((salida_td - entrada_td - refrigerio_td).total_seconds() / 3600, 0.0), 2)
 
 
 def _motivo_falta(estado_base, estado, comentario):
@@ -146,7 +167,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
     r["_refrigerio_min"] = r.apply(_refrigerio_min_para, axis=1)
-    r["horas_a_trabajar"] = r["fecha"].apply(lambda f: _horas_esperadas_dia(f.date(), feriados_set))
+    r["horas_a_trabajar"] = r.apply(lambda row: _horas_esperadas_dia(row, feriados_set), axis=1)
 
     r["_entrada_esp_td"] = pd.to_timedelta(r["entrada_esperada"].astype(str), errors="coerce")
     r["_entrada_real_td"] = pd.to_timedelta(r["entrada_real"].astype(str), errors="coerce")

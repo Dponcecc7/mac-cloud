@@ -120,7 +120,7 @@ def cargar_patron():
     p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
     p["DNI"] = p["DNI"].astype(str).str.strip()
     p["Dia"] = p["Dia"].astype(str).str.strip().str.lower()
-    dia_map = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5}
+    dia_map = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5, "domingo": 6}
     p["weekday"] = p["Dia"].map(dia_map)
     col_ent = [c for c in p.columns if "entrada" in c.lower()][0]
     col_sal = [c for c in p.columns if "salida" in c.lower()][0]
@@ -364,7 +364,11 @@ def main():
         weekday_hoy = hoy.weekday()
         weekday_ant = anterior.weekday()
 
-        if weekday_hoy == 6 or hoy.date() in feriados_set:
+        # Domingo (6) ya no se salta a ciegas -- mismo criterio que
+        # motor_clasificacion.py (Davor, 2026-09-14): Autoservicio sí
+        # trabaja domingo, y el check de p_idx más abajo ya excluye
+        # correctamente a quien no tenga fila de domingo en su Patrón.
+        if hoy.date() in feriados_set:
             continue
 
         fecha_ingreso = persona.get("Fecha de ingreso")
