@@ -24,6 +24,7 @@ from flask_login import current_user
 from openpyxl.styles import Font
 
 from dimension_models import HistorialCambio, Persona, get_session
+from patron_recurrente import canonizar_canal_dia
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import condicion_scope
 
@@ -122,6 +123,15 @@ def _leer_datos_comunes(form):
         if valor_normalizado is None:
             return None, f'"{valor_nuevo}" no es una hora válida -- usá el formato HH:MM (ej. 09:00).'
         valor_nuevo = valor_normalizado
+    elif campo == "Canal del día":
+        # canonizar_canal_dia() (Davor, 2026-09-14, misma auditoría que
+        # encontró el bug de "FARMACIA"/"AUTOSERVICIO"/"Autorsevicios" en
+        # PatronRecurrente) -- un cambio manual acá alimenta la MISMA
+        # comparación de texto exacto en motor_clasificacion.py, así que
+        # necesita la misma forma canónica ("Tradicional"/"Autoservicio"/
+        # "Farmacia") para que valor_efectivo() realmente calce contra una
+        # visita real.
+        valor_nuevo = canonizar_canal_dia(valor_nuevo)
     try:
         fecha_desde = dt.date.fromisoformat(fecha_desde)
         fecha_hasta = dt.date.fromisoformat(fecha_hasta) if fecha_hasta else None
@@ -413,6 +423,8 @@ def cargar():
                     errores.append(f"Fila {fila_excel}: \"{valor_nuevo}\" no es una hora válida -- usá el formato HH:MM (ej. 09:00).")
                     continue
                 valor_nuevo = valor_normalizado
+            elif campo == "Canal del día":
+                valor_nuevo = canonizar_canal_dia(valor_nuevo)
             if not fecha_desde:
                 errores.append(f"Fila {fila_excel}: falta Fecha desde.")
                 continue
