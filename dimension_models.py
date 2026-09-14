@@ -220,6 +220,28 @@ class CorreccionWeb(Base):
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
 
 
+class VacacionRegistrada(Base):
+    """Rango de vacaciones registrado desde mac_cloud/asistencia.py (Davor,
+    2026-09-14) -- fuente de verdad de "qué rango está vigente ahora" para
+    poder EDITARLO después (extender o acortar), independiente de lo que ya
+    quedó procesado en ClasificacionDiaria (eso lo sigue infiriendo
+    vacaciones.py::calcular_viajes_vacaciones() a partir de los días ya
+    clasificados, de solo lectura). Igual que CorreccionWeb, esto es solo
+    la copia de auditoría/consulta en Postgres -- la fuente REAL que lee el
+    motor sigue siendo Tabla 3 en SharePoint (un comentario "Falta -
+    Vacaciones" por día del rango, mismo mecanismo que ya usaba el motor)."""
+    __tablename__ = "vacaciones_registradas"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+    fecha_inicio = Column(Date, nullable=False)
+    fecha_fin = Column(Date, nullable=False)
+    registrado_por = Column(String(150))
+    fecha_registro = Column(TIMESTAMP, server_default=func.now())
+    actualizado_por = Column(String(150))
+    fecha_actualizacion = Column(TIMESTAMP)
+
+
 class Visita(Base):
     """Fase 6+ (2026-08-23): detalle de visitas a PDV (GPS), tal cual llega
     de Athena (ver pipeline/athena_client.py::traer_visitas()) -- antes solo

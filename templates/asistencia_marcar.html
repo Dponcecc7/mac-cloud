@@ -204,6 +204,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reemplazo_form') }}" class="{{ 'active' if activo=='reemplazo' else '' }}">Agregar reemplazo</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}" class="{{ 'active' if activo=='headcount_nuevo' else '' }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}" class="{{ 'active' if activo=='dar_de_baja' else '' }}">Dar de baja</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="{{ 'active' if activo=='vacaciones' else '' }}">Vacaciones</a>{% endif %}
     </nav>
 
     <div class="top-actions">
@@ -306,7 +307,7 @@
             </select>
             <button class="btn sm info" type="submit" name="accion" value="Descanso">Descanso</button>
             <button class="btn sm warn" type="submit" name="accion" value="Vacante">Vacante</button>
-            <select class="ipt-filtro sm" name="motivo" style="width:135px;" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+            <select class="ipt-filtro sm" name="motivo" style="width:135px;" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ fecha_str }}');">
               <option value="">Motivo...</option>
               {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
             </select>
@@ -389,7 +390,7 @@
           <label class="campo-mini">Corregir hora de entrada<input type="time" name="entrada_corr_{{ p.dni }}"></label>
           <label class="campo-mini">Colocar hora de salida (hoy, sin esperar a mañana)<input type="time" name="salida_corr_hoy_{{ p.dni }}"></label>
           <span class="campo-mini-lbl">o convertir a Falta (nunca llegó)</span>
-          <select name="motivo_falta_{{ p.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+          <select name="motivo_falta_{{ p.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ fecha_str }}', '{{ p.dni }}');">
             <option value="">No convertir</option>
             {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
           </select>
@@ -452,7 +453,7 @@
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <label class="campo-mini">Corregir hora de entrada<input type="time" name="entrada_corr_{{ p.dni }}"></label>
             <span class="campo-mini-lbl">o convertir a Falta</span>
-            <select name="motivo_falta_{{ p.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+            <select name="motivo_falta_{{ p.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ fecha_str }}', '{{ p.dni }}');">
               <option value="">No convertir</option>
               {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
             </select>
@@ -498,7 +499,7 @@
             </select>
             <button class="btn sm info" type="submit" name="accion" value="Descanso">Descanso</button>
             <button class="btn sm warn" type="submit" name="accion" value="Vacante">Vacante</button>
-            <select name="motivo" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+            <select name="motivo" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ fecha_str }}');">
               <option value="">Cambiar motivo...</option>
               {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
             </select>
@@ -526,5 +527,58 @@
     </div>
     {% endif %}
   </div>
+
+  <dialog id="dlg-vacaciones" style="border:none; border-radius:14px; padding:0; max-width:320px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
+    <form method="dialog" style="padding:20px 22px;">
+      <p style="margin:0 0 12px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
+      <input type="date" id="dlg-vacaciones-fecha" class="ipt-filtro" style="width:100%; margin-bottom:14px;" required>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" id="dlg-vacaciones-cancelar" class="btn sm" style="background:var(--line); color:var(--ink);">Cancelar</button>
+        <button type="submit" value="confirmar" class="btn sm ok">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+  <script>
+    // Rango de vacaciones (Davor, 2026-09-14): al elegir "Vacaciones" como
+    // motivo de Falta, pide el rango completo en vez de marcar un solo día
+    // -- el campo oculto que arma acá lo lee asistencia.py::marcar()/guardar()
+    // para escribir "Falta - Vacaciones" en Tabla 3 para cada día del rango.
+    (function () {
+      var dlg = document.getElementById('dlg-vacaciones');
+      var fechaInput = document.getElementById('dlg-vacaciones-fecha');
+      var pendiente = null;
+
+      window.pedirRangoVacaciones = function (select, fechaMin, sufijoDni) {
+        if (select.value !== 'Vacaciones') return;
+        var form = select.closest('form');
+        var hiddenName = sufijoDni ? 'fecha_fin_vacaciones_' + sufijoDni : 'fecha_fin_vacaciones';
+        pendiente = { select: select, form: form, hiddenName: hiddenName };
+        fechaInput.min = fechaMin;
+        fechaInput.value = fechaMin;
+        dlg.showModal();
+      };
+
+      document.getElementById('dlg-vacaciones-cancelar').addEventListener('click', function () {
+        if (pendiente) { pendiente.select.value = ''; }
+        pendiente = null;
+        dlg.close('cancelar');
+      });
+
+      dlg.addEventListener('close', function () {
+        if (dlg.returnValue === 'confirmar' && pendiente) {
+          var hidden = pendiente.form.querySelector('input[name="' + pendiente.hiddenName + '"]');
+          if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = pendiente.hiddenName;
+            pendiente.form.appendChild(hidden);
+          }
+          hidden.value = fechaInput.value;
+        }
+        pendiente = null;
+        dlg.returnValue = '';
+      });
+    })();
+  </script>
 </body>
 </html>

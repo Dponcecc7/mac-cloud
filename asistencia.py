@@ -29,7 +29,7 @@ import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, Visita, get_session
+from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, VacacionRegistrada, Visita, get_session
 from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
@@ -721,6 +721,36 @@ def _dar_de_baja_historico(usuario_actual, limite=100):
     ]
 
 
+def _vacaciones_vigentes(usuario_actual, limite=200):
+    """Rangos de vacaciones registrados que todavía no terminaron (fecha_fin
+    >= hoy) -- para la pestaña "Vacaciones" de Asistencia diaria (Davor,
+    2026-09-14: "una pestaña... para editar y saber"). Los que ya terminaron
+    no se muestran acá (nada que editar), pero el registro sigue en
+    Postgres para auditoría."""
+    hoy = dt.date.today()
+    session = get_session()
+    try:
+        query = (
+            session.query(VacacionRegistrada, Persona.nombre_completo)
+            .join(Persona, Persona.dni == VacacionRegistrada.dni)
+            .filter(VacacionRegistrada.fecha_fin >= hoy)
+        )
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas = query.order_by(VacacionRegistrada.fecha_inicio).limit(limite).all()
+    finally:
+        session.close()
+    return [
+        {
+            "id": v.id, "dni": v.dni, "nombre": nombre,
+            "fecha_inicio": v.fecha_inicio, "fecha_fin": v.fecha_fin,
+            "registrado_por": v.registrado_por, "fecha_registro": v.fecha_registro,
+        }
+        for v, nombre in filas
+    ]
+
+
 def _fecha_mas_reciente_con_datos():
     session = get_session()
     try:
@@ -911,6 +941,33 @@ def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, 
         ws.cell(row=fila_libre, column=8, value=str(hora_sal))
 
 
+def _escribir_rango_vacaciones(ws, fila_libre, dni, fecha_inicio, fecha_fin):
+    """Una fila "Falta - Vacaciones" por día CALENDARIO del rango -- el motor
+    (motor_clasificacion.py) ya descarta solo lo que no corresponda (feriados,
+    días sin fila de Patrón Recurrente ese weekday), así que no hace falta
+    filtrar acá cuáles días "sí trabaja". Devuelve la lista de fechas
+    escritas, para armar los CorreccionWeb en el mismo orden."""
+    fila = fila_libre
+    fechas = []
+    d = fecha_inicio
+    while d <= fecha_fin:
+        _agregar_fila_tabla3(ws, fila, dni, d, "Falta - Vacaciones")
+        fechas.append(d)
+        fila += 1
+        d += dt.timedelta(days=1)
+    return fechas
+
+
+def _borrar_fechas_tabla3(ws, fila_libre, dni, fechas):
+    """Mismo mecanismo que ya usa MARCADOR_BORRADO en el resto del archivo
+    (Tabla 3 es append-only, no se puede "borrar" una fila vieja) -- se usa
+    para los días que salen de un rango de vacaciones editado (acortado)."""
+    fila = fila_libre
+    for f in fechas:
+        _agregar_fila_tabla3(ws, fila, dni, f, MARCADOR_BORRADO)
+        fila += 1
+
+
 @bp.post("/guardar")
 @requiere_pagina("asistencia")
 def guardar():
@@ -949,11 +1006,24 @@ def guardar():
         # (mismo criterio que ya usa marcar() para Pendientes) -- si vienen,
         # pisan lo que haya en comentario_entrada_{dni}.
         motivo_falta = request.form.get(f"motivo_falta_{dni}", "").strip()
+        fecha_fin_vacaciones = None
         if motivo_falta:
             detalle_falta = request.form.get(f"detalle_falta_{dni}", "").strip()
             comentario_entrada = f"Falta - {motivo_falta}"
             if detalle_falta:
                 comentario_entrada += f" ({detalle_falta})"
+            # Mismo rango de vacaciones que marcar() -- acá el campo viene
+            # sufijado por DNI porque esta vista edita varias personas a la
+            # vez en un solo POST (ver fecha_fin_vacaciones en marcar()).
+            if motivo_falta == "Vacaciones":
+                fecha_fin_raw = request.form.get(f"fecha_fin_vacaciones_{dni}", "").strip()
+                if fecha_fin_raw:
+                    try:
+                        fecha_fin_candidata = dt.date.fromisoformat(fecha_fin_raw)
+                        if fecha_fin_candidata >= fecha:
+                            fecha_fin_vacaciones = fecha_fin_candidata
+                    except ValueError:
+                        pass
 
         # "Borrar" gana sobre lo que haya quedado tipeado en el cuadro de
         # texto -- el usuario tildó el check porque quiere deshacer el
@@ -978,6 +1048,7 @@ def guardar():
             ediciones.append({
                 "dni": dni, "comentario_entrada": comentario_entrada, "comentario_salida": comentario_salida,
                 "entrada_corr": entrada_corr, "salida_corr": salida_corr, "salida_corr_hoy": salida_corr_hoy,
+                "fecha_fin_vacaciones": fecha_fin_vacaciones,
             })
 
     # "volver" explícito (Davor, 2026-09-05, "Histórico diario": "con la
@@ -1016,8 +1087,21 @@ def guardar():
         # sacaba a la persona de "Pendientes de marcar" aunque la
         # corrección nunca hubiera llegado a T3 -- se perdía en silencio.
         correcciones_web = []
+        vacaciones_nuevas = []
         for e in ediciones:
-            if e["comentario_entrada"] or e["entrada_corr"]:
+            if e.get("fecha_fin_vacaciones"):
+                fechas_rango = _escribir_rango_vacaciones(ws, fila_libre, e["dni"], fecha, e["fecha_fin_vacaciones"])
+                fila_libre += len(fechas_rango)
+                for f in fechas_rango:
+                    correcciones_web.append(CorreccionWeb(
+                        dni=e["dni"], fecha=f, comentario_entrada="Falta - Vacaciones",
+                        registrado_por=current_user.email,
+                    ))
+                vacaciones_nuevas.append(VacacionRegistrada(
+                    dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
+                    registrado_por=current_user.email,
+                ))
+            elif e["comentario_entrada"] or e["entrada_corr"]:
                 _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, e["comentario_entrada"], hora_ent=e["entrada_corr"])
                 fila_libre += 1
                 correcciones_web.append(CorreccionWeb(
@@ -1062,6 +1146,8 @@ def guardar():
         try:
             for c in correcciones_web:
                 session.add(c)
+            for v in vacaciones_nuevas:
+                session.add(v)
             session.commit()
         finally:
             session.close()
@@ -1114,6 +1200,22 @@ def marcar():
     if accion in ACCIONES_CON_MOTIVO and not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
 
+    # Rango de vacaciones (Davor, 2026-09-14): si el motivo elegido es
+    # "Vacaciones", asistencia_marcar.html despliega un diálogo pidiendo
+    # "hasta qué fecha" antes de dejar enviar el form -- este campo solo
+    # llega lleno en ese caso puntual, cualquier otro motivo de Falta sigue
+    # el camino de un solo día de siempre (fecha_fin_vacaciones vacío).
+    fecha_fin_vacaciones = None
+    if accion == "Falta" and motivo == "Vacaciones":
+        fecha_fin_raw = request.form.get("fecha_fin_vacaciones", "").strip()
+        if fecha_fin_raw:
+            try:
+                fecha_fin_candidata = dt.date.fromisoformat(fecha_fin_raw)
+                if fecha_fin_candidata >= fecha:
+                    fecha_fin_vacaciones = fecha_fin_candidata
+            except ValueError:
+                pass
+
     # El detalle adicional va entre paréntesis al final -- _homologar_motivo()
     # / _motivo_limpio() ya recortan cualquier paréntesis final al agrupar
     # "Faltas por motivo" (mismo mecanismo que ya usa MARCADOR_BORRADO), así
@@ -1131,12 +1233,15 @@ def marcar():
             detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
             volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
         )
+    fechas_rango_escritas = None
     try:
         try:
             wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
             ws = wb["Registro diario supervisor"]
             fila_libre = ws.max_row + 1
-            if accion in ACCIONES_CON_MOTIVO:
+            if fecha_fin_vacaciones:
+                fechas_rango_escritas = _escribir_rango_vacaciones(ws, fila_libre, dni, fecha, fecha_fin_vacaciones)
+            elif accion in ACCIONES_CON_MOTIVO:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_con_motivo)
             else:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
@@ -1158,11 +1263,22 @@ def marcar():
         # lista de una, sin esperar a que el motor vuelva a correr.
         session = get_session()
         try:
-            session.add(CorreccionWeb(
-                dni=dni, fecha=fecha,
-                comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else accion),
-                registrado_por=current_user.email,
-            ))
+            if fechas_rango_escritas:
+                for f in fechas_rango_escritas:
+                    session.add(CorreccionWeb(
+                        dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones",
+                        registrado_por=current_user.email,
+                    ))
+                session.add(VacacionRegistrada(
+                    dni=dni, fecha_inicio=fecha, fecha_fin=fecha_fin_vacaciones,
+                    registrado_por=current_user.email,
+                ))
+            else:
+                session.add(CorreccionWeb(
+                    dni=dni, fecha=fecha,
+                    comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else accion),
+                    registrado_por=current_user.email,
+                ))
             session.commit()
         finally:
             session.close()
@@ -1631,4 +1747,220 @@ def dar_de_baja_submit():
         volver=url_for("asistencia.dar_de_baja_form"),
         poll_workflow="exportar_dimensiones.yml" if ok and ok_disparo else None,
         poll_siguiente="pipeline_completo.yml" if ok and ok_disparo else None,
+    )
+
+
+@bp.get("/vacaciones")
+@_analista_requerido
+def vacaciones_form():
+    """Pestaña "Vacaciones" de Asistencia diaria (Davor, 2026-09-14) -- lista
+    los rangos vigentes/futuros para poder editarlos (extender o acortar la
+    vuelta), y permite registrar uno nuevo sin pasar por "Marcar
+    asistencia". Mismo patrón que dar_de_baja_form()/reemplazo_form()."""
+    session = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+        query = session.query(Persona.dni, Persona.nombre_completo, Persona.rol, Persona.ciudad).filter(
+            Persona.estado == "Activo"
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+    finally:
+        session.close()
+
+    vigentes = _vacaciones_vigentes(current_user)
+
+    return render_template(
+        "asistencia_vacaciones.html", usuario=current_user, activo="vacaciones",
+        hoy=dt.date.today().isoformat(), activos=activos, vigentes=vigentes,
+    )
+
+
+def _validar_rango_vacaciones(fecha_inicio_str, fecha_fin_str):
+    """Devuelve (fecha_inicio, fecha_fin, error) -- error es None si el
+    rango es válido. Compartido por vacaciones_registrar()/vacaciones_editar()."""
+    if not fecha_inicio_str or not fecha_fin_str:
+        return None, None, "Faltan la fecha de inicio o la fecha de fin."
+    try:
+        fecha_inicio = dt.date.fromisoformat(fecha_inicio_str)
+        fecha_fin = dt.date.fromisoformat(fecha_fin_str)
+    except ValueError:
+        return None, None, "Fecha inválida."
+    if fecha_fin < fecha_inicio:
+        return None, None, "La fecha de fin no puede ser anterior a la de inicio."
+    return fecha_inicio, fecha_fin, None
+
+
+def _fechas_de_rango(inicio, fin):
+    d, fechas = inicio, []
+    while d <= fin:
+        fechas.append(d)
+        d += dt.timedelta(days=1)
+    return set(fechas)
+
+
+def _diff_rango_vacaciones(vieja_inicio, vieja_fin, nueva_inicio, nueva_fin):
+    """Compara un rango viejo contra uno nuevo -- devuelve (agregadas,
+    quitadas), ambas listas ordenadas de fechas. Usado por vacaciones_editar()
+    para escribir en Tabla 3 solo los días que cambiaron, no el rango
+    completo de nuevo (los días que están en ambos rangos no se tocan)."""
+    fechas_viejas = _fechas_de_rango(vieja_inicio, vieja_fin)
+    fechas_nuevas = _fechas_de_rango(nueva_inicio, nueva_fin)
+    return sorted(fechas_nuevas - fechas_viejas), sorted(fechas_viejas - fechas_nuevas)
+
+
+@bp.post("/vacaciones/registrar")
+@_analista_requerido
+def vacaciones_registrar():
+    dni = request.form.get("dni", "").strip()
+    fecha_inicio, fecha_fin, error = _validar_rango_vacaciones(
+        request.form.get("fecha_inicio", "").strip(), request.form.get("fecha_fin", "").strip(),
+    )
+    if not dni or error:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+            titulo="Falló", ok=False, detalle=error or "Falta el DNI.",
+            volver=url_for("asistencia.vacaciones_form"),
+        )
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.vacaciones_form"),
+        )
+    try:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fechas = _escribir_rango_vacaciones(ws, ws.max_row + 1, dni, fecha_inicio, fecha_fin)
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.vacaciones_form"),
+            )
+
+        session = get_session()
+        try:
+            for f in fechas:
+                session.add(CorreccionWeb(
+                    dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones",
+                    registrado_por=current_user.email,
+                ))
+            session.add(VacacionRegistrada(dni=dni, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, registrado_por=current_user.email))
+            session.commit()
+        finally:
+            session.close()
+    finally:
+        liberar_lock("tabla3_web")
+
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+        titulo="Vacaciones registradas", ok=True,
+        detalle=f"Se registraron {len(fechas)} días de vacaciones para el DNI {dni} ({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')}).",
+        volver=url_for("asistencia.vacaciones_form"),
+    )
+
+
+@bp.post("/vacaciones/editar/<int:vacacion_id>")
+@_analista_requerido
+def vacaciones_editar(vacacion_id):
+    """Extiende o acorta un rango ya registrado -- calcula el diff contra
+    lo guardado (fechas que salen del rango vs. fechas que entran) y
+    escribe/"borra" solo esas, sin tocar de nuevo los días que ya estaban
+    en ambos rangos (Tabla 3 es append-only, así que "borrar" es escribir
+    MARCADOR_BORRADO -- ver _borrar_fechas_tabla3())."""
+    nueva_inicio, nueva_fin, error = _validar_rango_vacaciones(
+        request.form.get("fecha_inicio", "").strip(), request.form.get("fecha_fin", "").strip(),
+    )
+    if error:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+            titulo="Falló", ok=False, detalle=error,
+            volver=url_for("asistencia.vacaciones_form"),
+        )
+
+    session_lookup = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+        query = (
+            session_lookup.query(VacacionRegistrada)
+            .join(Persona, Persona.dni == VacacionRegistrada.dni)
+            .filter(VacacionRegistrada.id == vacacion_id)
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        registro = query.first()
+        if registro is None:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+                titulo="Falló", ok=False, detalle="No se encontró ese registro de vacaciones (o no tenés acceso).",
+                volver=url_for("asistencia.vacaciones_form"),
+            )
+        dni, vieja_inicio, vieja_fin = registro.dni, registro.fecha_inicio, registro.fecha_fin
+    finally:
+        session_lookup.close()
+
+    fechas_agregadas, fechas_quitadas = _diff_rango_vacaciones(vieja_inicio, vieja_fin, nueva_inicio, nueva_fin)
+
+    if not fechas_agregadas and not fechas_quitadas:
+        return redirect(url_for("asistencia.vacaciones_form"))
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.vacaciones_form"),
+        )
+    try:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fila_libre = ws.max_row + 1
+            for f in fechas_agregadas:
+                _agregar_fila_tabla3(ws, fila_libre, dni, f, "Falta - Vacaciones")
+                fila_libre += 1
+            _borrar_fechas_tabla3(ws, fila_libre, dni, fechas_quitadas)
+            fila_libre += len(fechas_quitadas)
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.vacaciones_form"),
+            )
+
+        session = get_session()
+        try:
+            for f in fechas_agregadas:
+                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones", registrado_por=current_user.email))
+            for f in fechas_quitadas:
+                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
+            registro = session.get(VacacionRegistrada, vacacion_id)
+            registro.fecha_inicio, registro.fecha_fin = nueva_inicio, nueva_fin
+            registro.actualizado_por = current_user.email
+            registro.fecha_actualizacion = dt.datetime.now()
+            session.commit()
+        finally:
+            session.close()
+    finally:
+        liberar_lock("tabla3_web")
+
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
+        titulo="Vacaciones actualizadas", ok=True,
+        detalle=(
+            f"Rango actualizado para el DNI {dni}: {nueva_inicio.strftime('%d/%m/%Y')} al {nueva_fin.strftime('%d/%m/%Y')}. "
+            f"({len(fechas_agregadas)} día(s) agregado(s), {len(fechas_quitadas)} día(s) quitado(s).)"
+        ),
+        volver=url_for("asistencia.vacaciones_form"),
     )

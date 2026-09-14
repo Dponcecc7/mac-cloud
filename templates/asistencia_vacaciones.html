@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MAC — Asistencia diaria</title>
   <style>
-    :root { --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef; --brand:#2f6fb0; --bad:#dc2626; --bad-bg:#fee2e2; }
+    :root { --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef; --brand:#2f6fb0; --bad:#dc2626; --bad-bg:#fee2e2; --ok:#16a34a; }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
     .wrap { max-width:900px; margin:0 auto; padding:0 24px 60px; }
@@ -37,19 +37,19 @@
     label.field { display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:700; color:var(--muted); }
     .ipt { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
     .actions { display:flex; justify-content:flex-end; }
-    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--bad); color:#fff; }
-    details summary { cursor:pointer; font-weight:700; font-size:14px; color:var(--brand); padding:12px 16px; background:var(--card); border-radius:14px; box-shadow:0 1px 3px rgba(35,25,10,.06); list-style:none; }
-    details summary::-webkit-details-marker { display:none; }
-    details summary::before { content:"+ "; }
-    details[open] summary::before { content:"− "; }
-    details[open] summary { border-radius:14px 14px 0 0; margin-bottom:0; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+    .btn.sm { padding:6px 12px; font-size:12px; }
     .empty { color:var(--muted); font-size:13px; }
-    table.historico { border-collapse:collapse; width:100%; font-size:12.5px; }
-    table.historico th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); border-bottom:1px solid var(--line); }
-    table.historico td { padding:8px 10px; border-bottom:1px solid var(--line); }
-    .estado-pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }
-    .estado-pill.vacante { background:var(--warn, #d97706); }
-    .estado-pill.inactivo { background:var(--line); color:var(--muted); }
+    .vac-item { background:var(--card); border-radius:14px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; overflow:hidden; }
+    .vac-item summary { cursor:pointer; list-style:none; padding:14px 16px; display:flex; align-items:center; gap:12px; }
+    .vac-item summary::-webkit-details-marker { display:none; }
+    .vac-row { display:flex; align-items:center; gap:12px; flex:1; flex-wrap:wrap; }
+    .vac-row .quien { flex:1; min-width:180px; }
+    .vac-row .fechas { font-size:12.5px; color:var(--muted); }
+    .editar-txt { font-size:12px; font-weight:700; color:var(--brand); }
+    .vac-editar { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:0 16px 16px; }
+    .vac-editar label { display:flex; flex-direction:column; gap:4px; font-size:11.5px; font-weight:700; color:var(--muted); }
+    .vac-editar input[type="date"] { font:inherit; font-size:13px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
 
     @media (max-width: 760px) {
       .wrap { padding:0 12px 40px; }
@@ -97,19 +97,20 @@
       <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
       <a href="{{ url_for('asistencia.reemplazo_form') }}">Agregar reemplazo</a>
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}" class="active">Dar de baja</a>{% endif %}
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="active">Vacaciones</a>{% endif %}
     </nav>
 
-    <div class="note"><b>Baja de una persona activa</b> — deja la posición en estado <b>Vacante</b>, sin necesidad de tener ya a quien la reemplace. Cuando aparezca el reemplazo, usá "Agregar reemplazo" para cubrir esa vacante.</div>
+    <div class="note">Registrá el rango completo de un viaje de vacaciones de una sola vez -- se escribe "Falta - Vacaciones" para cada día del rango, igual que si lo marcaras uno por uno en "Marcar asistencia". Si la fecha de vuelta cambia, editá el rango de abajo en vez de cargar uno nuevo.</div>
 
-    <form method="post" action="{{ url_for('asistencia.dar_de_baja_submit') }}">
+    <form method="post" action="{{ url_for('asistencia.vacaciones_registrar') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="panel">
+        <p class="panel-title">Registrar nuevo rango</p>
         {% if not activos %}
-          <p class="note" style="margin:0;">No hay nadie activo en tu alcance para dar de baja.</p>
+          <p class="note" style="margin:0;">No hay nadie activo en tu alcance para registrar vacaciones.</p>
         {% else %}
-        <div class="form-row">
+        <div class="form-row" style="grid-template-columns:2fr 1fr 1fr;">
           <label class="field">Persona
             <select class="ipt" name="dni" required>
               <option value="">Elegí una persona...</option>
@@ -118,42 +119,36 @@
               {% endfor %}
             </select>
           </label>
-          <label class="field">Fecha de baja<input class="ipt" type="date" name="fecha_baja" value="{{ hoy }}" required></label>
+          <label class="field">Desde<input class="ipt" type="date" name="fecha_inicio" value="{{ hoy }}" required></label>
+          <label class="field">Hasta<input class="ipt" type="date" name="fecha_fin" required></label>
         </div>
-        <div class="form-row" style="grid-template-columns:1fr;">
-          <label class="field">Motivo (opcional)<input class="ipt" name="motivo_baja" placeholder="ej. renuncia, fin de contrato por días"></label>
-        </div>
-        <div class="actions"><button class="btn" type="submit">Dar de baja</button></div>
+        <div class="actions"><button class="btn" type="submit">Registrar rango</button></div>
         {% endif %}
       </div>
     </form>
 
-    <details style="margin-top:14px;">
-      <summary>Histórico de bajas ({{ historico|length }})</summary>
-      <div class="panel" style="border-radius:0 0 14px 14px; margin-top:0;">
-        {% if not historico %}
-        <p class="empty">Todavía no se registraron bajas.</p>
-        {% else %}
-        <div style="overflow-x:auto;">
-        <table class="historico">
-          <tr><th>Fecha de baja</th><th>Nombre</th><th>Estado</th><th>Motivo</th><th>Dado de baja por</th></tr>
-          {% for r in historico %}
-          <tr>
-            <td>{{ r.fecha_baja.strftime("%d/%m/%Y") if r.fecha_baja else "—" }}</td>
-            <td>{{ (r.nombre or r.dni)|title }}</td>
-            <td>
-              {% if r.estado == "Vacante" %}<span class="estado-pill vacante">Dado de baja</span>
-              {% else %}<span class="estado-pill inactivo">{{ r.estado }}</span>{% endif %}
-            </td>
-            <td>{{ r.motivo_baja or "—" }}</td>
-            <td>{{ r.dado_de_baja_por or "—" }}</td>
-          </tr>
-          {% endfor %}
-        </table>
+    <p class="panel-title" style="margin:18px 0 10px;">Rangos vigentes o próximos ({{ vigentes|length }})</p>
+    {% if not vigentes %}
+    <p class="empty">No hay vacaciones registradas todavía.</p>
+    {% else %}
+    {% for v in vigentes %}
+    <details class="vac-item">
+      <summary>
+        <div class="vac-row">
+          <div class="quien"><b>{{ (v.nombre or v.dni)|title }}</b> <span style="color:var(--muted); font-size:12px;">· DNI {{ v.dni }}</span></div>
+          <span class="fechas">{{ v.fecha_inicio.strftime("%d/%m/%Y") }} al {{ v.fecha_fin.strftime("%d/%m/%Y") }}</span>
+          <span class="editar-txt">Editar</span>
         </div>
-        {% endif %}
-      </div>
+      </summary>
+      <form method="post" action="{{ url_for('asistencia.vacaciones_editar', vacacion_id=v.id) }}" class="vac-editar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Desde<input type="date" name="fecha_inicio" value="{{ v.fecha_inicio.isoformat() }}" required></label>
+        <label>Hasta<input type="date" name="fecha_fin" value="{{ v.fecha_fin.isoformat() }}" required></label>
+        <button class="btn sm" type="submit">Guardar cambios</button>
+      </form>
     </details>
+    {% endfor %}
+    {% endif %}
   </div>
 </body>
 </html>
