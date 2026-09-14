@@ -18,6 +18,7 @@ from openpyxl.styles import Font
 
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal, get_session
 from github_actions import disparar_workflow
+from patron_recurrente import sin_acentos
 from permisos import requiere_pagina
 from scoping import canonizar_canal
 from parseo_headcount import (
@@ -147,7 +148,7 @@ def crear_persona_individual(
             if not fila.get("hora_entrada") or not fila.get("hora_salida"):
                 continue
             session.add(PatronRecurrente(
-                dni=dni, dia_semana=fila["dia_semana"],
+                dni=dni, dia_semana=sin_acentos(fila["dia_semana"]),
                 hora_entrada_prog=fila["hora_entrada"], hora_salida_prog=fila["hora_salida"],
                 canal_dia=fila.get("canal_dia") or canal, refrigerio=fila.get("refrigerio"),
             ))
@@ -417,8 +418,17 @@ def headcount_submit():
         n_patron = 0
         if p is not None:
             dnis_propios = set(nuevas) | set(actualizadas) | set(compartidos)
+            # sin_acentos() en dia_semana (Davor, 2026-09-14: "agregar una
+            # corrección para las mayúsculas/minúsculas y tildes") -- el
+            # Excel llega con texto libre ("Lunes"/"lunes"/con o sin tilde
+            # en "Miércoles"/"Sábado", según cómo lo haya tipeado cada
+            # analista); sin normalizar acá, dos cargas del mismo día con
+            # capitalización distinta creaban DOS filas para el mismo
+            # (dni, día) en vez de una sola -- la restricción UNIQUE de la
+            # tabla solo bloquea el texto EXACTAMENTE igual letra por letra
+            # (hallazgo real: 18 personas con 47 filas duplicadas así).
             filas_patron = [
-                (dni, _texto(row["Día de la semana"]),
+                (dni, sin_acentos(_texto(row["Día de la semana"])),
                  _hora(row["Hora entrada programada"]), _hora(row["Hora salida programada"]),
                  canal_propio or _texto(row["Canal del día"]), _texto(row["Refrigerio"]))
                 for dni, row in ((_dni(r["DNI"]), r) for _, r in p.iterrows())
