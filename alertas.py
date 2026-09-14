@@ -5,6 +5,7 @@ Regla explícita de Davor: por cada 3 tardanzas acumuladas en el mes, una
 alerta de "posible memorándum"; por cada 3 faltas, una de "observación para
 la renovación". "Por cada 3" se interpreta como niveles: 3-5 = nivel 1, 6-8
 = nivel 2, etc. (`cantidad // 3`), no una alerta única al llegar a 3."""
+import datetime as dt
 import os
 import sys
 
@@ -13,7 +14,7 @@ import pandas as pd
 from cobertura import alertas_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
-from patron_recurrente import cargar_patron_recurrente, sin_acentos, WD_NORM
+from patron_recurrente import cargar_patron_recurrente, dnis_con_domingo, sin_acentos, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +85,18 @@ def _detalle_salida(row, refrigerio_map, idx_historial):
     if es_critico:
         texto = f"🚨 {texto} -- menos del {int(PCT_JORNADA_CRITICA * 100)}% de lo programado ese día"
     return texto, es_critico
+
+
+def _tiene_descanso_registrado(comentario):
+    """Falta con comentario que menciona "descanso" pero NO "descanso
+    médico" (esa es otra categoría, con sustento -- ver MOTIVOS_CON_SUSTENTO)
+    -- así es como el analista registra el día de descanso semanal de
+    alguien de Autoservicio (su Patrón cubre los 7 días, así que no hay un
+    día implícito libre como en Tradicional/Farmacia)."""
+    if pd.isna(comentario):
+        return False
+    texto = str(comentario).lower()
+    return "descanso" in texto and "medic" not in texto
 
 
 def _tiene_sustento(comentario):
@@ -266,6 +279,73 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 "mensaje": f"No está marcando por su cuenta -- hora puesta a mano {cantidad} días este periodo",
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
                 "motivos": [],
+            })
+
+    # Descanso semanal (Davor, 2026-09-14): "todos los mercaderistas deben
+    # descansar 1 día de la semana" -- Tradicional/Farmacia lo hacen
+    # implícitamente si NO tienen domingo en su Patrón Recurrente (ese
+    # domingo libre cuenta como su descanso); Autoservicio (su Patrón cubre
+    # los 7 días desde 2026-09-14) necesita que el analista haya registrado
+    # explícitamente "Descanso" algún día (ver _tiene_descanso_registrado).
+    # Guiado por los DATOS de cada persona, no por su canal declarado --
+    # mismo criterio que dnis_con_domingo() en el resto de la sesión: quien
+    # no tiene domingo en su Patrón, sin importar su canal, recibe el
+    # descanso implícito.
+    #
+    # Se evalúa por SEMANA ISO (lunes a domingo) completa dentro de
+    # [desde, hasta] -- una semana partida en el borde del rango elegido
+    # (típico al filtrar por mes calendario) no se evalúa, para no marcar en
+    # falso por datos que caen fuera del rango visible.
+    if len(r):
+        dnis_scope = set(r["dni"].unique())
+        session_desc = get_session()
+        try:
+            dnis_domingo_scope = dnis_con_domingo(session_desc) & dnis_scope
+        finally:
+            session_desc.close()
+
+        r_desc = r.copy()
+        r_desc["es_descanso_explicito"] = (r_desc["estado_base"] == "FALTA") & r_desc["comentario"].apply(_tiene_descanso_registrado)
+
+        semanas_completas = []  # [(lunes, domingo), ...]
+        cursor = desde - dt.timedelta(days=desde.weekday())
+        while cursor <= hasta:
+            lunes_sem, domingo_sem = cursor, cursor + dt.timedelta(days=6)
+            if lunes_sem >= desde and domingo_sem <= hasta:
+                semanas_completas.append((lunes_sem, domingo_sem))
+            cursor += dt.timedelta(days=7)
+
+        for dni, grupo_persona in r_desc.groupby("dni"):
+            nombre = grupo_persona["nombre"].iloc[0]
+            tiene_domingo_patron = dni in dnis_domingo_scope
+            semanas_problema, fechas_problema = [], []
+            for lunes_sem, domingo_sem in semanas_completas:
+                grupo_semana = grupo_persona[
+                    (grupo_persona["fecha"] >= lunes_sem) & (grupo_persona["fecha"] <= domingo_sem)
+                ]
+                if not len(grupo_semana):
+                    continue  # sin ninguna fila esa semana (recién ingresó, etc.) -- no hay nada que evaluar
+                descansos = int(grupo_semana["es_descanso_explicito"].sum())
+                if not tiene_domingo_patron:
+                    descansos += 1
+                if descansos == 1:
+                    continue
+                etiqueta = f"S{lunes_sem.isocalendar()[1]} ({lunes_sem.strftime('%d/%m')}–{domingo_sem.strftime('%d/%m')})"
+                detalle = "sin día de descanso" if descansos == 0 else f"{descansos} días de descanso (debería ser 1)"
+                semanas_problema.append(f"{etiqueta}: {detalle}")
+                # Lunes de la semana como fecha representativa -- para que
+                # el filtro de día (dd/mm) de la pantalla también encuentre
+                # esta alerta, igual que las demás.
+                fechas_problema.append(lunes_sem.strftime("%d/%m"))
+            if not semanas_problema:
+                continue
+            cantidad = len(semanas_problema)
+            alertas.append({
+                "dni": dni, "nombre": nombre, "tipo": "sin_descanso",
+                "cantidad": cantidad, "nivel": cantidad, "critico": True,
+                "mensaje": f"Descanso semanal irregular ({cantidad} semana{'s' if cantidad != 1 else ''} este periodo)",
+                "fechas": fechas_problema,
+                "motivos": semanas_problema,
             })
 
     # Visita larga / Punto Censo -- tabla `visitas` (Postgres), ver
