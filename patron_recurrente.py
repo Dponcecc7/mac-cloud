@@ -37,3 +37,15 @@ def cargar_patron_recurrente(session, atributo):
         (p.dni, sin_acentos(p.dia_semana)): getattr(p, atributo)
         for p in session.query(PatronRecurrente).all()
     }
+
+
+def dnis_con_domingo(session):
+    """{dni, ...} de quienes tienen fila de domingo en su Patrón Recurrente
+    -- usado para decidir, persona por persona, si "el día hábil anterior"
+    de un lunes es domingo (Autoservicio) o sábado (todos los demás, ver
+    asistencia.py::_dia_habil_anterior()). Reusado también por
+    proyecciones.py::ranking_proxima_falta()."""
+    return {
+        dni for dni, dia in session.query(PatronRecurrente.dni, PatronRecurrente.dia_semana).all()
+        if sin_acentos(dia) == "domingo"
+    }

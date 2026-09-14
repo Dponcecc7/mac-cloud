@@ -34,6 +34,7 @@ from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
+from patron_recurrente import dnis_con_domingo
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from sqlalchemy import func
@@ -166,11 +167,32 @@ def _cargar_feriados():
     return {f for (f,) in filas}
 
 
-def _dia_habil_anterior(fecha, feriados_set):
+def _dia_habil_anterior(fecha, feriados_set, permite_domingo=False):
     d = fecha - dt.timedelta(days=1)
-    while d.weekday() == 6 or d in feriados_set:
+    while (d.weekday() == 6 and not permite_domingo) or d in feriados_set:
         d -= dt.timedelta(days=1)
     return d
+
+
+def _resolver_ayer_por_dni(session, fecha, feriados_set):
+    """"Ayer" depende de la persona SOLO cuando cae domingo (o sea, cuando
+    `fecha` es lunes): para quien trabaja domingo (tiene esa fila en su
+    Patrón Recurrente, Autoservicio) ayer es domingo; para el resto sigue
+    siendo el mismo día hábil anterior de siempre (sábado, salvo feriado).
+    El resto de la semana no hay ambigüedad -- se devuelve la MISMA fecha
+    para todos sin consultar Patrón Recurrente de más (Davor, 2026-09-14:
+    "para el caso de autoservicios, el día Lunes debería salir salida del
+    Domingo").
+
+    Devuelve (ayer_general, fechas_posibles, ayer_de) -- `fechas_posibles`
+    es el set a usar en un `.filter(...in_(...))`; `ayer_de(dni)` resuelve
+    la fecha correcta para un DNI puntual."""
+    ayer = _dia_habil_anterior(fecha, feriados_set)
+    ayer_domingo = _dia_habil_anterior(fecha, feriados_set, permite_domingo=True)
+    if ayer_domingo == ayer:
+        return ayer, {ayer}, (lambda dni: ayer)
+    dnis_domingo = dnis_con_domingo(session)
+    return ayer, {ayer, ayer_domingo}, (lambda dni: ayer_domingo if dni in dnis_domingo else ayer)
 
 
 def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False, dni_filtro=None):
@@ -204,10 +226,10 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
     (Davor: "ahi me saldrá la información del día seleccionado su hora
     entrada y salida, no como esta vista que la salida es del día anterior")."""
     feriados = _cargar_feriados()
-    ayer = _dia_habil_anterior(fecha, feriados)
 
     session = get_session()
     try:
+        ayer, fechas_ayer_posibles, ayer_de = _resolver_ayer_por_dni(session, fecha, feriados)
         query_personas = session.query(Persona)
         cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
         if cond_scope is not None:
@@ -249,8 +271,9 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         filas_ayer = {
             c.dni: c for c in
             session.query(ClasificacionDiaria)
-            .filter(ClasificacionDiaria.fecha == ayer, ClasificacionDiaria.dni.in_(personas.keys()))
+            .filter(ClasificacionDiaria.fecha.in_(fechas_ayer_posibles), ClasificacionDiaria.dni.in_(personas.keys()))
             .all()
+            if c.fecha == ayer_de(c.dni)
         }
         # DNIs ya marcados hoy desde "Marcar asistencia" (correcciones_web) --
         # la Tabla 3 ya tiene su fila, pero clasificacion_diaria.comentario_supervisor
@@ -271,17 +294,18 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         # clasificacion_diaria.comentario_supervisor de todos modos, ya que
         # ambos salen de la misma fila que guardar() sube a Tabla 3.
         override_entrada, override_salida = {}, {}
-        fecha_fuente_salida = fecha if salida_mismo_dia else ayer
+        fechas_fuente_salida_posibles = {fecha} if salida_mismo_dia else fechas_ayer_posibles
         correcciones_recientes = (
             session.query(CorreccionWeb)
-            .filter(CorreccionWeb.dni.in_(personas.keys()), CorreccionWeb.fecha.in_([fecha, fecha_fuente_salida]))
+            .filter(CorreccionWeb.dni.in_(personas.keys()), CorreccionWeb.fecha.in_({fecha} | fechas_fuente_salida_posibles))
             .order_by(CorreccionWeb.fecha_registro.desc())
             .all()
         )
         for corr in correcciones_recientes:
             if corr.fecha == fecha and corr.comentario_entrada and corr.dni not in override_entrada:
                 override_entrada[corr.dni] = corr.comentario_entrada
-            if corr.fecha == fecha_fuente_salida and corr.comentario_salida and corr.dni not in override_salida:
+            fecha_fuente_salida_dni = fecha if salida_mismo_dia else ayer_de(corr.dni)
+            if corr.fecha == fecha_fuente_salida_dni and corr.comentario_salida and corr.dni not in override_salida:
                 override_salida[corr.dni] = corr.comentario_salida
     finally:
         session.close()
@@ -899,7 +923,11 @@ def guardar():
     vista = request.form.get("vista") or "reporte"
     fecha = dt.date.fromisoformat(fecha_str)
     feriados = _cargar_feriados()
-    ayer = _dia_habil_anterior(fecha, feriados)
+    session_ayer = get_session()
+    try:
+        ayer, _fechas_ayer_posibles, ayer_de = _resolver_ayer_por_dni(session_ayer, fecha, feriados)
+    finally:
+        session_ayer.close()
 
     dnis = request.form.getlist("dni")
     ediciones = []
@@ -999,10 +1027,14 @@ def guardar():
                     registrado_por=current_user.email,
                 ))
             if e["comentario_salida"] or e["salida_corr"]:
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer, e["comentario_salida"], hora_sal=e["salida_corr"])
+                # ayer_de(dni), no `ayer` a secas -- Davor, 2026-09-14: para
+                # Autoservicio (trabaja domingo), corregir "salida" un lunes
+                # debe escribir sobre el domingo real, no sobre el sábado.
+                ayer_de_esta_persona = ayer_de(e["dni"])
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer_de_esta_persona, e["comentario_salida"], hora_sal=e["salida_corr"])
                 fila_libre += 1
                 correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=ayer,
+                    dni=e["dni"], fecha=ayer_de_esta_persona,
                     comentario_salida=e["comentario_salida"] or None,
                     hora_salida_corregida=e["salida_corr"] or None,
                     registrado_por=current_user.email,

@@ -15,9 +15,9 @@ import datetime as dt
 
 import pandas as pd
 
-from dimension_models import Persona, PatronRecurrente, get_session
+from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
-from patron_recurrente import sin_acentos
+from patron_recurrente import dnis_con_domingo
 from recomendaciones import insights_equipo
 from scoping import aplicar_filtros_extra, condicion_scope
 
@@ -353,10 +353,7 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     # día, apenas existiera algún dato real de domingo en el equipo.
     session_dias = get_session()
     try:
-        dnis_con_domingo = {
-            dni for dni, dia in session_dias.query(PatronRecurrente.dni, PatronRecurrente.dia_semana).all()
-            if sin_acentos(dia) == "domingo"
-        }
+        dnis_domingo = dnis_con_domingo(session_dias)
     finally:
         session_dias.close()
 
@@ -371,7 +368,7 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
         pct_max = 0.0
         for fecha_dia in dias_semana_fechas:
             dia_semana = DIAS_ES[fecha_dia.weekday()]
-            if dia_semana == "Domingo" and p.dni not in dnis_con_domingo:
+            if dia_semana == "Domingo" and p.dni not in dnis_domingo:
                 continue
             pct = estacionalidad_individual.get(p.dni, {}).get(dia_semana, pct_equipo_por_dia.get(dia_semana, 0))
             pct = round(min(pct, 100.0), 1)
