@@ -58,6 +58,16 @@ def _codigo_tareo(estado_base, comentario):
     if estado_base == "FALTA":
         if "descanso" in comentario_norm and "medic" in comentario_norm:
             return "DM", "info"
+        # "D" (Descanso semanal, Davor, 2026-09-14) -- distinto de "DM"
+        # (descanso médico, con sustento) y de un "F" común (falta sin
+        # justificar): un Falta con comentario "Descanso" es el día de
+        # descanso semanal que el analista registró a propósito para
+        # Autoservicio (su Patrón cubre los 7 días, no hay un día libre
+        # implícito como en Tradicional/Farmacia) -- antes se veía igual
+        # que cualquier Falta común, sin distinguir que era un descanso
+        # legítimo. Mismo criterio que alertas.py::_tiene_descanso_registrado().
+        if "descanso" in comentario_norm:
+            return "D", "info"
         return "F", "bad"
     if estado_base == "TARDANZA":
         return "T", "warn"
@@ -68,6 +78,56 @@ def _codigo_tareo(estado_base, comentario):
     if estado_base == "ASISTIÓ A TIEMPO":
         return "A", "ok"
     return "?", "muted"
+
+
+def _patron_semanal(dni):
+    """[{dia, trabaja, entrada, salida, canal, hubo_cambio, entrada_efectiva,
+    salida_efectiva, canal_efectivo}, ...] lunes..domingo -- Patrón
+    Recurrente base de `dni` más el valor EFECTIVO hoy (mismo
+    valor_efectivo()/cargar_historial() que ya usa el motor/Horas
+    semanales/Cobertura para aplicar un override de Historial de cambios).
+    Usado por reportes_ficha.html ("Patrón recurrente actual") y por
+    ficha() para saber si el domingo es descanso implícito en "Tareo del
+    mes" (domingo sin fila acá = sin Patrón ese día)."""
+    session = get_session()
+    try:
+        patron_por_dia = {sin_acentos(p.dia_semana): p for p in session.query(PatronRecurrente).filter_by(dni=dni).all()}
+    finally:
+        session.close()
+    idx_historial = cargar_historial()
+    hoy_patron = dt.date.today()
+    resultado = []
+    for wd, dia_es in enumerate(DIAS_ES):
+        dia_norm = sin_acentos(dia_es)
+        fila = patron_por_dia.get(dia_norm)
+        # Fecha real más reciente que cae en ese día de semana -- hace
+        # falta una fecha concreta para que valor_efectivo() pueda evaluar
+        # si un override "solo los lunes" está vigente hoy.
+        fecha_ref = hoy_patron - dt.timedelta(days=(hoy_patron.weekday() - wd) % 7)
+
+        entrada_base = fila.hora_entrada_prog.strftime("%H:%M") if fila and fila.hora_entrada_prog else None
+        salida_base = fila.hora_salida_prog.strftime("%H:%M") if fila and fila.hora_salida_prog else None
+        canal_base = fila.canal_dia if fila else None
+
+        entrada_efectiva = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha_ref, entrada_base)
+        salida_efectiva = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha_ref, salida_base)
+        canal_efectivo = valor_efectivo(idx_historial, dni, "Canal del día", fecha_ref, canal_base)
+        entrada_efectiva = entrada_efectiva[:5] if entrada_efectiva else None
+        salida_efectiva = salida_efectiva[:5] if salida_efectiva else None
+
+        hubo_cambio = (
+            (entrada_efectiva or "") != (entrada_base or "")
+            or (salida_efectiva or "") != (salida_base or "")
+            or (canal_efectivo or "").strip().upper() != (canal_base or "").strip().upper()
+        )
+        resultado.append({
+            "dia": dia_es, "trabaja": fila is not None,
+            "entrada": entrada_base, "salida": salida_base, "canal": canal_base,
+            "hubo_cambio": hubo_cambio,
+            "entrada_efectiva": entrada_efectiva, "salida_efectiva": salida_efectiva, "canal_efectivo": canal_efectivo,
+        })
+    return resultado
+
 
 COLUMNAS_HORAS = [
     ("nombre", "Nombre"), ("supervisor", "Supervisor"), ("ciudad", "Ciudad"), ("region", "Región"),
@@ -662,7 +722,7 @@ def marcaciones():
 
 LEYENDA_TAREO = [
     ("A", "ok", "Asistió a tiempo"), ("T", "warn", "Tardanza"), ("F", "bad", "Falta"),
-    ("DM", "info", "Descanso médico"), ("V", "info", "Vacaciones"), ("PC", "muted", "Posición por cubrir"),
+    ("D", "info", "Descanso"), ("DM", "info", "Descanso médico"), ("V", "info", "Vacaciones"), ("PC", "muted", "Posición por cubrir"),
     ("—", "muted", "Sin marcación (no le tocaba trabajar)"),
 ]
 
@@ -838,17 +898,31 @@ def ficha(dni):
     resumen_mes = resumen_por_persona(detalle_mes)
     indicador_mes = resumen_mes.iloc[0].to_dict() if len(resumen_mes) else None
 
+    patron_semanal = _patron_semanal(dni)
+    trabaja_domingo = patron_semanal[6]["trabaja"]
+
     # Tareo del mes -- calendario compacto día por día (mismo estilo que la
     # vista "Tareo" de One Page), reusando detalle_mes (ya calculado arriba,
-    # no hace falta una consulta nueva). Un día sin fila (domingo, feriado,
-    # antes del ingreso, o todavía no procesado) se muestra como "—".
+    # no hace falta una consulta nueva). Domingo (Davor, 2026-09-14):
+    # "deberia aparecer... con la D 'Descanso' o F 'sino hay motivo
+    # registrado'" -- sin fila de domingo en su Patrón (Tradicional/
+    # Farmacia) es su descanso implícito ("D"); CON fila de domingo
+    # (Autoservicio) y sin marcación ni motivo en un domingo YA PASADO, es
+    # una Falta sin justificar ("F") -- un domingo futuro sigue en blanco,
+    # todavía no pasó. El resto de días sin fila (feriado, antes del
+    # ingreso, todavía no procesado) se muestra como "—", sin cambios.
     por_fecha = {row["fecha"].date(): row for _, row in detalle_mes.iterrows()} if len(detalle_mes) else {}
     tareo_mes = []
     fecha_cursor = mes_desde
     while fecha_cursor <= mes_hasta:
         row = por_fecha.get(fecha_cursor)
         if row is None:
-            codigo, clase, titulo = "—", "muted", "Sin marcación (no le tocaba trabajar)"
+            if fecha_cursor.weekday() == 6 and not trabaja_domingo:
+                codigo, clase, titulo = "D", "info", "Descanso (domingo, sin Patrón Recurrente ese día)"
+            elif fecha_cursor.weekday() == 6 and trabaja_domingo and fecha_cursor <= hoy:
+                codigo, clase, titulo = "F", "bad", "Falta -- domingo con Patrón Recurrente registrado, sin marcación ni motivo"
+            else:
+                codigo, clase, titulo = "—", "muted", "Sin marcación (no le tocaba trabajar)"
         else:
             estado_base = row["estado"].split(" (")[0]
             codigo, clase = _codigo_tareo(estado_base, row["comentario"])
@@ -899,46 +973,6 @@ def ficha(dni):
             .all()
         )
 
-        # Patrón Recurrente semanal (Davor, 2026-09-14: "puedes agregar en
-        # la parte inferior su patrón recurrente actual, horario, canal que
-        # ve ese día, si hubo cambio también") -- una fila por día de la
-        # semana con lo que dice el Patrón base, más el valor EFECTIVO hoy
-        # (mismo valor_efectivo() que ya usa el motor/Horas semanales/
-        # Cobertura para aplicar un override de Historial de cambios) --
-        # si difieren, se marca visualmente que hay un cambio vigente.
-        patron_por_dia = {sin_acentos(p.dia_semana): p for p in session.query(PatronRecurrente).filter_by(dni=dni).all()}
-        idx_historial = cargar_historial()
-        hoy_patron = dt.date.today()
-        patron_semanal = []
-        for wd, dia_es in enumerate(DIAS_ES):
-            dia_norm = sin_acentos(dia_es)
-            fila = patron_por_dia.get(dia_norm)
-            # Fecha real más reciente que cae en ese día de semana -- hace
-            # falta una fecha concreta para que valor_efectivo() pueda
-            # evaluar si un override "solo los lunes" está vigente hoy.
-            fecha_ref = hoy_patron - dt.timedelta(days=(hoy_patron.weekday() - wd) % 7)
-
-            entrada_base = fila.hora_entrada_prog.strftime("%H:%M") if fila and fila.hora_entrada_prog else None
-            salida_base = fila.hora_salida_prog.strftime("%H:%M") if fila and fila.hora_salida_prog else None
-            canal_base = fila.canal_dia if fila else None
-
-            entrada_efectiva = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha_ref, entrada_base)
-            salida_efectiva = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha_ref, salida_base)
-            canal_efectivo = valor_efectivo(idx_historial, dni, "Canal del día", fecha_ref, canal_base)
-            entrada_efectiva = entrada_efectiva[:5] if entrada_efectiva else None
-            salida_efectiva = salida_efectiva[:5] if salida_efectiva else None
-
-            hubo_cambio = (
-                (entrada_efectiva or "") != (entrada_base or "")
-                or (salida_efectiva or "") != (salida_base or "")
-                or (canal_efectivo or "").strip().upper() != (canal_base or "").strip().upper()
-            )
-            patron_semanal.append({
-                "dia": dia_es, "trabaja": fila is not None,
-                "entrada": entrada_base, "salida": salida_base, "canal": canal_base,
-                "hubo_cambio": hubo_cambio,
-                "entrada_efectiva": entrada_efectiva, "salida_efectiva": salida_efectiva, "canal_efectivo": canal_efectivo,
-            })
     finally:
         session.close()
 
