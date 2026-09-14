@@ -305,7 +305,18 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             session_desc.close()
 
         r_desc = r.copy()
-        r_desc["es_descanso_explicito"] = (r_desc["estado_base"] == "FALTA") & r_desc["comentario"].apply(_tiene_descanso_registrado)
+        # estado_base == "DESCANSO", NO "FALTA" -- hallazgo real, 2026-09-14:
+        # motor_clasificacion.py tiene un estado propio "DESCANSO (comentario
+        # supervisor)" para esto (línea aparte de "FALTA", ver
+        # clasificar_dia()), activado cuando el comentario del supervisor
+        # empieza con "Descanso" -- a propósito NO cuenta como Falta en el
+        # indicador de asistencia. La primera versión de este chequeo
+        # asumía (sin verificar contra datos reales) que el descanso vivía
+        # como un Falta con comentario "descanso" -- nunca coincidía con
+        # ningún registro real, así que las 59 personas "sin descanso"
+        # detectadas eran un falso positivo para cualquiera que SÍ tuviera
+        # su día bien registrado.
+        r_desc["es_descanso_explicito"] = (r_desc["estado_base"] == "DESCANSO") & r_desc["comentario"].apply(_tiene_descanso_registrado)
 
         semanas_completas = []  # [(lunes, domingo), ...]
         cursor = desde - dt.timedelta(days=desde.weekday())

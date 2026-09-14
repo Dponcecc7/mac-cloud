@@ -55,19 +55,27 @@ ESTADO_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA"
 # como un tareo... algo asi como la vista de One Page".
 def _codigo_tareo(estado_base, comentario):
     comentario_norm = str(comentario).lower() if pd.notna(comentario) else ""
+    # "DESCANSO" es un estado_base PROPIO que escribe motor_clasificacion.py
+    # (clasificar_dia()) cuando el comentario del supervisor empieza con
+    # "Descanso" -- a propósito NO es un sub-tipo de "FALTA" (no cuenta como
+    # negativo en el indicador de asistencia). Hallazgo real, 2026-09-14: el
+    # primer intento de esto (mismo día) asumía sin verificar que vivía
+    # anidado bajo FALTA -- nunca coincidía con ningún registro real de
+    # Descanso, código muerto. "DM" (descanso médico, con sustento) vs "D"
+    # (descanso semanal registrado a propósito para Autoservicio, cuyo
+    # Patrón cubre los 7 días -- Tradicional/Farmacia tienen el domingo
+    # libre implícito, no necesitan este registro) -- mismo criterio que
+    # alertas.py::_tiene_descanso_registrado().
+    if estado_base == "DESCANSO":
+        return ("DM", "info") if "medic" in comentario_norm else ("D", "info")
     if estado_base == "FALTA":
+        # Caso legado, no relacionado con lo de arriba: "Falta - Descanso
+        # médico" es un artefacto del cierre automático de reemplazo.py
+        # (reemplazo_submit(), ya corregido) que reusaba el motivo_baja de
+        # alguien de baja por licencia médica como comentario de Falta del
+        # día -- datos históricos ya existentes, no se van a re-clasificar.
         if "descanso" in comentario_norm and "medic" in comentario_norm:
             return "DM", "info"
-        # "D" (Descanso semanal, Davor, 2026-09-14) -- distinto de "DM"
-        # (descanso médico, con sustento) y de un "F" común (falta sin
-        # justificar): un Falta con comentario "Descanso" es el día de
-        # descanso semanal que el analista registró a propósito para
-        # Autoservicio (su Patrón cubre los 7 días, no hay un día libre
-        # implícito como en Tradicional/Farmacia) -- antes se veía igual
-        # que cualquier Falta común, sin distinguir que era un descanso
-        # legítimo. Mismo criterio que alertas.py::_tiene_descanso_registrado().
-        if "descanso" in comentario_norm:
-            return "D", "info"
         return "F", "bad"
     if estado_base == "TARDANZA":
         return "T", "warn"
