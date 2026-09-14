@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       dias_visitas:
-        description: "Días hacia atrás a re-sincronizar a Postgres (normal = 10; usar más solo para un re-sync manual amplio, ej. tras corregir una regla de clasificación)"
+        description: "Días hacia atrás a re-sincronizar a Postgres Y a reprocesar en el motor de clasificación (normal = 10; usar más solo para un re-sync/reproceso manual amplio, ej. tras corregir una regla de clasificación -- 2026-09-14: ahora también ensancha DIAS_REPROCESO en motor_clasificacion.py, no solo la sincronización de visitas)"
         required: false
         default: "10"
 

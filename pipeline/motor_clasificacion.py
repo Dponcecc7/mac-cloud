@@ -54,7 +54,17 @@ def fmt_hora(td):
 
 GEOFENCE_MAX_M = 200
 TOLERANCIA_MIN = 15
-DIAS_REPROCESO = 10
+# Antes era un 10 fijo, independiente de VENTANA_DIAS_VISITAS (el input
+# "dias_visitas" del workflow_dispatch) -- eso significaba que ensanchar
+# ese input solo traía más días de visitas desde Athena, pero el motor
+# seguía sin animarse a RECALCULAR ninguna fila de ClasificacionDiaria ya
+# existente más vieja de 10 días (ver "ya_procesado and not tiene_correccion
+# and not es_reciente: continue" más abajo) -- un fix real en clasificar_dia()
+# no se reflejaba en el historico salvo que la fila tuviera además una
+# corrección/historial puntual. Ahora comparte la misma variable: un
+# disparo manual con dias_visitas=31, por ejemplo, resincroniza Y reprocesa
+# el mes completo en una sola corrida (Davor, 2026-09-14).
+DIAS_REPROCESO = int(os.environ.get("VENTANA_DIAS_VISITAS", "10"))
 
 TIPO_NEGOCIO_A_CANAL = {
     "TRADICIONAL": "Tradicional", "PUESTO DE MERCADO": "Tradicional", "TIENDA": "Tradicional",
