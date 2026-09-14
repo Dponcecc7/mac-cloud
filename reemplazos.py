@@ -10,7 +10,7 @@ via agregar_reemplazo.py.
 import datetime as dt
 
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
-from patron_recurrente import sin_acentos
+from patron_recurrente import canonizar_canal_dia, sin_acentos
 
 # "analista_propietario" agregado 2026-08-27 -- sin esto, un reemplazo
 # quedaba con esa columna en NULL (nunca se seteaba en ningún lado para la
@@ -82,14 +82,14 @@ def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_
             session.query(PatronRecurrente).filter_by(dni=dni_nuevo).delete()
             session.flush()
             for fila in filas_patron_vacante:
-                # sin_acentos() acá también (Davor, 2026-09-14) -- copiar el
-                # patrón de la vacante no debería propagar una capitalización
-                # inconsistente si la fila original venía de antes de esta
-                # corrección.
+                # sin_acentos()/canonizar_canal_dia() acá también (Davor,
+                # 2026-09-14) -- copiar el patrón de la vacante no debería
+                # propagar una capitalización inconsistente si la fila
+                # original venía de antes de esta corrección.
                 session.add(PatronRecurrente(
                     dni=dni_nuevo, dia_semana=sin_acentos(fila.dia_semana),
                     hora_entrada_prog=fila.hora_entrada_prog, hora_salida_prog=fila.hora_salida_prog,
-                    canal_dia=fila.canal_dia, refrigerio=fila.refrigerio,
+                    canal_dia=canonizar_canal_dia(fila.canal_dia), refrigerio=fila.refrigerio,
                 ))
 
         # Si dni_vacante era supervisor de otras personas, esas personas

@@ -39,6 +39,32 @@ def cargar_patron_recurrente(session, atributo):
     }
 
 
+CANAL_DIA_CANONICO = {
+    "tradicional": "Tradicional",
+    "autoservicio": "Autoservicio", "autoservicios": "Autoservicio", "autorsevicios": "Autoservicio",
+    "farmacia": "Farmacia",
+}
+
+
+def canonizar_canal_dia(valor):
+    """Normaliza "Canal del día" (PatronRecurrente.canal_dia) a la forma
+    EXACTA que usa motor_clasificacion.py::TIPO_NEGOCIO_A_CANAL para el
+    canal real de una visita ("Tradicional"/"Autoservicio"/"Farmacia",
+    Title case) -- la comparación en el motor (canal_esp_norm not in
+    canales_marcados) es de texto EXACTO, sensible a mayúsculas, sin
+    tolerancia a errores de tipeo. Hallazgo real, 2026-09-14: "FARMACIA"/
+    "AUTOSERVICIO" (mayúsculas) y el typo "Autorsevicios" NUNCA coincidían
+    con una visita real -- 97% de las 4064 marcas "trabajó en canal
+    distinto al asignado" en toda la base eran este bug de formato, no
+    cambios de canal reales (534 de 978 filas de gente activa mal
+    formateadas). OJO: esto es un vocabulario DISTINTO al de
+    scoping.canonizar_canal() (Persona.canal, en MAYÚSCULAS) -- Title
+    case acá a propósito, para calzar con lo que espera el motor."""
+    if not valor:
+        return valor
+    return CANAL_DIA_CANONICO.get(valor.strip().lower(), valor.strip())
+
+
 def dnis_con_domingo(session):
     """{dni, ...} de quienes tienen fila de domingo en su Patrón Recurrente
     -- usado para decidir, persona por persona, si "el día hábil anterior"

@@ -18,7 +18,7 @@ from openpyxl.styles import Font
 
 from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal, get_session
 from github_actions import disparar_workflow
-from patron_recurrente import sin_acentos
+from patron_recurrente import canonizar_canal_dia, sin_acentos
 from permisos import requiere_pagina
 from scoping import canonizar_canal
 from parseo_headcount import (
@@ -150,7 +150,7 @@ def crear_persona_individual(
             session.add(PatronRecurrente(
                 dni=dni, dia_semana=sin_acentos(fila["dia_semana"]),
                 hora_entrada_prog=fila["hora_entrada"], hora_salida_prog=fila["hora_salida"],
-                canal_dia=fila.get("canal_dia") or canal, refrigerio=fila.get("refrigerio"),
+                canal_dia=canonizar_canal_dia(fila.get("canal_dia") or canal), refrigerio=fila.get("refrigerio"),
             ))
             n_patron += 1
 
@@ -427,10 +427,16 @@ def headcount_submit():
             # (dni, día) en vez de una sola -- la restricción UNIQUE de la
             # tabla solo bloquea el texto EXACTAMENTE igual letra por letra
             # (hallazgo real: 18 personas con 47 filas duplicadas así).
+            # canonizar_canal_dia() (Davor, 2026-09-14, misma auditoría) --
+            # "Canal del día" en MAYÚSCULAS ("FARMACIA"/"AUTOSERVICIO") o con
+            # el typo "Autorsevicios" nunca coincidía con el canal real de
+            # una visita en el motor (comparación de texto exacto) -- 97%
+            # de las marcas "trabajó en canal distinto al asignado" en toda
+            # la base eran este bug de formato, no cambios de canal reales.
             filas_patron = [
                 (dni, sin_acentos(_texto(row["Día de la semana"])),
                  _hora(row["Hora entrada programada"]), _hora(row["Hora salida programada"]),
-                 canal_propio or _texto(row["Canal del día"]), _texto(row["Refrigerio"]))
+                 canonizar_canal_dia(canal_propio or _texto(row["Canal del día"])), _texto(row["Refrigerio"]))
                 for dni, row in ((_dni(r["DNI"]), r) for _, r in p.iterrows())
                 if dni in dnis_propios
             ]
