@@ -95,7 +95,12 @@ def _tiene_descanso_registrado(comentario):
     día implícito libre como en Tradicional/Farmacia)."""
     if pd.isna(comentario):
         return False
-    texto = str(comentario).lower()
+    # sin_acentos(), no .lower() a secas (Davor, 2026-09-14, misma
+    # auditoría) -- "médico" con tilde real NUNCA contiene la subcadena
+    # "medic" (m-e-d-i-c sin tilde), así que este chequeo le daba FALSO a
+    # "medic" not in texto para el texto real "Descanso médico", tratando
+    # un descanso médico como si fuera el descanso semanal regular.
+    texto = sin_acentos(str(comentario))
     return "descanso" in texto and "medic" not in texto
 
 

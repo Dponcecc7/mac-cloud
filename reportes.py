@@ -54,7 +54,13 @@ ESTADO_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA"
 # -- Davor, 2026-08-26: "cuando entro a ver el personal... me deberia salir
 # como un tareo... algo asi como la vista de One Page".
 def _codigo_tareo(estado_base, comentario):
-    comentario_norm = str(comentario).lower() if pd.notna(comentario) else ""
+    # sin_acentos(), no .lower() a secas (Davor, 2026-09-14, misma
+    # auditoría de "cruces rotos por mayúsculas/tildes") -- "médico" con
+    # tilde real nunca contiene la subcadena "medic" (m-e-d-i-c sin tilde),
+    # así que los chequeos de "medic in comentario_norm" de más abajo
+    # daban falso para el texto real "Descanso médico"/"Falta - Descanso
+    # médico", sin importar el estado.
+    comentario_norm = sin_acentos(str(comentario)) if pd.notna(comentario) else ""
     # "DESCANSO" es un estado_base PROPIO que escribe motor_clasificacion.py
     # (clasificar_dia()) cuando el comentario del supervisor empieza con
     # "Descanso" -- a propósito NO es un sub-tipo de "FALTA" (no cuenta como

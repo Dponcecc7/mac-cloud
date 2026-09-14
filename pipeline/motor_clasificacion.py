@@ -255,8 +255,24 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             estado_base = "VACACIONES (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
         elif sin_marcacion_valida and not pd.isna(registro_sup.get("Estado reportado")) and str(registro_sup.get("Estado reportado")).strip():
-            estado_reportado = str(registro_sup.get("Estado reportado")).strip()
-            estado_base = f"{estado_reportado.upper()} (según supervisor, sin marcación app)"
+            estado_reportado_norm = str(registro_sup.get("Estado reportado")).strip().upper()
+            if estado_reportado_norm in ("ASISTIÓ", "ASISTIO", "ASISTIÓ A TIEMPO", "ASISTIO A TIEMPO"):
+                # "ASISTIÓ A TIEMPO" es el ÚNICO estado canónico que necesita
+                # un sufijo de dos palabras (no solo un paréntesis colgado)
+                # para que el resto del sistema lo reconozca -- Dashboard,
+                # Tareo, Horas semanales y varios scripts del pipeline
+                # comparan contra el string exacto "ASISTIÓ A TIEMPO", así
+                # que un supervisor reportando "Asistió" sin marcación
+                # quedaba con "ASISTIÓ (según supervisor...)", que NINGÚN
+                # otro lugar reconocía como asistencia real (hallazgo real,
+                # 2026-09-14: 9 días en 2 meses mostraban "?" sin reconocer
+                # en Tareo por esto). TARDANZA/FALTA/VACANTE/VACACIONES no
+                # necesitan este caso especial -- son una sola palabra, y
+                # ".split(' (')[0]" ya los recupera bien sin importar qué
+                # vaya en el paréntesis.
+                estado_base = "ASISTIÓ A TIEMPO"
+            else:
+                estado_base = f"{estado_reportado_norm} (según supervisor, sin marcación app)"
             fuente = "Supervisor (sin marcación app)"
             alerta_analista = True
         elif sin_marcacion_valida:
