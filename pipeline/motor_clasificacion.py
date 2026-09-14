@@ -337,7 +337,14 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
 
     return {
         "DNI": dni, "Nombre": nombre, "Fecha": fecha.date() if hasattr(fecha, "date") else fecha,
-        "Día": ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"][weekday],
+        # Lista de 7, no 6 -- con solo Lunes..Sábado, cualquier domingo
+        # (weekday=6) tiraba IndexError acá mismo, silenciado por el
+        # try/except de main() ("se omite, la corrida sigue con el resto")
+        # -- por esto NINGÚN domingo se clasificó nunca (0 filas en toda la
+        # tabla, ClasificacionDiaria completa) pese a que el bloqueo
+        # explícito de domingo ya se había sacado antes. Hallazgo real,
+        # Davor, 2026-09-14.
+        "Día": ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][weekday],
         "Canal esperado (Patrón)": canal_esp_norm,
         "Canal(es) marcado(s)": ", ".join(canales_marcados) if canales_marcados else None,
         "Entrada esperada": str(entrada_esp), "Entrada real": fmt_hora(entrada_real),
