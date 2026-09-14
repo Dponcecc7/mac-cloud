@@ -224,6 +224,27 @@ def create_app():
         ok, mensaje = disparar_workflow("pipeline_completo.yml")
         return jsonify({"ok": ok, "mensaje": mensaje}), (200 if ok else 502)
 
+    @app.get("/cron/exportar")
+    def cron_disparar_exportar():
+        """Mismo respaldo externo que /cron/pipeline, pero para
+        exportar_dimensiones.yml (Davor, 2026-09-14) -- ese workflow solo
+        tenía el `schedule` nativo de GitHub Actions (cada 15 min) sin
+        ningún respaldo, y resultó tener el mismo problema de fondo ya
+        documentado para pipeline_completo.yml: se detectó en producción
+        que el snapshot de Patrón Recurrente en SharePoint llevaba horas
+        desactualizado (motor_clasificacion.py clasificando con canal_dia
+        viejo pese a que Postgres ya tenía el dato corregido), justo por
+        una corrida de schedule que no disparó a tiempo. Mismo token, mismo
+        candado (exportar_dimensiones.py ya usa db_lock) -- seguro pegarle
+        más seguido de lo necesario."""
+        token_esperado = os.environ.get("CRON_TRIGGER_TOKEN")
+        if not token_esperado:
+            return jsonify({"error": "CRON_TRIGGER_TOKEN no configurado"}), 404
+        if request.args.get("token") != token_esperado:
+            return jsonify({"error": "token inválido"}), 403
+        ok, mensaje = disparar_workflow("exportar_dimensiones.yml")
+        return jsonify({"ok": ok, "mensaje": mensaje}), (200 if ok else 502)
+
     @app.get("/")
     @login_required
     def dashboard():

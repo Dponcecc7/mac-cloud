@@ -1,8 +1,13 @@
 name: Exportar dimensiones (Postgres -> Excel)
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # El "schedule:" nativo de GitHub Actions se sacó (Davor, 2026-09-14) --
+  # mismo problema ya documentado en pipeline_completo.yml: resultó poco
+  # confiable (se detectó en producción un snapshot de Patrón Recurrente
+  # desactualizado por horas pese al cron de cada 15 min) y, si se lo deja
+  # activo junto al disparador externo de abajo, duplica ejecuciones sin
+  # aportar nada. Ahora depende del mismo mecanismo que ya probó ser
+  # confiable: cron-job.org -> GET /cron/exportar cada 5 min.
   workflow_dispatch: {}
 
 jobs:
