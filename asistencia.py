@@ -1765,7 +1765,10 @@ def vacaciones_form():
         )
         if cond_scope is not None:
             query = query.filter(cond_scope)
-        activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+        # tuple(row), no el Row de SQLAlchemy tal cual -- el template arma
+        # el buscador con lupa (mismo patrón que reportes_perfil.html) via
+        # {{ activos|tojson }}, y un Row no es serializable a JSON directo.
+        activos = sorted((tuple(row) for row in query.all()), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
 
