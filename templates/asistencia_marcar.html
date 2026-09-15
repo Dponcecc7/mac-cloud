@@ -530,7 +530,8 @@
 
   <dialog id="dlg-vacaciones" style="border:none; border-radius:14px; padding:0; max-width:320px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
     <form method="dialog" style="padding:20px 22px;">
-      <p style="margin:0 0 12px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
+      <p style="margin:0 0 4px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
+      <p style="margin:0 0 10px; font-size:12px; color:var(--muted);">Poné el último día antes de que vuelva a trabajar -- se va a marcar "Vacaciones" todos los días desde hoy hasta esa fecha.</p>
       <input type="date" id="dlg-vacaciones-fecha" class="ipt-filtro" style="width:100%; margin-bottom:14px;" required>
       <div style="display:flex; justify-content:flex-end; gap:8px;">
         <button type="button" id="dlg-vacaciones-cancelar" class="btn sm" style="background:var(--line); color:var(--ink);">Cancelar</button>
@@ -553,8 +554,14 @@
         var form = select.closest('form');
         var hiddenName = sufijoDni ? 'fecha_fin_vacaciones_' + sufijoDni : 'fecha_fin_vacaciones';
         pendiente = { select: select, form: form, hiddenName: hiddenName };
+        // OJO: sin valor por default -- Davor, 2026-09-15: "me está
+        // saliendo esto todos los días" -- precargar la fecha de HOY acá
+        // hacía que confirmar sin tocar el campo registrara un rango de
+        // UN solo día (hoy a hoy), así que la persona volvía a aparecer
+        // como pendiente al día siguiente. Vacío + required obliga a
+        // elegir la fecha real de vuelta antes de poder confirmar.
         fechaInput.min = fechaMin;
-        fechaInput.value = fechaMin;
+        fechaInput.value = '';
         dlg.showModal();
       };
 
