@@ -472,7 +472,7 @@
       <p class="panel-title" style="margin-bottom:6px;">Faltas / Vacaciones / Vacantes de hoy ({{ faltas_vacaciones_vacantes|length }})</p>
       <div>
         {% for p in faltas_vacaciones_vacantes %}
-        {% set eb = (p.estado or '').split(' (')[0] %}
+        {% set eb = p.estado_efectivo %}
         {% set clase = {'FALTA':'warn', 'VACANTE':'warn'}.get(eb, 'ok') %}
         {% if usuario.rol == "supervisor" %}
         <div class="marcaron-row">

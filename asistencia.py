@@ -99,6 +99,27 @@ def _estado_base(estado):
     return (estado or "").split(" (")[0]
 
 
+def _estado_para_mostrar(estado, comentario_entrada):
+    """Para "Faltas/Vacaciones/Vacantes de hoy": si ya se cargó una
+    corrección hoy (botón rápido Asistió/Descanso/Vacante o "Cambiar
+    motivo" -> Falta), se muestra ESE resultado en vez del estado crudo
+    del motor -- la corrección recién se refleja en `estado` en la
+    próxima corrida del pipeline, y mostrar "Falta" al lado de un
+    "· Asistió" ya cargado se lee como una contradicción (Davor,
+    2026-09-17: "le colocó asistió pero me aparece en ese item de
+    Falta")."""
+    com_norm = (comentario_entrada or "").strip().upper()
+    if com_norm.startswith("ASISTI"):
+        return "ASISTIÓ"
+    if com_norm.startswith("DESCANSO"):
+        return "DESCANSO"
+    if com_norm.startswith("VACANTE"):
+        return "VACANTE"
+    if com_norm.startswith("FALTA"):
+        return "FALTA"
+    return _estado_base(estado)
+
+
 def _canal_para_mostrar(marcado, canal_asignado):
     """"Canal hoy"/"Canal ayer" salen de canales_marcados (el canal REAL de
     la visita GPS) -- si la persona marco en un punto administrativo/censo
@@ -548,11 +569,14 @@ def _faltas_vacaciones_vacantes(filas):
     """Faltas/Vacaciones/Vacantes registradas hoy, resueltas o no -- para
     revisar al cierre del día qué quedó cargado en total, no solo lo
     todavía pendiente (a diferencia de _pendientes_de_marcar) (Davor,
-    2026-08-24)."""
-    return sorted(
-        (f for f in filas if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES")),
-        key=lambda f: (_estado_base(f["estado"]), f["mercaderista"]),
-    )
+    2026-08-24). Sigue mostrando a la persona aunque ya se haya cargado
+    una corrección (a propósito, "resueltas o no"), pero el badge usa
+    `estado_efectivo` (ver _estado_para_mostrar) para no mostrar "Falta"
+    al lado de una corrección "Asistió" ya cargada."""
+    seleccionadas = [f for f in filas if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES")]
+    for f in seleccionadas:
+        f["estado_efectivo"] = _estado_para_mostrar(f["estado"], f.get("comentario_entrada"))
+    return sorted(seleccionadas, key=lambda f: (f["estado_efectivo"], f["mercaderista"]))
 
 
 def _corregidos_a_mano(filas):
