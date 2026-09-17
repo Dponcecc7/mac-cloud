@@ -535,14 +535,17 @@ def _motivos_falta_con_id():
         session.close()
 
 
+def _es_pendiente(f):
+    """Falta/Vacante que todavía no tiene ningún comentario -- ni de la app
+    móvil de supervisores ni de acá."""
+    return _estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"] and not f["marcado_web"]
+
+
 def _pendientes_de_marcar(filas):
     """Personas con Falta/Vacante que todavía no tienen ningún comentario --
     ni de la app móvil de supervisores ni de acá -- igual al panel
     "Pendientes" de la Power App (galPendientes, ver GUIA_POWER_APPS_SUPERVISOR.md)."""
-    return [
-        f for f in filas
-        if _estado_base(f["estado"]) in ("FALTA", "VACANTE") and not f["comentario_entrada"] and not f["marcado_web"]
-    ]
+    return [f for f in filas if _es_pendiente(f)]
 
 
 def _ya_marcaron(filas):
@@ -566,14 +569,20 @@ def _ya_marcaron(filas):
 
 
 def _faltas_vacaciones_vacantes(filas):
-    """Faltas/Vacaciones/Vacantes registradas hoy, resueltas o no -- para
-    revisar al cierre del día qué quedó cargado en total, no solo lo
-    todavía pendiente (a diferencia de _pendientes_de_marcar) (Davor,
-    2026-08-24). Sigue mostrando a la persona aunque ya se haya cargado
-    una corrección (a propósito, "resueltas o no"), pero el badge usa
-    `estado_efectivo` (ver _estado_para_mostrar) para no mostrar "Falta"
-    al lado de una corrección "Asistió" ya cargada."""
-    seleccionadas = [f for f in filas if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES")]
+    """Faltas/Vacaciones/Vacantes YA CARGADAS hoy (con motivo/comentario) --
+    complementa a _pendientes_de_marcar, no lo duplica: alguien que todavía
+    está sin ningún comentario vive SOLO en "Pendientes de marcar", no acá
+    también (Davor, 2026-09-17: "no deberían aparecer en ese panel inferior
+    ya que parece que si se les puso motivo" -- verlo repetido en los dos
+    paneles hacía pensar que ya tenía motivo cuando en realidad seguía
+    pendiente). Vacaciones/Vacante-vía-app siempre entran (nunca son
+    "pendientes" en el otro panel); Falta/Vacante solo si ya se resolvió.
+    El badge usa `estado_efectivo` (ver _estado_para_mostrar) para no
+    mostrar "Falta" al lado de una corrección "Asistió" ya cargada."""
+    seleccionadas = [
+        f for f in filas
+        if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES") and not _es_pendiente(f)
+    ]
     for f in seleccionadas:
         f["estado_efectivo"] = _estado_para_mostrar(f["estado"], f.get("comentario_entrada"))
     return sorted(seleccionadas, key=lambda f: (f["estado_efectivo"], f["mercaderista"]))
