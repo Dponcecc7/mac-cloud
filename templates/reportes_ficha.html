@@ -695,6 +695,16 @@ function ordenarPorHistorial(campo) { _ordenarTabla('tabla-historial-ficha', cam
       dlg.close('cancelar');
     });
 
+    // Cerrar con Escape deja returnValue vacío -- sin esto, el <select>
+    // seguía mostrando "Vacaciones" elegido pero SIN el rango cargado, y
+    // si después se apretaba "Falta" igual, se guardaba un solo día en
+    // vez del rango (hallazgo real, Davor, 2026-09-17: "le puse vacaciones
+    // hasta el 15... pero no se duplicó" -- Chaupi Cuba, 02/09, quedó con
+    // "Falta - Vacaciones" de un solo día).
+    dlg.addEventListener('cancel', function () {
+      if (pendiente) { pendiente.select.value = ''; }
+    });
+
     dlg.addEventListener('close', function () {
       if (dlg.returnValue === 'confirmar' && pendiente) {
         var hidden = pendiente.form.querySelector('input[name="' + pendiente.hiddenName + '"]');
@@ -705,6 +715,10 @@ function ordenarPorHistorial(campo) { _ordenarTabla('tabla-historial-ficha', cam
           pendiente.form.appendChild(hidden);
         }
         hidden.value = fechaInput.value;
+        // Enviar el form directo al confirmar -- antes hacía falta un
+        // segundo clic aparte en "Falta" para que esto se guardara de
+        // verdad, y ese paso extra se estaba salteando en la práctica.
+        pendiente.form.submit();
       }
       pendiente = null;
       dlg.returnValue = '';

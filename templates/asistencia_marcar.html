@@ -583,6 +583,17 @@
         dlg.close('cancelar');
       });
 
+      // Cerrar con Escape (o cualquier cierre nativo que no pase por
+      // "Cancelar" ni "Confirmar") deja returnValue vacío -- sin este
+      // listener, el <select> seguía mostrando "Vacaciones" elegido pero
+      // SIN el rango cargado, y si después se apretaba "Falta" igual, se
+      // guardaba un solo día en vez del rango (hallazgo real, Davor,
+      // 2026-09-17: "le puse vacaciones hasta el 15... pero no se
+      // duplicó" -- el diálogo se había cerrado con Escape sin confirmar).
+      dlg.addEventListener('cancel', function () {
+        if (pendiente) { pendiente.select.value = ''; }
+      });
+
       dlg.addEventListener('close', function () {
         if (dlg.returnValue === 'confirmar' && pendiente) {
           var hidden = pendiente.form.querySelector('input[name="' + pendiente.hiddenName + '"]');
@@ -593,6 +604,10 @@
             pendiente.form.appendChild(hidden);
           }
           hidden.value = fechaInput.value;
+          // Enviar el form directo al confirmar -- antes hacía falta un
+          // segundo clic aparte en "Falta" para que esto se guardara de
+          // verdad, y ese paso extra se estaba salteando en la práctica.
+          pendiente.form.submit();
         }
         pendiente = null;
         dlg.returnValue = '';
