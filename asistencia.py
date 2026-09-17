@@ -2065,7 +2065,9 @@ def vacaciones_editar(vacacion_id):
 def _reunion_historico(usuario_actual, limite=100):
     """Últimas reuniones registradas -- agrupadas por (fecha, hora_inicio,
     hora_fin, nota, registrado_por) para mostrar "reunión de 20 personas"
-    en una sola fila en vez de 20 filas idénticas."""
+    en una sola fila en vez de 20 filas idénticas. Incluye `dnis` (Davor,
+    2026-09-17: "coloca una opción para editar a las personas") para poder
+    pre-marcar en el checklist de edición quién ya está en el grupo."""
     session = get_session()
     try:
         cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
@@ -2073,7 +2075,7 @@ def _reunion_historico(usuario_actual, limite=100):
             session.query(
                 ReunionRegistrada.fecha, ReunionRegistrada.hora_inicio, ReunionRegistrada.hora_fin,
                 ReunionRegistrada.nota, ReunionRegistrada.registrado_por, ReunionRegistrada.fecha_registro,
-                Persona.nombre_completo,
+                ReunionRegistrada.dni, Persona.nombre_completo,
             )
             .join(Persona, Persona.dni == ReunionRegistrada.dni)
         )
@@ -2084,13 +2086,14 @@ def _reunion_historico(usuario_actual, limite=100):
         session.close()
 
     grupos = {}
-    for fecha, hora_inicio, hora_fin, nota, registrado_por, fecha_registro, nombre in filas:
+    for fecha, hora_inicio, hora_fin, nota, registrado_por, fecha_registro, dni, nombre in filas:
         clave = (fecha, hora_inicio, hora_fin, nota, registrado_por)
         grupo = grupos.setdefault(clave, {
             "fecha": fecha, "hora_inicio": hora_inicio, "hora_fin": hora_fin, "nota": nota,
-            "registrado_por": registrado_por, "fecha_registro": fecha_registro, "nombres": [],
+            "registrado_por": registrado_por, "fecha_registro": fecha_registro, "nombres": [], "dnis": [],
         })
         grupo["nombres"].append(nombre)
+        grupo["dnis"].append(dni)
     return sorted(grupos.values(), key=lambda g: (g["fecha"], g["fecha_registro"]), reverse=True)[:limite]
 
 
@@ -2129,14 +2132,33 @@ def reunion_form():
             supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
         )
         activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+
+        # Para "editar personas" de una reunión ya registrada (Davor,
+        # 2026-09-17) -- el checklist de edición no debe quedar acotado a
+        # los filtros de arriba (Región/Rol/etc de ESTA vista), porque la
+        # reunión pudo haber juntado gente de fuera de ese filtro puntual.
+        query_todos = session.query(
+            Persona.dni, Persona.nombre_completo, Persona.rol, Persona.ciudad, Persona.canal,
+        ).filter(Persona.estado == "Activo")
+        if cond_scope is not None:
+            query_todos = query_todos.filter(cond_scope)
+        todos_activos = sorted(query_todos.all(), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
 
     historico = _reunion_historico(current_user)
+    # Alguien que ya estaba en una reunión pero hoy figura inactivo (o de
+    # baja) no aparece en todos_activos -- sin esto, no habría forma de
+    # sacarlo del checklist de edición porque ni siquiera se listaría.
+    dnis_activos = {t[0] for t in todos_activos}
+    for h in historico:
+        h["inactivos"] = [
+            (dni, h["nombres"][i]) for i, dni in enumerate(h["dnis"]) if dni not in dnis_activos
+        ]
 
     return render_template(
         "asistencia_reunion.html", usuario=current_user, activo="reunion",
-        hoy=dt.date.today().isoformat(), activos=activos, historico=historico,
+        hoy=dt.date.today().isoformat(), activos=activos, todos_activos=todos_activos, historico=historico,
         filtro_args=filtro_args, roles_disponibles=roles_disp, regiones_disponibles=regiones_disp,
         supervisores_disponibles=supervisores_disp, ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
     )
@@ -2223,5 +2245,138 @@ def reunion_registrar():
             f"Se registró la reunión de trabajo ({hora_inicio}-{hora_fin}) del {fecha.strftime('%d/%m/%Y')} "
             f"para {len(dnis)} {plural}. No les va a restar horas a su semana."
         ),
+        volver=url_for("asistencia.reunion_form"),
+    )
+
+
+@bp.post("/reunion/editar_personas")
+@_analista_requerido
+def reunion_editar_personas():
+    """Agregar o sacar gente de una reunión ya registrada (Davor,
+    2026-09-17: "coloca una opción para editar a las personas") -- mismo
+    mecanismo de "borrado" que ya usa el resto del archivo (Tabla 3 es
+    append-only, ver MARCADOR_BORRADO/_borrar_fechas_tabla3): a quien se
+    saca se le escribe MARCADOR_BORRADO ese día (deshace el "Asistió"
+    asumido) y se borra su ReunionRegistrada de este grupo puntual; a quien
+    se agrega se le escribe la misma fila que ya hace reunion_registrar()."""
+    fecha_str = request.form.get("fecha", "").strip()
+    hora_inicio = request.form.get("hora_inicio", "").strip()
+    hora_fin = request.form.get("hora_fin", "").strip()
+    nota = (request.form.get("nota") or "").strip() or None
+    registrado_por = request.form.get("registrado_por", "").strip()
+    nuevos = set(request.form.getlist("dnis"))
+
+    try:
+        fecha = dt.date.fromisoformat(fecha_str)
+    except ValueError:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="Fecha inválida.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+    if not hora_inicio or not hora_fin or not registrado_por:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="Faltan datos de la reunión a editar.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+
+    session_lookup = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+        query = (
+            session_lookup.query(ReunionRegistrada.dni)
+            .join(Persona, Persona.dni == ReunionRegistrada.dni)
+            .filter(
+                ReunionRegistrada.fecha == fecha, ReunionRegistrada.hora_inicio == hora_inicio,
+                ReunionRegistrada.hora_fin == hora_fin, ReunionRegistrada.nota == nota,
+                ReunionRegistrada.registrado_por == registrado_por,
+            )
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        actuales = {dni for (dni,) in query.all()}
+    finally:
+        session_lookup.close()
+
+    if not actuales:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="No se encontró esa reunión (o no tenés acceso).",
+            volver=url_for("asistencia.reunion_form"),
+        )
+
+    agregados = nuevos - actuales
+    quitados = actuales - nuevos
+    if not agregados and not quitados:
+        return redirect(url_for("asistencia.reunion_form"))
+
+    comentario = f"Reunión de trabajo ({hora_inicio}-{hora_fin})"
+    if nota:
+        comentario += f" - {nota}"
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+    try:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fila_libre = ws.max_row + 1
+            for dni in agregados:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, estado_reportado="Asistió")
+                fila_libre += 1
+            for dni in quitados:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, MARCADOR_BORRADO)
+                fila_libre += 1
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="reunion",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.reunion_form"),
+            )
+
+        session = get_session()
+        try:
+            for dni in agregados:
+                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+                session.add(ReunionRegistrada(
+                    dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
+                    nota=nota, registrado_por=registrado_por,
+                ))
+            for dni in quitados:
+                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
+            if quitados:
+                (
+                    session.query(ReunionRegistrada)
+                    .filter(
+                        ReunionRegistrada.fecha == fecha, ReunionRegistrada.hora_inicio == hora_inicio,
+                        ReunionRegistrada.hora_fin == hora_fin, ReunionRegistrada.nota == nota,
+                        ReunionRegistrada.registrado_por == registrado_por, ReunionRegistrada.dni.in_(quitados),
+                    )
+                    .delete(synchronize_session=False)
+                )
+            session.commit()
+        finally:
+            session.close()
+    finally:
+        liberar_lock("tabla3_web")
+
+    partes = []
+    if agregados:
+        partes.append(f"se agregaron {len(agregados)}")
+    if quitados:
+        partes.append(f"se sacaron {len(quitados)}")
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="reunion",
+        titulo="Reunión actualizada", ok=True,
+        detalle=f"Reunión del {fecha.strftime('%d/%m/%Y')} ({hora_inicio}-{hora_fin}): {' y '.join(partes)}.",
         volver=url_for("asistencia.reunion_form"),
     )

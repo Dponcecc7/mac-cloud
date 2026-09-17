@@ -69,7 +69,13 @@
     .reu-row .fecha { font-weight:700; }
     .reu-row .horario { color:var(--brand); font-weight:700; font-size:12.5px; }
     .reu-nombres { margin-top:6px; font-size:12.5px; color:var(--muted); }
-    .reu-meta { margin-top:4px; font-size:11px; color:var(--muted); }
+    .reu-meta { margin-top:4px; font-size:11px; color:var(--muted); display:flex; align-items:center; gap:10px; }
+
+    .reu-editar { margin-top:10px; }
+    .reu-editar > summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--brand); list-style:none; }
+    .reu-editar > summary::-webkit-details-marker { display:none; }
+    .reu-editar .personas-widget { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+    .persona-check.inactivo .sub { color:var(--bad); }
 
     @media (max-width: 760px) {
       .wrap { padding:0 12px 40px; }
@@ -172,19 +178,21 @@
           <label class="field">Nota (opcional)<input class="ipt" type="text" name="nota" placeholder="ej. Capacitación mensual, lanzamiento de producto..."></label>
         </div>
 
-        <p class="panel-title" style="margin-bottom:6px;">¿Quiénes van a la reunión? <span class="contador-elegidos" id="contador-elegidos"></span></p>
-        <div class="personas-toolbar">
-          <input type="text" id="buscar-personas" class="ipt" placeholder="Filtrar por nombre...">
-          <button type="button" class="btn sm ghost" id="btn-marcar-todos">Marcar todos</button>
-          <button type="button" class="btn sm ghost" id="btn-marcar-ninguno">Ninguno</button>
-        </div>
-        <div class="personas-lista" id="lista-personas">
-          {% for dni, nombre, rol, ciudad, canal in activos %}
-          <label class="persona-check" data-nombre="{{ (nombre or dni)|lower }}">
-            <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona">
-            <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span></span>
-          </label>
-          {% endfor %}
+        <div class="personas-widget">
+          <p class="panel-title" style="margin-bottom:6px;">¿Quiénes van a la reunión? <span class="contador-elegidos"></span></p>
+          <div class="personas-toolbar">
+            <input type="text" class="ipt buscar-personas" placeholder="Filtrar por nombre...">
+            <button type="button" class="btn sm ghost btn-marcar-todos">Marcar todos</button>
+            <button type="button" class="btn sm ghost btn-marcar-ninguno">Ninguno</button>
+          </div>
+          <div class="personas-lista">
+            {% for dni, nombre, rol, ciudad, canal in activos %}
+            <label class="persona-check" data-nombre="{{ (nombre or dni)|lower }}">
+              <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona">
+              <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span></span>
+            </label>
+            {% endfor %}
+          </div>
         </div>
 
         <div class="actions" style="margin-top:14px;"><button class="btn" type="submit">Registrar reunión</button></div>
@@ -204,7 +212,45 @@
         {% if h.nota %}<span>· {{ h.nota }}</span>{% endif %}
       </div>
       <div class="reu-nombres">{{ h.nombres|length }} persona{{ 's' if h.nombres|length != 1 else '' }}: {{ h.nombres|map('title')|join(', ') }}</div>
-      <div class="reu-meta">Registrado por {{ h.registrado_por }}</div>
+      <div class="reu-meta">
+        <span>Registrado por {{ h.registrado_por }}</span>
+      </div>
+
+      <details class="reu-editar">
+        <summary>Editar personas</summary>
+        <form method="post" action="{{ url_for('asistencia.reunion_editar_personas') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="fecha" value="{{ h.fecha.isoformat() }}">
+          <input type="hidden" name="hora_inicio" value="{{ h.hora_inicio }}">
+          <input type="hidden" name="hora_fin" value="{{ h.hora_fin }}">
+          <input type="hidden" name="nota" value="{{ h.nota or '' }}">
+          <input type="hidden" name="registrado_por" value="{{ h.registrado_por }}">
+
+          <div class="personas-widget">
+            <p class="panel-title" style="margin-bottom:6px;">¿Quiénes van? <span class="contador-elegidos"></span></p>
+            <div class="personas-toolbar">
+              <input type="text" class="ipt buscar-personas" placeholder="Filtrar por nombre...">
+              <button type="button" class="btn sm ghost btn-marcar-todos">Marcar todos</button>
+              <button type="button" class="btn sm ghost btn-marcar-ninguno">Ninguno</button>
+            </div>
+            <div class="personas-lista">
+              {% for dni, nombre, rol, ciudad, canal in todos_activos %}
+              <label class="persona-check" data-nombre="{{ (nombre or dni)|lower }}">
+                <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona" {{ 'checked' if dni in h.dnis else '' }}>
+                <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span></span>
+              </label>
+              {% endfor %}
+              {% for dni, nombre in h.inactivos %}
+              <label class="persona-check inactivo" data-nombre="{{ (nombre or dni)|lower }}">
+                <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona" checked>
+                <span>{{ (nombre or dni)|title }} <span class="sub">· inactivo/de baja actualmente</span></span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px;"><button class="btn sm" type="submit">Guardar cambios</button></div>
+        </form>
+      </details>
     </div>
     {% endfor %}
     {% endif %}
@@ -220,16 +266,21 @@
       if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
     });
 
-    (function () {
-      var buscar = document.getElementById('buscar-personas');
-      var lista = document.getElementById('lista-personas');
-      var contador = document.getElementById('contador-elegidos');
+    // Un mismo widget de "buscar + marcar personas" se repite una vez por
+    // cada reunión editable (Davor, 2026-09-17: "coloca una opción para
+    // editar a las personas") -- por eso ya no son IDs únicos sino clases,
+    // inicializadas por instancia con querySelector acotado a cada .personas-widget.
+    document.querySelectorAll('.personas-widget').forEach(function (widget) {
+      var buscar = widget.querySelector('.buscar-personas');
+      var lista = widget.querySelector('.personas-lista');
+      var contador = widget.querySelector('.contador-elegidos');
       var checks = lista ? Array.prototype.slice.call(lista.querySelectorAll('.chk-persona')) : [];
 
       function actualizarContador() {
         var n = checks.filter(function (c) { return c.checked; }).length;
         contador.textContent = n ? '(' + n + ' elegido' + (n !== 1 ? 's' : '') + ')' : '';
       }
+      actualizarContador();
       checks.forEach(function (c) { c.addEventListener('change', actualizarContador); });
 
       if (buscar) {
@@ -240,8 +291,8 @@
           });
         });
       }
-      var btnTodos = document.getElementById('btn-marcar-todos');
-      var btnNinguno = document.getElementById('btn-marcar-ninguno');
+      var btnTodos = widget.querySelector('.btn-marcar-todos');
+      var btnNinguno = widget.querySelector('.btn-marcar-ninguno');
       if (btnTodos) {
         btnTodos.addEventListener('click', function () {
           lista.querySelectorAll('.persona-check').forEach(function (fila) {
@@ -256,7 +307,7 @@
           actualizarContador();
         });
       }
-    })();
+    });
   </script>
 </body>
 </html>
