@@ -432,12 +432,13 @@
                     <option value="">Día de descanso...</option>
                     {% for m in motivos_descanso %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
                   </select>
+                  <button type="submit">Descanso</button>
                   <select name="motivo_falta_{{ persona.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ f.fecha_iso }}', '{{ persona.dni }}');">
                     <option value="">Registrar motivo de falta...</option>
                     {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
                   </select>
                   <input type="text" name="detalle_falta_{{ persona.dni }}" placeholder="Detalle (opcional)" style="display:none;">
-                  <button type="submit">Guardar</button>
+                  <button type="submit">✕ Falta</button>
                 </form>
               </details>
             </td>
