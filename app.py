@@ -399,6 +399,13 @@ def create_app():
             "falta": hoy_es.count("FALTA"),
             "vacante": hoy_es.count("VACANTE"),
             "vacaciones": hoy_es.count("VACACIONES"),
+            # Descanso (Davor, 2026-09-17: "eso no debe estar en el ítem de
+            # faltas, sino de descanso") -- antes de esto, un día DESCANSO
+            # no aparecía en NINGÚN lado del Dashboard (no suma a Faltas,
+            # que está bien, pero tampoco se mostraba como Descanso en
+            # ningún conteo) -- quedaba invisible en vez de simplemente no
+            # penalizado.
+            "descanso": hoy_es.count("DESCANSO"),
             "total": len(hoy_es),
         }
 
@@ -408,6 +415,7 @@ def create_app():
         n_falta = int((r["estado_base"] == "FALTA").sum())
         n_vacante = int((r["estado_base"] == "VACANTE").sum())
         n_vacaciones = int((r["estado_base"] == "VACACIONES").sum())
+        n_descanso = int((r["estado_base"] == "DESCANSO").sum())
         pct_efectividad = round((n_asistio + n_tardanza) / total * 100, 1) if total else 0.0
         n_personas_evaluadas = r["dni"].nunique()
         n_incidencias = n_falta + n_vacante + n_vacaciones
@@ -653,7 +661,7 @@ def create_app():
             "resumen_hoy": resumen_hoy,
             "resumen": {
                 "total": total, "asistio": n_asistio, "tardanza": n_tardanza, "falta": n_falta,
-                "vacante": n_vacante, "vacaciones": n_vacaciones, "pct_efectividad": pct_efectividad,
+                "vacante": n_vacante, "vacaciones": n_vacaciones, "descanso": n_descanso, "pct_efectividad": pct_efectividad,
             },
             "kpis": {
                 "headcount_actual": headcount_actual, "personas_evaluadas": int(n_personas_evaluadas),
