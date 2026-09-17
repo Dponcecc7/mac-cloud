@@ -300,6 +300,11 @@
           <form method="post" action="{{ url_for('asistencia.marcar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}">
+            <input type="hidden" name="region" value="{{ filtro_args.region }}">
+            <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
+            <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
+            <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
             <input type="time" name="hora_ingreso" class="ipt-filtro sm" style="width:90px;" title="Hora de ingreso (opcional)">
             <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
             <select class="ipt-filtro sm" name="motivo_descanso" style="width:150px;">
@@ -493,6 +498,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="dni" value="{{ p.dni }}">
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
+            <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}">
+            <input type="hidden" name="region" value="{{ filtro_args.region }}">
+            <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
+            <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
+            <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
             <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
             <select name="motivo_descanso">
               <option value="">Día de descanso...</option>

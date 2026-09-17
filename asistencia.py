@@ -1235,10 +1235,26 @@ def marcar():
     # salida programada cuando falta (mismo criterio que el caso sin hora).
     hora_ingreso = request.form.get("hora_ingreso", "").strip() if accion == "Asistió" else ""
 
+    # Filtros de Supervisor/Región/Rol/Ciudad/Canal (Davor, 2026-09-17:
+    # "que se siga manteniendo con los filtros que hice") -- sin esto, cada
+    # redirect de vuelta a Marcar asistencia perdía el filtro aplicado y la
+    # lista volvía a mostrar TODO el equipo, no solo el subconjunto que se
+    # estaba revisando. Cada fila del listado manda estos mismos valores
+    # como campos ocultos (ver asistencia_marcar.html) para que vuelvan acá.
+    filtros_volver = {
+        campo: valor for campo, valor in (
+            ("supervisor", request.form.get("supervisor", "").strip()),
+            ("region", request.form.get("region", "").strip()),
+            ("rol", request.form.get("rol", "").strip()),
+            ("ciudad", request.form.get("ciudad", "").strip()),
+            ("canal", request.form.get("canal", "").strip()),
+        ) if valor
+    }
+
     if accion not in ACCIONES_MARCAR:
-        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver))
     if accion in ACCIONES_CON_MOTIVO and not motivo:
-        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo"))
+        return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo", **filtros_volver))
 
     # Rango de vacaciones (Davor, 2026-09-14): si el motivo elegido es
     # "Vacaciones", asistencia_marcar.html despliega un diálogo pidiendo
@@ -1271,7 +1287,7 @@ def marcar():
             "asistencia_resultado.html", usuario=current_user, activo="marcar",
             titulo="No se pudo guardar", ok=False,
             detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
+            volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
         )
     fechas_rango_escritas = None
     try:
@@ -1295,7 +1311,7 @@ def marcar():
                 "asistencia_resultado.html", usuario=current_user, activo="marcar",
                 titulo="No se pudo guardar", ok=False,
                 detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.marcar_vista", fecha=fecha_str),
+                volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
             )
 
         # Ademas de Tabla 3 (lo que lee el motor), se guarda en correcciones_web
@@ -1326,7 +1342,7 @@ def marcar():
     finally:
         liberar_lock("tabla3_web")
 
-    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok"))
+    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok", **filtros_volver))
 
 
 @bp.post("/motivos/agregar")
