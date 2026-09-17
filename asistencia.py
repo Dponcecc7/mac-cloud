@@ -29,7 +29,7 @@ import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, VacacionRegistrada, Visita, get_session
+from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, ReunionRegistrada, VacacionRegistrada, Visita, get_session
 from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
 from graph_client import descargar, subir_in_place
@@ -2059,4 +2059,157 @@ def vacaciones_editar(vacacion_id):
             f"({len(fechas_agregadas)} día(s) agregado(s), {len(fechas_quitadas)} día(s) quitado(s).)"
         ),
         volver=url_for("asistencia.vacaciones_form"),
+    )
+
+
+def _reunion_historico(usuario_actual, limite=100):
+    """Últimas reuniones registradas -- agrupadas por (fecha, hora_inicio,
+    hora_fin, nota, registrado_por) para mostrar "reunión de 20 personas"
+    en una sola fila en vez de 20 filas idénticas."""
+    session = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, usuario_actual) if usuario_actual else None
+        query = (
+            session.query(
+                ReunionRegistrada.fecha, ReunionRegistrada.hora_inicio, ReunionRegistrada.hora_fin,
+                ReunionRegistrada.nota, ReunionRegistrada.registrado_por, ReunionRegistrada.fecha_registro,
+                Persona.nombre_completo,
+            )
+            .join(Persona, Persona.dni == ReunionRegistrada.dni)
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        filas = query.order_by(ReunionRegistrada.fecha.desc(), ReunionRegistrada.fecha_registro.desc()).limit(limite * 10).all()
+    finally:
+        session.close()
+
+    grupos = {}
+    for fecha, hora_inicio, hora_fin, nota, registrado_por, fecha_registro, nombre in filas:
+        clave = (fecha, hora_inicio, hora_fin, nota, registrado_por)
+        grupo = grupos.setdefault(clave, {
+            "fecha": fecha, "hora_inicio": hora_inicio, "hora_fin": hora_fin, "nota": nota,
+            "registrado_por": registrado_por, "fecha_registro": fecha_registro, "nombres": [],
+        })
+        grupo["nombres"].append(nombre)
+    return sorted(grupos.values(), key=lambda g: (g["fecha"], g["fecha_registro"]), reverse=True)[:limite]
+
+
+@bp.get("/reunion")
+@_analista_requerido
+def reunion_form():
+    """"Reunión de trabajo" masiva (Davor, 2026-09-17) -- registrar varios
+    mercaderistas de una sola vez para un día con horario de reunión, sin
+    que ese día les reste horas a la semana. Mismo mecanismo que "✓
+    Asistió" (asume el horario programado completo) más el horario de la
+    reunión como comentario, para que quede trazable por qué no hay
+    marcación real ese día."""
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_marcar()
+    session = get_session()
+    try:
+        cond_scope = condicion_scope(Persona, current_user)
+        query = session.query(Persona.dni, Persona.nombre_completo, Persona.rol, Persona.ciudad, Persona.canal).filter(
+            Persona.estado == "Activo"
+        )
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        query = aplicar_filtros_extra(
+            query, Persona, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
+            supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+        )
+        activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+    finally:
+        session.close()
+
+    historico = _reunion_historico(current_user)
+
+    return render_template(
+        "asistencia_reunion.html", usuario=current_user, activo="reunion",
+        hoy=dt.date.today().isoformat(), activos=activos, historico=historico,
+        filtro_args=filtro_args, roles_disponibles=roles_disp, regiones_disponibles=regiones_disp,
+        supervisores_disponibles=supervisores_disp, ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
+    )
+
+
+@bp.post("/reunion/registrar")
+@_analista_requerido
+def reunion_registrar():
+    dnis = request.form.getlist("dnis")
+    fecha_str = request.form.get("fecha", "").strip()
+    hora_inicio = request.form.get("hora_inicio", "").strip()
+    hora_fin = request.form.get("hora_fin", "").strip()
+    nota = request.form.get("nota", "").strip()
+
+    if not dnis:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="Elegí al menos un mercaderista.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+    try:
+        fecha = dt.date.fromisoformat(fecha_str)
+    except ValueError:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="Fecha inválida.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+    if not hora_inicio or not hora_fin:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="Falló", ok=False, detalle="Faltan la hora de inicio o la hora de fin de la reunión.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+
+    comentario = f"Reunión de trabajo ({hora_inicio}-{hora_fin})"
+    if nota:
+        comentario += f" - {nota}"
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="reunion",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.reunion_form"),
+        )
+    try:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fila_libre = ws.max_row + 1
+            for dni in dnis:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, estado_reportado="Asistió")
+                fila_libre += 1
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="reunion",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.reunion_form"),
+            )
+
+        session = get_session()
+        try:
+            for dni in dnis:
+                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+                session.add(ReunionRegistrada(
+                    dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
+                    nota=nota or None, registrado_por=current_user.email,
+                ))
+            session.commit()
+        finally:
+            session.close()
+    finally:
+        liberar_lock("tabla3_web")
+
+    plural = "personas" if len(dnis) != 1 else "persona"
+    return render_template(
+        "asistencia_resultado.html", usuario=current_user, activo="reunion",
+        titulo="Reunión registrada", ok=True,
+        detalle=(
+            f"Se registró la reunión de trabajo ({hora_inicio}-{hora_fin}) del {fecha.strftime('%d/%m/%Y')} "
+            f"para {len(dnis)} {plural}. No les va a restar horas a su semana."
+        ),
+        volver=url_for("asistencia.reunion_form"),
     )

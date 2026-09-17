@@ -99,6 +99,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}" class="active">Dar de baja</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
     <div class="note"><b>Baja de una persona activa</b> — deja la posición en estado <b>Vacante</b>, sin necesidad de tener ya a quien la reemplace. Cuando aparezca el reemplazo, usá "Agregar reemplazo" para cubrir esa vacante.</div>

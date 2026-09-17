@@ -205,6 +205,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}" class="{{ 'active' if activo=='headcount_nuevo' else '' }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}" class="{{ 'active' if activo=='dar_de_baja' else '' }}">Dar de baja</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="{{ 'active' if activo=='vacaciones' else '' }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}" class="{{ 'active' if activo=='reunion' else '' }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
     <div class="top-actions">

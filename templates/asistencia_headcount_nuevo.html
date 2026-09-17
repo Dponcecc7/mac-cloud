@@ -104,6 +104,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}" class="active">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
     <div class="note"><b>Alta de una persona nueva</b> — para cubrir una vacante que ya existe en el sistema usá "Agregar reemplazo" en vez de esto. Esto es para headcount genuinamente nuevo (una posición que no existía).</div>

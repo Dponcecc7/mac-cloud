@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Asistencia diaria</title>
+  <style>
+    :root { --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef; --brand:#2f6fb0; --bad:#dc2626; --bad-bg:#fee2e2; --ok:#16a34a; }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1100px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e0ecf8; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#a8c3dc; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e0ecf8; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:18px; font-size:13px; margin-bottom:18px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; }
+    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:16px; }
+    .panel { background:var(--card); border-radius:14px; padding:20px 22px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:14px; }
+    .panel-title { font-size:13px; font-weight:700; margin:0 0 12px; }
+    .form-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:14px; }
+    label.field { display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:700; color:var(--muted); }
+    .ipt { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
+    select.ipt-filtro { font:inherit; font-size:12.5px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .actions { display:flex; justify-content:flex-end; gap:8px; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
+    .btn.sm { padding:6px 12px; font-size:12px; }
+    .btn.ghost { background:var(--line); color:var(--ink); }
+    .empty { color:var(--muted); font-size:13px; }
+    .filtros-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+
+    .personas-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .personas-toolbar input[type=text] { flex:1; min-width:180px; }
+    .personas-lista { max-height:280px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; padding:6px; }
+    .persona-check { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:13px; }
+    .persona-check:hover { background:var(--bg); }
+    .persona-check input { width:auto; }
+    .persona-check .sub { color:var(--muted); font-size:11.5px; }
+    .contador-elegidos { font-size:12px; font-weight:700; color:var(--brand); }
+
+    .reu-item { background:var(--card); border-radius:14px; box-shadow:0 1px 3px rgba(35,25,10,.06); padding:14px 16px; margin-bottom:10px; }
+    .reu-row { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .reu-row .fecha { font-weight:700; }
+    .reu-row .horario { color:var(--brand); font-weight:700; font-size:12.5px; }
+    .reu-nombres { margin-top:6px; font-size:12.5px; color:var(--muted); }
+    .reu-meta { margin-top:4px; font-size:11px; color:var(--muted); }
+
+    @media (max-width: 760px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+      .panel { padding:14px !important; border-radius:12px; }
+      .form-row { grid-template-columns:1fr; gap:10px; }
+    }
+  </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}" class="active">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Asistencia diaria</h1>
+    <nav class="tabs">
+      <a href="{{ url_for('asistencia.reporte') }}">Reporte diario</a>
+      <a href="{{ url_for('asistencia.marcar_vista') }}">Marcar asistencia</a>
+      <a href="{{ url_for('asistencia.cliente') }}">Enviar a cliente</a>
+      <a href="{{ url_for('asistencia.reemplazo_form') }}">Agregar reemplazo</a>
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}" class="active">Reunión de trabajo</a>{% endif %}
+    </nav>
+
+    <div class="note">Registrá una reunión de trabajo para varios mercaderistas a la vez -- se marca "Asistió" con el horario de la reunión como comentario, así el día no les resta horas a la semana aunque no tengan marcación real de PDV.</div>
+
+    {% if roles_disponibles %}
+    <form method="get" class="filtros-bar">
+      <select class="ipt-filtro" name="supervisor" onchange="this.form.submit()">
+        <option value="">Supervisor: todos</option>
+        {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+      </select>
+      <select class="ipt-filtro" name="region" onchange="this.form.submit()">
+        <option value="">Región: todas</option>
+        {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+      </select>
+      <select class="ipt-filtro" name="rol" onchange="this.form.submit()">
+        <option value="">Rol: todos</option>
+        {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
+      </select>
+      <select class="ipt-filtro" name="ciudad" onchange="this.form.submit()">
+        <option value="">Ciudad: todas</option>
+        {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
+      </select>
+      {% if canales_disponibles %}
+      <select class="ipt-filtro" name="canal" onchange="this.form.submit()">
+        <option value="">Canal: todos</option>
+        {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    </form>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('asistencia.reunion_registrar') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="panel">
+        <p class="panel-title">Registrar reunión</p>
+        {% if not activos %}
+          <p class="note" style="margin:0;">No hay nadie activo en tu alcance con estos filtros.</p>
+        {% else %}
+        <div class="form-row">
+          <label class="field">Fecha<input class="ipt" type="date" name="fecha" value="{{ hoy }}" required></label>
+          <label class="field">Hora de inicio<input class="ipt" type="time" name="hora_inicio" required></label>
+          <label class="field">Hora de fin<input class="ipt" type="time" name="hora_fin" required></label>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr; margin-bottom:10px;">
+          <label class="field">Nota (opcional)<input class="ipt" type="text" name="nota" placeholder="ej. Capacitación mensual, lanzamiento de producto..."></label>
+        </div>
+
+        <p class="panel-title" style="margin-bottom:6px;">¿Quiénes van a la reunión? <span class="contador-elegidos" id="contador-elegidos"></span></p>
+        <div class="personas-toolbar">
+          <input type="text" id="buscar-personas" class="ipt" placeholder="Filtrar por nombre...">
+          <button type="button" class="btn sm ghost" id="btn-marcar-todos">Marcar todos</button>
+          <button type="button" class="btn sm ghost" id="btn-marcar-ninguno">Ninguno</button>
+        </div>
+        <div class="personas-lista" id="lista-personas">
+          {% for dni, nombre, rol, ciudad, canal in activos %}
+          <label class="persona-check" data-nombre="{{ (nombre or dni)|lower }}">
+            <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona">
+            <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span></span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <div class="actions" style="margin-top:14px;"><button class="btn" type="submit">Registrar reunión</button></div>
+        {% endif %}
+      </div>
+    </form>
+
+    <p class="panel-title" style="margin:18px 0 10px;">Reuniones registradas recientemente ({{ historico|length }})</p>
+    {% if not historico %}
+    <p class="empty">Todavía no se registró ninguna reunión.</p>
+    {% else %}
+    {% for h in historico %}
+    <div class="reu-item">
+      <div class="reu-row">
+        <span class="fecha">{{ h.fecha.strftime("%d/%m/%Y") }}</span>
+        <span class="horario">{{ h.hora_inicio }}–{{ h.hora_fin }}</span>
+        {% if h.nota %}<span>· {{ h.nota }}</span>{% endif %}
+      </div>
+      <div class="reu-nombres">{{ h.nombres|length }} persona{{ 's' if h.nombres|length != 1 else '' }}: {{ h.nombres|map('title')|join(', ') }}</div>
+      <div class="reu-meta">Registrado por {{ h.registrado_por }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      var buscar = document.getElementById('buscar-personas');
+      var lista = document.getElementById('lista-personas');
+      var contador = document.getElementById('contador-elegidos');
+      var checks = lista ? Array.prototype.slice.call(lista.querySelectorAll('.chk-persona')) : [];
+
+      function actualizarContador() {
+        var n = checks.filter(function (c) { return c.checked; }).length;
+        contador.textContent = n ? '(' + n + ' elegido' + (n !== 1 ? 's' : '') + ')' : '';
+      }
+      checks.forEach(function (c) { c.addEventListener('change', actualizarContador); });
+
+      if (buscar) {
+        buscar.addEventListener('input', function () {
+          var texto = buscar.value.trim().toLowerCase();
+          lista.querySelectorAll('.persona-check').forEach(function (fila) {
+            fila.style.display = fila.getAttribute('data-nombre').includes(texto) ? '' : 'none';
+          });
+        });
+      }
+      var btnTodos = document.getElementById('btn-marcar-todos');
+      var btnNinguno = document.getElementById('btn-marcar-ninguno');
+      if (btnTodos) {
+        btnTodos.addEventListener('click', function () {
+          lista.querySelectorAll('.persona-check').forEach(function (fila) {
+            if (fila.style.display !== 'none') { fila.querySelector('.chk-persona').checked = true; }
+          });
+          actualizarContador();
+        });
+      }
+      if (btnNinguno) {
+        btnNinguno.addEventListener('click', function () {
+          checks.forEach(function (c) { c.checked = false; });
+          actualizarContador();
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

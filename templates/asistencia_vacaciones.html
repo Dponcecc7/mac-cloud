@@ -117,6 +117,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="active">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
     <div class="note">Registrá el rango completo de un viaje de vacaciones de una sola vez -- se escribe "Falta - Vacaciones" para cada día del rango, igual que si lo marcaras uno por uno en "Marcar asistencia". Si la fecha de vuelta cambia, editá el rango de abajo en vez de cargar uno nuevo.</div>

@@ -242,6 +242,30 @@ class VacacionRegistrada(Base):
     fecha_actualizacion = Column(TIMESTAMP)
 
 
+class ReunionRegistrada(Base):
+    """Registro de auditoría de "Reunión de trabajo" masiva (Davor,
+    2026-09-17: "a veces hay reuniones de mercaderistas... para que no
+    afecte sus horas laborables de la semana") -- una fila por persona
+    incluida en la reunión, para poder ver después quién se registró, con
+    qué horario y quién lo cargó. Igual que VacacionRegistrada/CorreccionWeb,
+    esto es solo la copia de auditoría en Postgres -- la fuente REAL que
+    lee el motor sigue siendo Tabla 3 (un comentario "Reunión de trabajo
+    (HH:MM-HH:MM)" + "Estado reportado"=Asistió, mismo mecanismo ya usado
+    por el botón "✓ Asistió" para que el día no reste horas a la semana:
+    el motor asume el horario programado completo cuando no hay ninguna
+    marcación real ese día)."""
+    __tablename__ = "reuniones_registradas"
+
+    id = Column(Integer, primary_key=True)
+    dni = Column(String(15), ForeignKey("personas.dni", ondelete="CASCADE"), nullable=False)
+    fecha = Column(Date, nullable=False)
+    hora_inicio = Column(String(10))
+    hora_fin = Column(String(10))
+    nota = Column(Text)
+    registrado_por = Column(String(150))
+    fecha_registro = Column(TIMESTAMP, server_default=func.now())
+
+
 class Visita(Base):
     """Fase 6+ (2026-08-23): detalle de visitas a PDV (GPS), tal cual llega
     de Athena (ver pipeline/athena_client.py::traer_visitas()) -- antes solo
