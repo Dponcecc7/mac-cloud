@@ -420,11 +420,16 @@
                   <input type="hidden" name="vista" value="ficha">
                   <input type="hidden" name="dni" value="{{ persona.dni }}">
                   <input type="hidden" name="volver" value="{{ request.full_path }}">
-                  <select name="motivo_falta_{{ persona.dni }}">
+                  <button type="submit" name="estado_reportado_{{ persona.dni }}" value="Asistió">✓ Asistió</button>
+                  <select name="motivo_descanso_{{ persona.dni }}">
+                    <option value="">Día de descanso...</option>
+                    {% for m in motivos_descanso %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+                  </select>
+                  <select name="motivo_falta_{{ persona.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none'; pedirRangoVacaciones(this, '{{ f.fecha_iso }}', '{{ persona.dni }}');">
                     <option value="">Registrar motivo de falta...</option>
                     {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
                   </select>
-                  <input type="text" name="detalle_falta_{{ persona.dni }}" placeholder="Detalle (opcional)">
+                  <input type="text" name="detalle_falta_{{ persona.dni }}" placeholder="Detalle (opcional)" style="display:none;">
                   <button type="submit">Guardar</button>
                 </form>
               </details>
@@ -643,6 +648,60 @@ var ordenTardanzas = { campo: null, asc: true };
 function ordenarPor(campo) { _ordenarTabla('tabla-tardanzas', campo, ordenTardanzas, 'flecha-'); }
 var ordenHistorialFicha = { campo: null, asc: true };
 function ordenarPorHistorial(campo) { _ordenarTabla('tabla-historial-ficha', campo, ordenHistorialFicha, 'flecha-h-'); }
+</script>
+
+<dialog id="dlg-vacaciones" style="border:none; border-radius:14px; padding:0; max-width:320px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
+  <form method="dialog" style="padding:20px 22px;">
+    <p style="margin:0 0 4px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
+    <p style="margin:0 0 10px; font-size:12px; color:var(--muted);">Poné el último día antes de que vuelva a trabajar -- se va a marcar "Vacaciones" todos los días desde esa fecha hasta esa fecha.</p>
+    <input type="date" id="dlg-vacaciones-fecha" class="ipt-filtro" style="width:100%; margin-bottom:14px;" required>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" id="dlg-vacaciones-cancelar" class="btn sm" style="background:var(--line); color:var(--ink);">Cancelar</button>
+      <button type="submit" value="confirmar" class="btn sm ok">Confirmar</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  // Mismo diálogo de rango de vacaciones que Marcar asistencia (Davor,
+  // 2026-09-17: "cuando pongo vacaciones me puede salir lo mismo, que al
+  // otro lado, colocar el rango") -- acá "hoy" es la fecha de LA FALTA que
+  // se está editando, no la de hoy real.
+  (function () {
+    var dlg = document.getElementById('dlg-vacaciones');
+    var fechaInput = document.getElementById('dlg-vacaciones-fecha');
+    var pendiente = null;
+
+    window.pedirRangoVacaciones = function (select, fechaMin, sufijoDni) {
+      if (select.value !== 'Vacaciones') return;
+      var form = select.closest('form');
+      var hiddenName = sufijoDni ? 'fecha_fin_vacaciones_' + sufijoDni : 'fecha_fin_vacaciones';
+      pendiente = { select: select, form: form, hiddenName: hiddenName };
+      fechaInput.min = fechaMin;
+      fechaInput.value = '';
+      dlg.showModal();
+    };
+
+    document.getElementById('dlg-vacaciones-cancelar').addEventListener('click', function () {
+      if (pendiente) { pendiente.select.value = ''; }
+      pendiente = null;
+      dlg.close('cancelar');
+    });
+
+    dlg.addEventListener('close', function () {
+      if (dlg.returnValue === 'confirmar' && pendiente) {
+        var hidden = pendiente.form.querySelector('input[name="' + pendiente.hiddenName + '"]');
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = pendiente.hiddenName;
+          pendiente.form.appendChild(hidden);
+        }
+        hidden.value = fechaInput.value;
+      }
+      pendiente = null;
+      dlg.returnValue = '';
+    });
+  })();
 </script>
 </body>
 </html>

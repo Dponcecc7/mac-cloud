@@ -18,7 +18,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
-from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_falta, historico_persona
+from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_descanso, _motivos_falta, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
 from excel_safety import fila_segura
@@ -1152,7 +1152,7 @@ def ficha(dni):
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
         historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
-        patron_semanal=patron_semanal, motivos=_motivos_falta(),
+        patron_semanal=patron_semanal, motivos=_motivos_falta(), motivos_descanso=_motivos_descanso(),
     )
 
 

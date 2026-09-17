@@ -1064,6 +1064,29 @@ def guardar():
                     except ValueError:
                         pass
 
+        # Descanso con motivo (Davor, 2026-09-17: "agregar también para
+        # colocar descanso con sus motivos") -- mismo patrón que motivo_falta
+        # de arriba, catálogo separado (CatalogoMotivo.categoria=="Descanso"),
+        # NO cuenta como falta en el Indicador (motor_clasificacion.py ya
+        # sabe leer "Descanso - {motivo}" aparte de "Falta - {motivo}").
+        motivo_descanso = request.form.get(f"motivo_descanso_{dni}", "").strip()
+        if not motivo_falta and motivo_descanso:
+            comentario_entrada = f"Descanso - {motivo_descanso}"
+
+        # "Asistió" con horario automático (Davor, 2026-09-17: "colocar
+        # asistió, con hora entrada y salida automáticamente igual a la
+        # programada") -- a diferencia de Marcar asistencia (día en curso,
+        # una marcación real todavía podría llegar), acá siempre se edita un
+        # día YA CERRADO (ej. "Faltas del mes" de Ficha del trabajador), así
+        # que no hay riesgo de pisar una marcación real futura. Se escribe
+        # SOLO "Estado reportado"=Asistió, sin ninguna hora -- el motor ya
+        # asume entrada Y salida = programada cuando no hay ninguna otra
+        # marcación ni comentario (mismo mecanismo que "Marcar asistencia",
+        # arreglado el 2026-09-14/17).
+        estado_reportado = ""
+        if not motivo_falta and not motivo_descanso and request.form.get(f"estado_reportado_{dni}", "").strip() == "Asistió":
+            estado_reportado = "Asistió"
+
         # "Borrar" gana sobre lo que haya quedado tipeado en el cuadro de
         # texto -- el usuario tildó el check porque quiere deshacer el
         # comentario, no reemplazarlo por otra cosa a medio escribir.
@@ -1083,11 +1106,11 @@ def guardar():
         if comentario_entrada.upper().startswith("FALTA") and entrada_corr:
             entrada_corr = ""
 
-        if comentario_entrada or comentario_salida or entrada_corr or salida_corr or salida_corr_hoy:
+        if comentario_entrada or comentario_salida or entrada_corr or salida_corr or salida_corr_hoy or estado_reportado:
             ediciones.append({
                 "dni": dni, "comentario_entrada": comentario_entrada, "comentario_salida": comentario_salida,
                 "entrada_corr": entrada_corr, "salida_corr": salida_corr, "salida_corr_hoy": salida_corr_hoy,
-                "fecha_fin_vacaciones": fecha_fin_vacaciones,
+                "fecha_fin_vacaciones": fecha_fin_vacaciones, "estado_reportado": estado_reportado,
             })
 
     # "volver" explícito (Davor, 2026-09-05, "Histórico diario": "con la
@@ -1138,6 +1161,13 @@ def guardar():
                     ))
                 vacaciones_nuevas.append(VacacionRegistrada(
                     dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
+                    registrado_por=current_user.email,
+                ))
+            elif e.get("estado_reportado"):
+                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, estado_reportado=e["estado_reportado"])
+                fila_libre += 1
+                correcciones_web.append(CorreccionWeb(
+                    dni=e["dni"], fecha=fecha, comentario_entrada=e["estado_reportado"],
                     registrado_por=current_user.email,
                 ))
             elif e["comentario_entrada"] or e["entrada_corr"]:
