@@ -1136,6 +1136,7 @@ def ficha(dni):
         for _, row in detalle_mes[detalle_mes["estado"].str.startswith("FALTA")].sort_values("fecha", ascending=False).iterrows():
             faltas_mes.append({
                 "fecha": row["fecha"].strftime("%d/%m"),
+                "fecha_iso": row["fecha"].date().isoformat(),
                 "motivo": _homologar_motivo(row["comentario"]) or "Sin motivo",
             })
 
@@ -1151,7 +1152,7 @@ def ficha(dni):
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,
         historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
-        patron_semanal=patron_semanal,
+        patron_semanal=patron_semanal, motivos=_motivos_falta(),
     )
 
 

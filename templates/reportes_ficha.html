@@ -153,6 +153,19 @@
       .semana-lbl { width:24px; font-size:11px; }
       .semana-pct { width:34px; font-size:11px; }
     }
+
+    /* Registrar motivo directo en "Faltas del mes" (Davor, 2026-09-17:
+       "acá debo poder registrar el motivo del día, algo así como las
+       opciones de Marcar asistencia") -- mismo botón chico ya usado en
+       Histórico de asistencia, misma ruta (asistencia.guardar()). */
+    details.edit-hora { margin-top:3px; }
+    details.edit-hora summary { list-style:none; cursor:pointer; font-size:10px; color:var(--brand); font-weight:700; }
+    details.edit-hora summary::-webkit-details-marker { display:none; }
+    details.edit-hora[open] summary { margin-bottom:4px; }
+    details.edit-hora form { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+    details.edit-hora input[type=text] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:140px; }
+    details.edit-hora select { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); max-width:150px; }
+    details.edit-hora button { font-size:10px; font-weight:700; padding:3px 8px; border-radius:5px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
   </style>
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
@@ -395,7 +408,28 @@
         <table>
           <tr><th>Fecha</th><th>Motivo</th></tr>
           {% for f in faltas_mes %}
-          <tr><td>{{ f.fecha }}</td><td>{{ f.motivo }}</td></tr>
+          <tr>
+            <td>{{ f.fecha }}</td>
+            <td>
+              {{ f.motivo }}
+              <details class="edit-hora">
+                <summary>Editar</summary>
+                <form method="post" action="{{ url_for('asistencia.guardar') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="fecha" value="{{ f.fecha_iso }}">
+                  <input type="hidden" name="vista" value="ficha">
+                  <input type="hidden" name="dni" value="{{ persona.dni }}">
+                  <input type="hidden" name="volver" value="{{ request.full_path }}">
+                  <select name="motivo_falta_{{ persona.dni }}">
+                    <option value="">Registrar motivo de falta...</option>
+                    {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+                  </select>
+                  <input type="text" name="detalle_falta_{{ persona.dni }}" placeholder="Detalle (opcional)">
+                  <button type="submit">Guardar</button>
+                </form>
+              </details>
+            </td>
+          </tr>
           {% endfor %}
         </table>
       </div>
