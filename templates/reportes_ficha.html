@@ -237,7 +237,7 @@
         {% if indicador_mes %}
         <div class="kpis">
           <div class="kpi"><div class="num">{{ indicador_mes.horas_trabajadas }}</div><div class="lbl">Horas trabajadas</div></div>
-          <div class="kpi"><div class="num">{{ indicador_mes.horas_a_trabajar }}</div><div class="lbl">Horas a trabajar</div></div>
+          <div class="kpi"><div class="num">{{ indicador_mes.horas_a_trabajar_sin_faltas }}</div><div class="lbl">Horas a trabajar</div></div>
           <div class="kpi">
             <div class="num">{% if indicador_mes.pct_cumplimiento_sin_faltas is not none %}{{ indicador_mes.pct_cumplimiento_sin_faltas }}%{% else %}—{% endif %}</div>
             <div class="lbl">% Cumplimiento</div>
