@@ -158,9 +158,15 @@ def _homologar_motivo(texto):
     cualquier variante de formato (con/sin guion, con/sin espacios,
     mayúsculas), no solo el "Falta - " exacto que espera el motor. Ej.:
     "Falta-Falta Injustificada" -> "Injustificada". No toca limpiar_motivo()
-    en sí (esa la usa el motor de clasificación real, no se arriesga)."""
-    if not texto:
-        return texto
+    en sí (esa la usa el motor de clasificación real, no se arriesga).
+
+    "texto != texto" -- el clásico chequeo de NaN sin pandas: un comentario
+    NULL que llega de un DataFrame es float('nan'), que es "truthy" para
+    "not texto" de arriba (no lo atajaba) -- se colaba hasta el final y
+    devolvía el string literal "Nan" (hallazgo real: "Faltas del mes" en
+    Perfil mercaderista mostraba "Nan" como motivo, 2026-09-17)."""
+    if not texto or texto != texto:
+        return None
     texto = str(texto).strip()
     while True:
         m = _RE_PREFIJO_FALTA.match(texto)
