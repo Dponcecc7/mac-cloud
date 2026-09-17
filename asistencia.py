@@ -2110,7 +2110,11 @@ def reunion_form():
     # solo hacía falta pasarle getlist() acá en vez del single-value que
     # devuelve _filtros_marcar() (compartida con Marcar asistencia, que sí
     # sigue siendo de a una región por vez).
-    regiones_elegidas = request.args.getlist("region") if roles_disp else []
+    # filtrar valores vacíos (Davor, 2026-09-17: quedó una URL vieja con
+    # "region=" sin valor, de cuando esto era un <select> simple -- sin este
+    # filtro, ese "" se cuela como si fuera una región elegida y no matchea
+    # a nadie).
+    regiones_elegidas = [r for r in request.args.getlist("region") if r] if roles_disp else []
     filtro_args["region"] = regiones_elegidas
     session = get_session()
     try:
