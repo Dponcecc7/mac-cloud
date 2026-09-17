@@ -230,6 +230,20 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             if pd.notna(salida_real):
                 diff_salida_min = (salida_esp_td - salida_real).total_seconds() / 60
                 salida_anticipada = round(diff_salida_min) if diff_salida_min > 0 else None
+            elif pd.notna(entrada_real) and not comentario_sup_norm:
+                # Salida asumida = programada (Davor, 2026-09-17): mismo
+                # caso que la rama "Estado reportado" de más abajo, pero
+                # acá la entrada llega como hora corregida SIN comentario
+                # (ej. "Marcar asistencia" -> Asistió + hora de ingreso, o
+                # "Reporte diario" corrigiendo solo la entrada) -- sin
+                # esto, horas_semanales.py exige entrada Y salida no-nulas
+                # para calcular horas trabajadas, y un día realmente
+                # trabajado quedaba en 0h por no tener nunca una marcación
+                # real de salida. Se limita a "sin comentario" a propósito
+                # -- si hay un comentario (VACANTE/ASISTIÓ literal/etc.) no
+                # se toca, para no asumir de más en casos ya explicados.
+                salida_real = salida_esp_td
+                alerta_analista = True
             sin_marcacion_valida = False
             fuente = "Corregido manualmente (Tabla 3)"
             if comentario_sup_norm.startswith((

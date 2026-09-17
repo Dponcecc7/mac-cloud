@@ -1218,6 +1218,13 @@ def marcar():
     accion = request.form.get("accion", "").strip()
     motivo = request.form.get("motivo", "").strip() or request.form.get("motivo_descanso", "").strip()
     comentario_extra = request.form.get("comentario", "").strip()
+    # Hora de ingreso (Davor, 2026-09-17: "cuando marcó asistió no me sale
+    # para colocar la hora de ingreso") -- opcional; sin ella, sigue el
+    # comportamiento de siempre (solo "Estado reportado"=Asistió, sin hora).
+    # Con ella, el motor calcula Tardanza/Asistió a tiempo real en vez de
+    # asumir "a tiempo" a ciegas, y motor_clasificacion.py ya sabe asumir la
+    # salida programada cuando falta (mismo criterio que el caso sin hora).
+    hora_ingreso = request.form.get("hora_ingreso", "").strip() if accion == "Asistió" else ""
 
     if accion not in ACCIONES_MARCAR:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str))
@@ -1268,7 +1275,7 @@ def marcar():
             elif accion in ACCIONES_CON_MOTIVO:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_con_motivo)
             else:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, estado_reportado=accion)
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, hora_ent=(hora_ingreso or None), estado_reportado=accion)
             subir_in_place(TABLA3_RUTA_GRAPH, wb)
         except requests.exceptions.RequestException as e:
             # Sin esto, si SharePoint/Graph no responde (timeout, red caida,
@@ -1301,6 +1308,7 @@ def marcar():
                 session.add(CorreccionWeb(
                     dni=dni, fecha=fecha,
                     comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else accion),
+                    hora_entrada_corregida=hora_ingreso or None,
                     registrado_por=current_user.email,
                 ))
             session.commit()
