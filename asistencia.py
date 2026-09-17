@@ -2104,6 +2104,14 @@ def reunion_form():
     reunión como comentario, para que quede trazable por qué no hay
     marcación real ese día."""
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_marcar()
+    # Región con opción múltiple (Davor, 2026-09-17) -- una reunión puede
+    # juntar gente de varias regiones a la vez. aplicar_filtros_extra() ya
+    # acepta una lista para cualquier filtro (_como_lista(), ver Personal);
+    # solo hacía falta pasarle getlist() acá en vez del single-value que
+    # devuelve _filtros_marcar() (compartida con Marcar asistencia, que sí
+    # sigue siendo de a una región por vez).
+    regiones_elegidas = request.args.getlist("region") if roles_disp else []
+    filtro_args["region"] = regiones_elegidas
     session = get_session()
     try:
         cond_scope = condicion_scope(Persona, current_user)
@@ -2113,7 +2121,7 @@ def reunion_form():
         if cond_scope is not None:
             query = query.filter(cond_scope)
         query = aplicar_filtros_extra(
-            query, Persona, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
+            query, Persona, rol_filtro=filtro_args["rol"], region_filtro=regiones_elegidas,
             supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
         )
         activos = sorted(query.all(), key=lambda t: (t[1] or "").title())

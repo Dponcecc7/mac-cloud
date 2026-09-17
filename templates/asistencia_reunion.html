@@ -42,7 +42,18 @@
     .btn.sm { padding:6px 12px; font-size:12px; }
     .btn.ghost { background:var(--line); color:var(--ink); }
     .empty { color:var(--muted); font-size:13px; }
-    .filtros-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-start; }
+
+    /* Región con opción múltiple (Davor, 2026-09-17) -- mismo componente
+       que ya usa Personal (checkboxes en un panel flotante). */
+    .ms { position:relative; }
+    .ms-toggle { font:inherit; font-size:12.5px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; white-space:nowrap; }
+    .ms-toggle:hover { border-color:var(--brand); }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(35,25,10,.18); padding:6px; min-width:180px; max-height:260px; overflow-y:auto; }
+    .ms-panel.abierto { display:block; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt:hover { background:var(--bg); }
+    .ms-opt input { width:auto; margin:0; }
 
     .personas-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
     .personas-toolbar input[type=text] { flex:1; min-width:180px; }
@@ -119,10 +130,15 @@
         <option value="">Supervisor: todos</option>
         {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
       </select>
-      <select class="ipt-filtro" name="region" onchange="this.form.submit()">
-        <option value="">Región: todas</option>
-        {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
-      </select>
+      <div class="ms">
+        <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
+          {% if not filtro_args.region %}Región: todas{% elif filtro_args.region|length == 1 %}{{ filtro_args.region[0]|title }}{% else %}{{ filtro_args.region|length }} regiones{% endif %}
+        </button>
+        <div class="ms-panel" id="panel-region">
+          {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
+        </div>
+      </div>
+      <button type="submit" class="btn sm">Filtrar</button>
       <select class="ipt-filtro" name="rol" onchange="this.form.submit()">
         <option value="">Rol: todos</option>
         {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
@@ -195,6 +211,15 @@
   </div>
 
   <script>
+    // Panel de Región (opción múltiple) -- mismo patrón que Personal.
+    function togglePanel(campo) {
+      document.querySelectorAll('.ms-panel').forEach(function (p) { if (p.id !== 'panel-' + campo) p.classList.remove('abierto'); });
+      document.getElementById('panel-' + campo).classList.toggle('abierto');
+    }
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
+    });
+
     (function () {
       var buscar = document.getElementById('buscar-personas');
       var lista = document.getElementById('lista-personas');
