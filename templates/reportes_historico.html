@@ -102,9 +102,10 @@
     details.edit-hora summary { list-style:none; cursor:pointer; font-size:10px; color:var(--brand); font-weight:700; }
     details.edit-hora summary::-webkit-details-marker { display:none; }
     details.edit-hora[open] summary { margin-bottom:4px; }
-    details.edit-hora form { display:flex; gap:4px; align-items:center; }
+    details.edit-hora form { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
     details.edit-hora input[type=time] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:78px; }
     details.edit-hora input[type=text] { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:140px; }
+    details.edit-hora select { font:inherit; font-size:10.5px; padding:2px 4px; border-radius:5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); max-width:150px; }
     details.edit-hora button { font-size:10px; font-weight:700; padding:3px 8px; border-radius:5px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
     details.edit-hora .chk-borrar { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; color:var(--muted); white-space:nowrap; }
     details.edit-hora .chk-borrar input { width:auto; }
@@ -334,7 +335,12 @@
                 <input type="hidden" name="vista" value="historico">
                 <input type="hidden" name="dni" value="{{ f.dni }}">
                 <input type="hidden" name="volver" value="{{ request.full_path }}">
-                <input type="text" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}" placeholder="ej. Falta - Motivo personal">
+                <select name="motivo_falta_{{ f.dni }}" onchange="this.nextElementSibling.style.display = this.value ? '' : 'none';">
+                  <option value="">Registrar motivo de falta...</option>
+                  {% for m in motivos %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+                </select>
+                <input type="text" name="detalle_falta_{{ f.dni }}" placeholder="Detalle adicional (opcional)" style="display:none;">
+                <input type="text" name="comentario_entrada_{{ f.dni }}" value="{{ f.comentario_entrada }}" placeholder="o comentario libre">
                 <label class="chk-borrar"><input type="checkbox" name="borrar_entrada_{{ f.dni }}"> Borrar</label>
                 <button type="submit">Guardar</button>
               </form>

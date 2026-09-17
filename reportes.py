@@ -18,7 +18,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
-from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, historico_persona
+from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_falta, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
 from excel_safety import fila_segura
@@ -1264,6 +1264,7 @@ def historico():
             supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
             canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
             estado_filtro=estado_filtro, estados_disponibles=estados_disponibles,
+            motivos=_motivos_falta(),
         )
 
     # Sin mercaderista elegido: "todos en un solo dia" -- para admin/analista
@@ -1301,6 +1302,7 @@ def historico():
         supervisores_disponibles=supervisores_disponibles, ciudades_disponibles=ciudades_disponibles,
         canales_disponibles=canales_disponibles, solo_incidencias=solo_incidencias,
         estado_filtro=estado_filtro, estados_disponibles=estados_disponibles,
+        motivos=_motivos_falta(),
     )
 
 
