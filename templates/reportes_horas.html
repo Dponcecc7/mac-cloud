@@ -47,8 +47,13 @@
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
 
-    .table-wrap { overflow-x:auto; }
+    /* Con 15 columnas y 100+ filas, la tabla sin límite empujaba toda la
+       página -- ahora scrollea ella sola (vertical Y horizontal, Davor
+       2026-09-18) dentro de una altura fija, con el header pegado arriba
+       para no perder de vista los nombres de columna al bajar. */
+    .table-wrap { overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px; }
     table { border-collapse:collapse; width:100%; font-size:12px; }
+    thead th { position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--line); }
     th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
     th:hover { color:var(--ink); }
     th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
