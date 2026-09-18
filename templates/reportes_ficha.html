@@ -386,6 +386,9 @@
             <th class="th-ordenable" onclick="ordenarPor('salida_real')">Salida real <span class="flecha-orden" id="flecha-salida_real"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('salida_prog')">Salida prog. <span class="flecha-orden" id="flecha-salida_prog"></span></th>
             <th></th>
+            <th>Hs. trabajadas</th>
+            <th>Hs. a trabajar</th>
+            <th>¿Recuperó?</th>
           </tr>
           {% for t in tardanzas_mes %}
           <tr data-orden-fecha="{{ t.fecha_iso }}" data-orden-estado="{{ ('TARDANZA' if t.tardanza else '') ~ (' SALIDA ANTICIPADA' if t.salida_temprana else '') }}"
@@ -400,6 +403,14 @@
             <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora entrada programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
             <td>{{ t.salida_real }}</td><td>{{ t.salida_esperada }}</td>
             <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora salida programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
+            <td class="num">{{ t.horas_trabajadas if t.horas_trabajadas is not none else '—' }}</td>
+            <td class="num">{{ t.horas_a_trabajar }}</td>
+            <td>
+              {% if t.recupero is none %}—
+              {% elif t.recupero %}<span class="badge-pct ok">Sí</span>
+              {% else %}<span class="badge-pct bad">No</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </table>

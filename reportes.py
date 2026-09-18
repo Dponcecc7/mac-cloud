@@ -1115,6 +1115,8 @@ def ficha(dni):
             es_salida_temprana = sal_ant is not None and sal_ant > SALIDA_ANTICIPADA_MIN
             if not es_tardanza and not es_salida_temprana:
                 continue
+            horas_trabajadas = row["horas_trabajadas"] if pd.notna(row["horas_trabajadas"]) else None
+            horas_a_trabajar = row["horas_a_trabajar"]
             tardanzas_mes.append({
                 "fecha_iso": row["fecha"].date().isoformat(),
                 "fecha": row["fecha"].strftime("%d/%m"),
@@ -1123,6 +1125,17 @@ def ficha(dni):
                 "tardanza": es_tardanza, "salida_temprana": es_salida_temprana,
                 "entrada_real": row["entrada_real"] or "—", "entrada_esperada": row["entrada_esperada"] or "—",
                 "salida_real": row["salida_real"] or "—", "salida_esperada": row["salida_esperada"] or "—",
+                "horas_trabajadas": horas_trabajadas, "horas_a_trabajar": horas_a_trabajar,
+                # Davor, 2026-09-18: "colocar horas trabajadas y horas a
+                # trabajar, teniendo en cuenta para saber si recuperó o no
+                # sus horas" -- llegó tarde/se fue antes pero si de todos
+                # modos cerró sus horas programadas ese día (se quedó
+                # después, por ejemplo), no es lo mismo que si además le
+                # faltaron horas.
+                "recupero": (
+                    horas_trabajadas is not None and horas_a_trabajar is not None
+                    and horas_trabajadas >= horas_a_trabajar
+                ) if horas_trabajadas is not None else None,
             })
 
     # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,
