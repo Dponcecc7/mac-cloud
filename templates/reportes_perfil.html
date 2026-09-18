@@ -161,7 +161,13 @@
       coincidencias.forEach(function (p) {
         const li = document.createElement("li");
         li.innerHTML = (p.nombre || p.dni).replace(/\b\w/g, c => c.toUpperCase()) + ' <span class="dni-mini">(' + p.dni + ')</span>';
-        li.addEventListener("mousedown", function (ev) { ev.preventDefault(); irA(p.dni); });
+        // click en vez de mousedown (Davor, 2026-09-18: "no puedo dar click
+        // al mercaderista") -- el <li> no es focuseable, así que el input
+        // nunca pierde foco al clickearlo (no hace falta el truco de
+        // preventDefault-en-mousedown-antes-del-blur); "click" es el evento
+        // que de verdad dispara touchstart/touchend en pantallas táctiles,
+        // mousedown puede no completarse ahí.
+        li.addEventListener("click", function () { irA(p.dni); });
         lista.appendChild(li);
       });
       lista.style.display = "block";
@@ -173,7 +179,7 @@
     input.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter") {
         const primera = lista.querySelector("li:not(.sin-resultados)");
-        if (primera) { ev.preventDefault(); primera.dispatchEvent(new MouseEvent("mousedown")); }
+        if (primera) { ev.preventDefault(); primera.click(); }
       }
     });
   </script>
