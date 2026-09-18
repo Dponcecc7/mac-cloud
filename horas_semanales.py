@@ -20,7 +20,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from alertas import _tiene_sustento
+from alertas import _tiene_sustento, SALIDA_ANTICIPADA_MIN
 from dimension_models import Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
 from patron_recurrente import cargar_patron_recurrente, sin_acentos, WD_NORM
@@ -111,6 +111,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
                 ClasificacionDiaria.entrada_esperada, ClasificacionDiaria.entrada_real,
                 ClasificacionDiaria.salida_esperada, ClasificacionDiaria.salida_real,
                 Persona.region, Persona.ciudad, Persona.supervisor_dni,
+                ClasificacionDiaria.salida_anticipada_min,
             )
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
@@ -150,7 +151,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     r = pd.DataFrame(filas, columns=[
         "dni", "nombre", "fecha", "estado", "comentario",
         "entrada_esperada", "entrada_real", "salida_esperada", "salida_real",
-        "region", "ciudad", "supervisor_dni",
+        "region", "ciudad", "supervisor_dni", "salida_anticipada_min",
     ])
     r["fecha"] = pd.to_datetime(r["fecha"])
     r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
@@ -180,6 +181,15 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     r["horas_trabajadas"] = r["_horas_trab_td"].apply(
         lambda td: None if pd.isna(td) else round(td.total_seconds() / 3600, 2)
     )
+
+    # Tardanza/salida anticipada + si ese día igual cumplió sus horas (Davor,
+    # 2026-09-18: "ranking... dias que llegaron tarde, cuantos de esos dias
+    # recuperaron... dias que salieron antes de ruta, si ese dia cumplio sus
+    # horas laborales") -- mismo criterio que reportes.py::ficha() usa para
+    # "Tardanzas y salidas anticipadas del mes".
+    r["es_tardanza"] = r["estado_base"] == "TARDANZA"
+    r["es_salida_temprana"] = r["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN
+    r["recupero_dia"] = r["horas_trabajadas"].notna() & (r["horas_trabajadas"] >= r["horas_a_trabajar"])
 
     # Faltas "con sustento" (descanso médico/licencia/feriado regional,
     # Davor 2026-08-23) se tratan como Vacante para las horas: no le "debe"
@@ -222,6 +232,10 @@ def resumen_por_persona(detalle_semana):
         _horas_vacante=("_horas_vacante_dia", "sum"),
         _horas_sustento=("_horas_sustento_dia", "sum"),
         _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
+        dias_tardanza=("es_tardanza", "sum"),
+        tardanzas_recuperadas=("es_tardanza", lambda s: int((s & detalle_semana.loc[s.index, "recupero_dia"]).sum())),
+        dias_salida_temprana=("es_salida_temprana", "sum"),
+        salidas_cumplieron=("es_salida_temprana", lambda s: int((s & detalle_semana.loc[s.index, "recupero_dia"]).sum())),
     ).reset_index()
 
     g["dias_falta_vacante"] = (
@@ -248,6 +262,7 @@ def resumen_por_persona(detalle_semana):
     g = g.drop(columns=["_dias_falta", "_dias_vacante", "_horas_vacante", "_horas_sustento", "_horas_sin_marcacion"])
     g = g[[
         "dni", "nombre", "supervisor", "ciudad", "region", "dias_falta_vacante",
+        "dias_tardanza", "tardanzas_recuperadas", "dias_salida_temprana", "salidas_cumplieron",
         "horas_trabajadas", "horas_a_trabajar", "horas_a_trabajar_sin_faltas",
         "diferencia_h", "pct_cumplimiento", "pct_cumplimiento_sin_faltas",
     ]]

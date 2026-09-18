@@ -208,6 +208,10 @@
               <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
               <th data-tipo="texto">Región <span class="flecha">↕</span></th>
               <th data-tipo="texto">Días Falta/Vacante <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Días tardanza <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Tardanzas recuperadas <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Días salida anticipada <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Salidas que cumplieron <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas trabajadas <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas a trabajar <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas a trabajar sin faltas <span class="flecha">↕</span></th>
@@ -228,6 +232,10 @@
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
               <td data-label="Días Falta/Vacante">{{ f.dias_falta_vacante }}</td>
+              <td class="num" data-label="Días tardanza">{{ f.dias_tardanza }}</td>
+              <td class="num" data-label="Tardanzas recuperadas">{{ f.tardanzas_recuperadas }}</td>
+              <td class="num" data-label="Días salida anticipada">{{ f.dias_salida_temprana }}</td>
+              <td class="num" data-label="Salidas que cumplieron">{{ f.salidas_cumplieron }}</td>
               <td class="num" data-label="Horas trabajadas">{{ f.horas_trabajadas }}</td>
               <td class="num" data-label="Horas a trabajar">{{ f.horas_a_trabajar }}</td>
               <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
