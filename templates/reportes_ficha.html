@@ -716,6 +716,19 @@ function ordenarPorHistorial(campo) { _ordenarTabla('tabla-historial-ficha', cam
       if (pendiente) { pendiente.select.value = ''; }
     });
 
+    // Bug real de Chromium (Davor, 2026-09-19: "le doy a la fecha luego
+    // vuelve a ponerse en blanco y me pregunta vacaciones") -- al abrir el
+    // calendario nativo del <input type=date> y elegir un día, el
+    // navegador cierra ese popup internamente "apretando Escape", y ese
+    // Escape burbujea hasta el <dialog> y dispara el "cancel" de arriba
+    // como si el USUARIO hubiese querido cerrar el diálogo -- reseteaba el
+    // <select> a mitad de la selección de fecha, sin dejar nunca llegar al
+    // botón Confirmar. Frenar el burbujeo del Escape que nace DENTRO del
+    // input de fecha evita que llegue al <dialog>.
+    fechaInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') { ev.stopPropagation(); }
+    });
+
     dlg.addEventListener('close', function () {
       if (dlg.returnValue === 'confirmar' && pendiente) {
         var hidden = pendiente.form.querySelector('input[name="' + pendiente.hiddenName + '"]');
