@@ -4,7 +4,17 @@
 Regla explícita de Davor: por cada 3 tardanzas acumuladas en el mes, una
 alerta de "posible memorándum"; por cada 3 faltas, una de "observación para
 la renovación". "Por cada 3" se interpreta como niveles: 3-5 = nivel 1, 6-8
-= nivel 2, etc. (`cantidad // 3`), no una alerta única al llegar a 3."""
+= nivel 2, etc. (`cantidad // 3`), no una alerta única al llegar a 3.
+
+Davor, 2026-09-21 -- tres reglas nuevas combinadas con lo anterior:
+1. "Posible memorándum" (ya existe, sin cambios).
+2. Al llegar al nivel 2 de tardanzas (6+, el "máximo 2 memorándums" que
+   Davor fijó) la alerta de tardanza escala a "observar renovación" en vez
+   de seguir emitiendo memorándums indefinidamente -- ver MAX_MEMORANDUM.
+3. Nueva alerta "cumplimiento_bajo": % Cumplimiento SIN faltas (elegido por
+   Davor sobre el % normal, ver UMBRAL_CUMPLIMIENTO_BAJO) por debajo de 70%
+   en el mes -- calculado automáticamente cada mes (no un conteo manual
+   acumulado), reusando horas_semanales.py."""
 import datetime as dt
 import os
 import sys
@@ -22,6 +32,8 @@ sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 
 UMBRAL = 3
+MAX_MEMORANDUM = 2  # Davor, 2026-09-21: al llegar a este nivel de tardanzas la alerta escala a "observar renovación"
+UMBRAL_CUMPLIMIENTO_BAJO = 70  # Davor, 2026-09-21: % Cumplimiento sin faltas por debajo de esto, en el mes
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que asistencia.py usa para resaltar "salida temprana" un día suelto
 FUENTE_CORREGIDO_MANUAL = "Corregido manualmente (Tabla 3)"  # mismo texto exacto que motor_clasificacion.py escribe en fuente_dato
 
@@ -184,10 +196,20 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
+            # Al llegar al máximo de memorándums (Davor, 2026-09-21: "máximo
+            # 2 memorandum"), la tardanza deja de ser "posible memorándum" y
+            # pasa a ser un caso a observar para la renovación -- mismo
+            # criterio de severidad que ya usan jornada_critica/sin_descanso.
+            escalado = tipo == "tardanza" and nivel >= MAX_MEMORANDUM
+            mensaje = (
+                f"Observar renovación -- alcanzó el máximo de {MAX_MEMORANDUM} memorándums por tardanzas ({cantidad} este periodo)"
+                if escalado else
+                f"{mensaje_base} ({nivel}x -- {cantidad} {tipo}s este periodo)"
+            )
             alertas.append({
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": tipo,
-                "cantidad": cantidad, "nivel": nivel,
-                "mensaje": f"{mensaje_base} ({nivel}x -- {cantidad} {tipo}s este periodo)",
+                "cantidad": cantidad, "nivel": nivel, "critico": escalado,
+                "mensaje": mensaje,
                 "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
                 # pd.isna(), no "c or ..." -- un comentario vacío puede llegar
                 # como NaN de pandas (float), y "NaN or x" da NaN (NaN es
@@ -362,6 +384,33 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 "mensaje": f"Descanso semanal irregular ({cantidad} semana{'s' if cantidad != 1 else ''} este periodo)",
                 "fechas": fechas_problema,
                 "motivos": semanas_problema,
+            })
+
+    # Cumplimiento de horas bajo (Davor, 2026-09-21) -- % Cumplimiento SIN
+    # faltas (no el % normal, ver UMBRAL_CUMPLIMIENTO_BAJO) por debajo de
+    # 70% en el mes. Import acá adentro, no arriba del archivo -- horas_
+    # semanales.py ya importa DE alertas.py (_tiene_sustento,
+    # SALIDA_ANTICIPADA_MIN), así que un import a nivel de módulo en este
+    # sentido sería circular.
+    from horas_semanales import calcular_detalle_semana, resumen_por_persona
+    detalle_horas = calcular_detalle_semana(
+        desde, hasta, usuario_actual, dni_filtro=dni_filtro,
+        rol_filtro=rol_filtro, region_filtro=region_filtro, supervisor_filtro=supervisor_filtro,
+        ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
+    )
+    resumen_horas = resumen_por_persona(detalle_horas)
+    if len(resumen_horas):
+        bajo_cumplimiento = resumen_horas[
+            resumen_horas["pct_cumplimiento_sin_faltas"].notna()
+            & (resumen_horas["pct_cumplimiento_sin_faltas"] < UMBRAL_CUMPLIMIENTO_BAJO)
+        ]
+        for fila in bajo_cumplimiento.itertuples():
+            alertas.append({
+                "dni": fila.dni, "nombre": fila.nombre, "tipo": "cumplimiento_bajo",
+                "cantidad": 1, "nivel": 1, "critico": True,
+                "mensaje": f"Cumplimiento de horas bajo -- {fila.pct_cumplimiento_sin_faltas:.1f}% este periodo (mínimo esperado {UMBRAL_CUMPLIMIENTO_BAJO}%)",
+                "fechas": [],
+                "motivos": [],
             })
 
     # Visita larga / Punto Censo -- tabla `visitas` (Postgres), ver
