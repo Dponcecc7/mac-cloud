@@ -18,6 +18,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from flask_wtf.csrf import CSRFError
 from openpyxl.styles import Font
 from sqlalchemy import text
 from sqlalchemy.orm import aliased
@@ -164,6 +165,21 @@ def create_app():
         # la próxima página que sí los muestre.
         destino = "dashboard" if current_user.is_authenticated else "auth.login"
         return redirect(url_for(destino))
+
+    @app.errorhandler(CSRFError)
+    def _token_csrf_vencido(e):
+        # El token CSRF de un formulario vence a la hora (default de
+        # Flask-WTF) -- si alguien deja una pestaña abierta más tiempo que
+        # eso (ej. "Reporte diario" abierto toda la mañana) y después
+        # aprieta "Actualizar ahora" o cualquier botón, sin esto veía la
+        # página cruda de Flask-WTF ("Bad Request / El token CSRF ha
+        # caducado") en vez de algo útil (Davor, 2026-09-21). Vuelve a la
+        # misma página (un GET arma un token nuevo) para que alcance con
+        # reintentar la acción -- mismo criterio que el handler de 405
+        # de acá arriba.
+        flash("Esta pestaña estuvo abierta mucho tiempo y venció -- volvé a intentarlo.", "error")
+        destino = request.referrer or url_for("dashboard" if current_user.is_authenticated else "auth.login")
+        return redirect(destino)
 
     @app.errorhandler(500)
     def _error_interno(e):
