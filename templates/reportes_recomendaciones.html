@@ -47,23 +47,7 @@
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
     .filtros-admin .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
 
-    .insight { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
-    .insight.media { border-left-color:var(--warn); }
-    .insight.alta { border-left-color:var(--bad); }
-    .insight .icono { font-size:20px; line-height:1; margin-top:2px; }
-    .insight .cuerpo { flex:1; }
-    .insight .nombre { font-weight:700; font-size:14px; }
-    .insight .nombre a { color:inherit; text-decoration:none; }
-    .insight .nombre a:hover { color:var(--brand); text-decoration:underline; }
-    .insight .mensaje { font-size:13px; margin:2px 0 0; color:var(--ink); }
-    .insight .detalle { font-size:11.5px; color:var(--muted); margin:6px 0 0; }
-
     .empty { color:var(--muted); font-size:13px; padding:20px 0; text-align:center; }
-
-    .filtro-tipos { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
-    .chip-tipo { cursor:pointer; font-size:12px; font-weight:700; padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); }
-    .chip-tipo.activo { background:var(--brand); border-color:var(--brand); color:#fff; }
-    .insight.oculto-tipo { display:none; }
 
     .subtitle { font-size:15px; font-weight:800; margin:26px 0 12px; }
     .perfil-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
@@ -93,7 +77,6 @@
       nav.tabs { gap:0; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
 
-      .insight { padding:12px 14px; gap:10px; }
       .perfil-grid { grid-template-columns:1fr; }
 
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
@@ -186,42 +169,7 @@
     </div>
     {% endif %}
 
-    <p class="note"><b>Importante:</b> esto NO es un modelo predictivo con IA — son reglas simples sobre los mismos datos de Horas semanales/Alertas (comparar esta semana contra el promedio, ver quién está a un paso de una alerta formal, etc.). Sirve para mirar antes de que algo escale, no como diagnóstico definitivo.</p>
-
-    <span class="stat-pill">{{ insights|length }} señal{{ 'es' if insights|length != 1 else '' }} esta semana</span>
-
-    {% if not insights %}
-      <div class="empty-state">
-        <span class="empty-icon">💡</span>
-        <span class="empty-title">Sin señales por ahora</span>
-      </div>
-    {% else %}
-      {% set etiquetas_insight = {'tardanza_creciente': 'Tardanza creciente', 'cumplimiento_bajando': 'Cumplimiento bajando', 'cerca_alerta_tardanza': 'Cerca de alerta (tardanza)', 'cerca_alerta_falta': 'Cerca de alerta (falta)', 'riesgo_semana': 'Riesgo esta semana'} %}
-      {% set tipos_presentes_insight = insights | map(attribute='tipo') | unique | list %}
-      <div class="filtro-tipos" id="filtro-tipos-insight">
-        <span class="chip-tipo activo" data-tipo="">Todos ({{ insights|length }})</span>
-        {% for t in tipos_presentes_insight %}
-        {% set n = insights | selectattr('tipo', 'equalto', t) | list | length %}
-        <span class="chip-tipo" data-tipo="{{ t }}">{{ etiquetas_insight.get(t, t) }} ({{ n }})</span>
-        {% endfor %}
-      </div>
-      {% for i in insights %}
-      <div class="insight {{ i.severidad }}" data-tipo="{{ i.tipo }}">
-        <div class="icono">{{ i.icono }}</div>
-        <div class="cuerpo">
-          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=i.dni) }}">{{ i.nombre|title }}</a></div>
-          <p class="mensaje">{{ i.mensaje }}</p>
-          {% if i.detalle_fechas %}
-            <p class="detalle">Fechas: {{ i.detalle_fechas|join(', ') }}</p>
-          {% elif i.detalle_semanas %}
-            <p class="detalle">{% for d in i.detalle_semanas %}{{ d.semana }}: {{ d.pct }}%{{ ', ' if not loop.last }}{% endfor %}</p>
-          {% elif i.detalle_dias %}
-            <p class="detalle">{% for d in i.detalle_dias %}{{ d.fecha }}: {{ d.horas_trabajadas }}/{{ d.horas_a_trabajar }}h{{ ', ' if not loop.last }}{% endfor %}</p>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    {% endif %}
+    <p class="note">💡 Las señales tempranas (tardanza creciente, cerca de una alerta formal, etc.) se mudaron a la pestaña <a href="{{ url_for('reportes.alertas') }}">Alertas</a>.</p>
 
     <h2 class="subtitle">Resumen de perfil — {{ perfiles|length }} persona{{ 's' if perfiles|length != 1 else '' }} en el periodo</h2>
     <p class="note">Puntaje = promedio ponderado de 4 métricas del periodo elegido ({{ desde.strftime('%d/%m') }} al {{ hasta.strftime('%d/%m') }}): Cumplimiento de horas (35%), Faltas sin descanso médico/licencia/feriado regional (35%), Tardanzas (15%) y Salidas antes de hora (15%), todas sobre los días hábiles ya transcurridos. 😊 Excelente ≥95 · 😐 Seguimiento 85–95 · 😟 Evaluar &lt;85.</p>
@@ -249,17 +197,5 @@
     </div>
     {% endif %}
   </div>
-  <script>
-    document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (chip) {
-      chip.addEventListener("click", function () {
-        document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (c) { c.classList.remove("activo"); });
-        chip.classList.add("activo");
-        var tipo = chip.getAttribute("data-tipo");
-        document.querySelectorAll(".insight").forEach(function (card) {
-          card.classList.toggle("oculto-tipo", tipo !== "" && card.getAttribute("data-tipo") !== tipo);
-        });
-      });
-    });
-  </script>
 </body>
 </html>

@@ -324,9 +324,18 @@ def alertas():
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
+    # Señales tempranas (Davor, 2026-09-21: "estos items deben estar en la
+    # pestaña Alertas") -- vivían en Desempeño, pero conceptualmente son
+    # avisos de "esto puede convertirse en alerta" así que el lugar natural
+    # es acá, junto a las alertas ya disparadas.
+    señales = insights_equipo(
+        current_user, desde=desde, hasta=hasta,
+        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+    )
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
-        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco,
+        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco, insights=señales,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
@@ -360,24 +369,8 @@ def _rango_mes_actual_por_defecto():
 def recomendaciones():
     desde, hasta = _rango_mes_actual_por_defecto()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
-    # calcular_detalle_semana() es lo mas caro de este reporte (~5s incluso
-    # con equipos chicos) -- insights_equipo() y resumen_perfil_equipo() lo
-    # llamaban cada uno por su cuenta con rangos que se superponen casi
-    # del todo, duplicando esa consulta y sumando por encima del timeout
-    # del worker en Render (Davor, 2026-09-01: 503 al filtrar por
-    # supervisor). Se trae UNA vez, con el rango mas amplio de los dos
-    # (el de insights_equipo, que mira 4 semanas antes de "hasta"), y se
-    # reusa en ambas funciones.
-    anio_actual, num_actual, _ = hasta.isocalendar()
-    inicio_actual, _ = semana_iso(anio_actual, num_actual)
-    desde_semanas = inicio_actual - dt.timedelta(weeks=4)
     detalle = calcular_detalle_semana(
-        desde_semanas, hasta, current_user,
-        rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
-    )
-    lista = insights_equipo(
-        current_user, desde=desde, hasta=hasta, detalle=detalle,
+        desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
@@ -388,7 +381,7 @@ def recomendaciones():
     )
     return render_template(
         "reportes_recomendaciones.html", usuario=current_user, activo="recomendaciones",
-        insights=lista, perfiles=perfiles, desde=desde, hasta=hasta,
+        perfiles=perfiles, desde=desde, hasta=hasta,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
