@@ -30,7 +30,12 @@ _SessionLocal = None
 def get_engine():
     global _engine
     if _engine is None:
-        _engine = create_engine(os.environ["DATABASE_URL"])
+        # .strip() (Davor, 2026-09-21) -- un DATABASE_URL con un salto de
+        # línea o espacio pegado al final (típico de copiar/pegar en un
+        # secret de GitHub Actions) hace que el nombre de la base termine
+        # siendo literalmente "mac_cloud_db\n" y Postgres la rechaza con
+        # "database does not exist" -- pasó de verdad migrando a Render.
+        _engine = create_engine(os.environ["DATABASE_URL"].strip())
     return _engine
 
 

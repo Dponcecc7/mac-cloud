@@ -89,7 +89,8 @@ def create_app():
               "en las variables de entorno de Render.")
         _secret_key = "dev-only-no-usar-en-produccion"
     app.config["SECRET_KEY"] = _secret_key
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
+    # .strip() (Davor, 2026-09-21) -- ver mismo fix en dimension_models.py::get_engine().
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db").strip()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # Cookie de sesion solo por HTTPS -- Render sirve todo por HTTPS, asi
     # que esto no rompe produccion. SESSION_COOKIE_SECURE=false permite
