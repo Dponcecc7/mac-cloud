@@ -26,6 +26,7 @@ import sys
 
 import pandas as pd
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
@@ -401,6 +402,17 @@ def _cargar_existente_desde_postgres():
 
 
 def _sincronizar_postgres(res, claves_recalculadas):
+    """Un DNI del Maestro (SharePoint) que no existe en personas (Postgres)
+    -- ej. alguien que quedó solo en el Excel y nunca se dio de alta por acá,
+    o un huérfano de una migración de base -- rompía la escritura entera con
+    un solo IntegrityError (FK a personas.dni): TODA la corrida perdía su
+    session.commit() de una sola vez, así que ni siquiera los DNI válidos
+    (altas/reemplazos nuevos incluidos) quedaban guardados (hallazgo real,
+    2026-09-21: DNI huérfano 9917175 post-migración a Render tumbó la
+    sincronización completa, dejando "Datos hasta las X" pegado y altas/
+    reemplazos del día sin aparecer en ningún reporte). Cada fila se escribe
+    ahora en su propio savepoint (begin_nested()) -- un DNI huérfano se
+    aisla y se omite, el resto de la corrida se guarda igual."""
     crear_tablas()
     session = get_session()
     try:
@@ -408,11 +420,22 @@ def _sincronizar_postgres(res, claves_recalculadas):
         existentes_por_clave = {(row.dni, row.fecha): row for row in existentes}
         res_por_clave = {(r["DNI"], r["Fecha"]): r for r in res.to_dict("records")}
 
+        n_escritas = 0
+        dnis_huerfanos = set()
         for clave in claves_recalculadas:
             fila = res_por_clave.get(clave)
             if fila is None:
                 continue
-            _upsert_postgres(session, existentes_por_clave, fila)
+            dni_clave = clave[0]
+            if dni_clave in dnis_huerfanos:
+                continue
+            try:
+                with session.begin_nested():
+                    _upsert_postgres(session, existentes_por_clave, fila)
+                    session.flush()
+                n_escritas += 1
+            except IntegrityError:
+                dnis_huerfanos.add(dni_clave)
 
         claves_finales = set(res_por_clave.keys())
         n_eliminadas = 0
@@ -422,7 +445,12 @@ def _sincronizar_postgres(res, claves_recalculadas):
                 n_eliminadas += 1
 
         session.commit()
-        print(f"Postgres (clasificacion_diaria) sincronizado: {len(claves_recalculadas)} filas escritas, {n_eliminadas} eliminadas.")
+        print(f"Postgres (clasificacion_diaria) sincronizado: {n_escritas} filas escritas, {n_eliminadas} eliminadas.")
+        if dnis_huerfanos:
+            print(
+                f"AVISO: {len(dnis_huerfanos)} DNI del Maestro no existen en personas (Postgres) -- "
+                f"se omitió su sincronización a clasificacion_diaria: {sorted(dnis_huerfanos)}"
+            )
     finally:
         session.close()
 
