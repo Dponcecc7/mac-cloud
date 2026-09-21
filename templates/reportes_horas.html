@@ -232,7 +232,7 @@
             {% set pct_full = f.pct_cumplimiento %}
             {% set clase_pct_full = 'ok' if pct_full is not none and pct_full >= 95 else ('warn' if pct_full is not none and pct_full >= 80 else 'bad') %}
             <tr>
-              <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni) }}">{{ f.nombre|title }}</a></td>
+              <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni, semana=semana_str) }}" title="Ver detalle día a día de esta semana">{{ f.nombre|title }}</a></td>
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
@@ -253,6 +253,7 @@
         </table>
       </div>
       {% endif %}
+      <p class="note">💡 Click en el nombre de una persona para ver el detalle día a día de esta misma semana.</p>
       <p class="note">Fuente: misma regla de <code>reporte_semanal.py</code> — horas fijas L-V 8.5h / Sábado 5.5h / feriados 0h, descuenta refrigerio según el patrón (no el real marcado). "Horas a trabajar" ya descuenta Vacante; "sin faltas" además descuenta Falta y Vacaciones — compara el cumplimiento solo contra los días que sí vino. % Cumplimiento = Horas trabajadas ÷ Horas a trabajar.</p>
     </div>
   </div>
