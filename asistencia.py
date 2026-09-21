@@ -1381,6 +1381,75 @@ def marcar():
     return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok", **filtros_volver))
 
 
+@bp.post("/marcar_descanso_masivo")
+@requiere_pagina("asistencia")
+def marcar_descanso_masivo():
+    """Mismo "Descanso" de marcar(), pero para varios DNIs de una sola vez
+    (Davor, 2026-09-21: "en Autoservicio descansan varios en unos días" --
+    marcar uno por uno era muy repetitivo). Un solo motivo para todo el
+    grupo, una sola descarga/subida de Tabla 3 (mismo patrón ya usado en
+    reunion_registrar())."""
+    dnis = request.form.getlist("dnis")
+    fecha_str = request.form["fecha"]
+    fecha = dt.date.fromisoformat(fecha_str)
+    motivo = request.form.get("motivo_descanso", "").strip()
+
+    filtros_volver = {
+        campo: valor for campo, valor in (
+            ("supervisor", request.form.get("supervisor", "").strip()),
+            ("region", request.form.get("region", "").strip()),
+            ("rol", request.form.get("rol", "").strip()),
+            ("ciudad", request.form.get("ciudad", "").strip()),
+            ("canal", request.form.get("canal", "").strip()),
+        ) if valor
+    }
+
+    if not dnis or not motivo:
+        return redirect(url_for(
+            "asistencia.marcar_vista", fecha=fecha_str,
+            marcado=("falta_sin_motivo" if dnis else None), **filtros_volver,
+        ))
+
+    comentario = f"Descanso - {motivo}"
+
+    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
+    if not ok_lock:
+        return render_template(
+            "asistencia_resultado.html", usuario=current_user, activo="marcar",
+            titulo="No se pudo guardar", ok=False,
+            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
+            volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
+        )
+    try:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
+            ws = wb["Registro diario supervisor"]
+            fila_libre = ws.max_row + 1
+            for dni in dnis:
+                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario)
+                fila_libre += 1
+            subir_in_place(TABLA3_RUTA_GRAPH, wb)
+        except requests.exceptions.RequestException as e:
+            return render_template(
+                "asistencia_resultado.html", usuario=current_user, activo="marcar",
+                titulo="No se pudo guardar", ok=False,
+                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
+                volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
+            )
+
+        session = get_session()
+        try:
+            for dni in dnis:
+                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+            session.commit()
+        finally:
+            session.close()
+    finally:
+        liberar_lock("tabla3_web")
+
+    return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok", **filtros_volver))
+
+
 @bp.post("/motivos/agregar")
 @requiere_pagina("asistencia")
 def motivos_agregar():

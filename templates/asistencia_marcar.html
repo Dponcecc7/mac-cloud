@@ -79,6 +79,14 @@
     .pendiente-row .quien b { font-weight:700; }
     .pendiente-row .quien span { color:var(--muted); }
     .pendiente-row form { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+    .chk-descanso-masivo { width:auto; margin:0 2px 0 0; cursor:pointer; }
+
+    /* Descanso masivo (Davor, 2026-09-21) -- "en Autoservicio descansan
+       varios en unos días", elegir por checkbox y marcar Descanso para
+       todos de una sola vez en vez de fila por fila. */
+    .descanso-masivo-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:var(--bg); border-radius:10px; padding:8px 10px; margin-bottom:8px; }
+    .descanso-masivo-bar .contador-elegidos { font-size:12px; font-weight:700; color:var(--muted); flex:1 1 auto; }
+    .descanso-masivo-bar .contador-elegidos.hay-elegidos { color:var(--brand); }
 
     .marcaron-row { display:flex; align-items:center; gap:10px; padding:6px 4px; border-bottom:1px solid var(--line); font-size:12.5px; }
     .marcaron-row:last-child { border-bottom:none; }
@@ -294,9 +302,27 @@
         <b>Día de descanso</b>: se coloca cuando al mercaderista se le considerará el día pero no asistió a laborar.
         <b>Falta</b>: se coloca cuando el mercaderista no asistió y se le descontará (excepto descanso médico -- con sustento).
       </p>
+
+      <form id="form-descanso-masivo" method="post" action="{{ url_for('asistencia.marcar_descanso_masivo') }}" class="descanso-masivo-bar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="fecha" value="{{ fecha_str }}">
+        <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}">
+        <input type="hidden" name="region" value="{{ filtro_args.region }}">
+        <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
+        <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
+        <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+        <span id="contador-descanso-masivo" class="contador-elegidos">Marcá a quienes descansan hoy...</span>
+        <select class="ipt-filtro sm" name="motivo_descanso" required style="width:150px;">
+          <option value="">Día de descanso...</option>
+          {% for m in motivos_descanso %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+        <button class="btn sm info" type="submit" id="btn-descanso-masivo" disabled>Marcar seleccionados como Descanso</button>
+      </form>
+
       <div>
         {% for p in pendientes %}
         <div class="pendiente-row">
+          <input type="checkbox" name="dnis" value="{{ p.dni }}" form="form-descanso-masivo" class="chk-descanso-masivo" title="Elegir para marcar Descanso masivo">
           <div class="quien"><b>{{ p.mercaderista|title }}</b><br><span>{{ (p.ciudad or '')|title }} · {{ (p.canal or '')|title }}</span></div>
           <form method="post" action="{{ url_for('asistencia.marcar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="dni" value="{{ p.dni }}">
@@ -625,6 +651,23 @@
         pendiente = null;
         dlg.returnValue = '';
       });
+    })();
+
+    // Descanso masivo (Davor, 2026-09-21) -- habilita el botón y muestra
+    // cuántos se eligieron a medida que se tildan checkboxes.
+    (function () {
+      var checks = Array.prototype.slice.call(document.querySelectorAll('.chk-descanso-masivo'));
+      var contador = document.getElementById('contador-descanso-masivo');
+      var boton = document.getElementById('btn-descanso-masivo');
+      if (!checks.length || !contador || !boton) return;
+      function actualizar() {
+        var n = checks.filter(function (c) { return c.checked; }).length;
+        contador.textContent = n ? n + ' elegido' + (n !== 1 ? 's' : '') : 'Marcá a quienes descansan hoy...';
+        contador.classList.toggle('hay-elegidos', n > 0);
+        boton.disabled = n === 0;
+      }
+      checks.forEach(function (c) { c.addEventListener('change', actualizar); });
+      actualizar();
     })();
   </script>
 </body>
