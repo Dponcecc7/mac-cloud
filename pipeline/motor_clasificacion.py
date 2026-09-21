@@ -511,15 +511,24 @@ def main():
     # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
     # vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
     # dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
+    # .str.zfill(8) (Davor, 2026-09-21) -- ese redondeo a int64 tambien se
+    # come un cero a la izquierda de un DNI real de 8 digitos (ej.
+    # "09917175" -> "9917175"), que despues no matchea contra el DNI real
+    # en personas -- hallazgo real, Felix Leon Karina Elizabeth (09917175)
+    # quedaba "huerfana" en cada corrida por esto.
     dni_num = pd.to_numeric(m["DNI"], errors="coerce")
     m = m[dni_num.notna()].copy()
-    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
+    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str).str.zfill(8)
     activos = m[m["Estado"].astype(str).str.strip() == "Activo"].copy()
 
     p = leer_excel("ASISTENCIA/MAC/2A_Patron_Recurrente.xlsx", sheet_name="Patrón recurrente", header=3).dropna(how="all")
     p.columns = [str(c).strip() for c in p.columns]
     p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
-    p["DNI"] = p["DNI"].astype(str).str.strip()
+    # .str.zfill(8) (Davor, 2026-09-21) -- resguardo por si esta columna
+    # también viene como número en el Excel (mismo problema de ceros a la
+    # izquierda que "DNI" en el Maestro Headcount, ver más arriba); sobre
+    # un DNI que ya viene bien como texto de 8 dígitos no cambia nada.
+    p["DNI"] = p["DNI"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True).str.zfill(8)
     p["Dia"] = p["Dia"].astype(str).str.strip().str.lower()
     dia_map = {"lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4, "sábado": 5, "sabado": 5, "domingo": 6}
     p["weekday"] = p["Dia"].map(dia_map)
@@ -534,10 +543,11 @@ def main():
     sup = leer_excel("ASISTENCIA/MAC/3_Registro_Diario_Supervisor.xlsx", sheet_name="Registro diario supervisor", header=3).dropna(how="all")
     sup.columns = [str(c).strip() for c in sup.columns]
     sup = sup.rename(columns={sup.columns[0]: "DNI"})
-    # Mismo gotcha que parseo_headcount.py -- ver comentario más arriba.
+    # Mismo gotcha que parseo_headcount.py -- ver comentario más arriba,
+    # incluido el .str.zfill(8).
     dni_num_sup = pd.to_numeric(sup["DNI"], errors="coerce")
     sup = sup[dni_num_sup.notna()].copy()
-    sup["DNI"] = dni_num_sup[dni_num_sup.notna()].astype("int64").astype(str)
+    sup["DNI"] = dni_num_sup[dni_num_sup.notna()].astype("int64").astype(str).str.zfill(8)
     sup["Fecha_dt"] = pd.to_datetime(sup["Fecha"], errors="coerce").dt.date
     sup_idx = {}
     for (dni_sup, fecha_sup), grupo in sup.groupby(["DNI", "Fecha_dt"]):
