@@ -313,6 +313,31 @@ def _dia_foco_desde_query():
         return dt.date.today()
 
 
+def _señal_como_alerta(i):
+    """Convierte un insight de insights_equipo() al mismo shape de dict que
+    usa alertas_periodo(), para poder mostrarlos en una sola lista (Davor,
+    2026-09-22: "las alertas de la parte inferior se deben combinar con las
+    de arriba"). Severidad -> nivel (para el orden y el badge), igual que
+    alertas.py usa nivel/critico. Ningún tipo de alerta real (tardanza,
+    falta, etc.) coincide con un tipo de señal, así que no hay choque de
+    colores/CSS -- las señales simplemente no tienen regla de color propia
+    y quedan con el borde neutro por defecto, distinguiéndose visualmente
+    de las alertas ya disparadas sin necesidad de una sección aparte."""
+    if "detalle_semanas" in i:
+        fechas, motivos = [], [f"{d['semana']}: {d['pct']}%" for d in i["detalle_semanas"]]
+    elif "detalle_dias" in i:
+        fechas = [d["fecha"] for d in i["detalle_dias"]]
+        motivos = [f"{d['fecha']}: {d['horas_trabajadas']}/{d['horas_a_trabajar']}h" for d in i["detalle_dias"]]
+    else:
+        fechas, motivos = i.get("detalle_fechas", []), []
+    return {
+        "dni": i["dni"], "nombre": i["nombre"], "tipo": i["tipo"],
+        "cantidad": len(fechas) or 1, "nivel": {"alta": 3, "media": 2, "baja": 1}.get(i["severidad"], 1),
+        "critico": i["severidad"] == "alta",
+        "mensaje": i["mensaje"], "fechas": fechas, "motivos": motivos,
+    }
+
+
 @bp.get("/alertas")
 @requiere_pagina("reportes_alertas")
 def alertas():
@@ -325,17 +350,19 @@ def alertas():
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
     # Señales tempranas (Davor, 2026-09-21: "estos items deben estar en la
-    # pestaña Alertas") -- vivían en Desempeño, pero conceptualmente son
-    # avisos de "esto puede convertirse en alerta" así que el lugar natural
-    # es acá, junto a las alertas ya disparadas.
+    # pestaña Alertas"; 2026-09-22: combinadas en la MISMA lista de arriba
+    # en vez de una sección aparte) -- avisos de "esto puede convertirse en
+    # alerta", mezclados y reordenados junto con las alertas ya disparadas.
     señales = insights_equipo(
         current_user, desde=desde, hasta=hasta,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
     )
+    lista = lista + [_señal_como_alerta(i) for i in señales]
+    lista.sort(key=lambda a: (0 if a.get("critico") else 1, -a["nivel"], -a["cantidad"], a["nombre"]))
     return render_template(
         "reportes_alertas.html", usuario=current_user, activo="alertas",
-        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco, insights=señales,
+        mes_str=mes_str, desde=desde, hasta=hasta, alertas=lista, dia_foco=dia_foco,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,

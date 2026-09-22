@@ -75,21 +75,6 @@
     .chip-tipo.activo { background:var(--brand); border-color:var(--brand); color:#fff; }
     .alerta.oculto-tipo, .alerta.oculto-dia { display:none; }
 
-    /* Señales tempranas (Davor, 2026-09-21: mudadas acá desde Desempeño --
-       mismo componente que ya tenía reportes_recomendaciones.html). */
-    .subtitle { font-size:15px; font-weight:800; margin:30px 0 12px; }
-    .insight { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; border-left:4px solid var(--line); }
-    .insight.media { border-left-color:var(--warn); }
-    .insight.alta { border-left-color:var(--bad); }
-    .insight .icono { font-size:20px; line-height:1; margin-top:2px; }
-    .insight .cuerpo { flex:1; }
-    .insight .nombre { font-weight:700; font-size:14px; }
-    .insight .nombre a { color:inherit; text-decoration:none; }
-    .insight .nombre a:hover { color:var(--brand); text-decoration:underline; }
-    .insight .mensaje { font-size:13px; margin:2px 0 0; color:var(--ink); }
-    .insight .detalle { font-size:11.5px; color:var(--muted); margin:6px 0 0; }
-    .insight.oculto-tipo { display:none; }
-
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -111,7 +96,6 @@
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
 
       .alerta { padding:12px 14px; gap:10px; }
-      .insight { padding:12px 14px; gap:10px; }
       .alerta .nivel { font-size:9px; padding:2px 6px; }
     }
   </style>
@@ -205,11 +189,11 @@
       <div class="empty-state">
         <span class="empty-icon">✅</span>
         <span class="empty-title">Sin alertas en {{ mes_str }}</span>
-        <span class="empty-hint">Nadie llegó a 3 tardanzas, faltas, cambios de canal o salidas anticipadas.</span>
+        <span class="empty-hint">Nadie llegó a 3 tardanzas, faltas, cambios de canal, salidas anticipadas, ni tiene señales tempranas.</span>
       </div>
     {% else %}
-      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️', 'jornada_critica': '🚨', 'sin_descanso': '🛌', 'cumplimiento_bajo': '📉'} %}
-      {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano', 'jornada_critica': 'Jornada casi nula', 'sin_descanso': 'Sin descanso semanal', 'cumplimiento_bajo': 'Cumplimiento bajo'} %}
+      {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️', 'jornada_critica': '🚨', 'sin_descanso': '🛌', 'cumplimiento_bajo': '📉', 'tardanza_creciente': '📈', 'cumplimiento_bajando': '📊', 'cerca_alerta_tardanza': '⚠️', 'cerca_alerta_falta': '🛑', 'riesgo_semana': '⏳'} %}
+      {% set etiquetas = {'tardanza': 'Tardanza', 'falta': 'Falta', 'otro_canal': 'Cambio de canal', 'salida_temprana': 'Salida anticipada', 'visita_larga': 'Visita larga', 'punto_censo': 'Punto censo', 'corregido_manual': 'Corregido a mano', 'jornada_critica': 'Jornada casi nula', 'sin_descanso': 'Sin descanso semanal', 'cumplimiento_bajo': 'Cumplimiento bajo', 'tardanza_creciente': 'Tardanza creciente', 'cumplimiento_bajando': 'Cumplimiento bajando', 'cerca_alerta_tardanza': 'Cerca de alerta (tardanza)', 'cerca_alerta_falta': 'Cerca de alerta (falta)', 'riesgo_semana': 'Riesgo esta semana'} %}
       {% set tipos_presentes = alertas | map(attribute='tipo') | unique | list %}
       <div class="filtro-tipos" id="filtro-tipos">
         <span class="chip-tipo activo" data-tipo="" data-label="Todos">Todos ({{ alertas|length }})</span>
@@ -225,7 +209,7 @@
           <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=a.dni) }}">{{ a.nombre|title }}</a></div>
           <p class="mensaje">{{ a.mensaje }}</p>
           <div class="detalle">
-            {% if a.tipo in ('salida_temprana', 'jornada_critica', 'sin_descanso', 'cumplimiento_bajo') %}
+            {% if a.tipo in ('salida_temprana', 'jornada_critica', 'sin_descanso', 'cumplimiento_bajo', 'cumplimiento_bajando', 'riesgo_semana') %}
               <ul class="motivos-lista">{% for m in a.motivos %}<li>{{ m }}</li>{% endfor %}</ul>
             {% else %}
               Fechas: {{ a.fechas|join(', ') }}
@@ -237,56 +221,7 @@
       </div>
       {% endfor %}
     {% endif %}
-
-    <h2 class="subtitle">Señales tempranas — {{ insights|length }} señal{{ 'es' if insights|length != 1 else '' }} esta semana</h2>
-    <p class="note"><b>Importante:</b> esto NO es un modelo predictivo con IA — son reglas simples sobre los mismos datos de Horas semanales/Alertas (comparar esta semana contra el promedio, ver quién está a un paso de una alerta formal, etc.). Sirve para mirar antes de que algo escale, no como diagnóstico definitivo.</p>
-    {% if not insights %}
-      <div class="empty-state">
-        <span class="empty-icon">💡</span>
-        <span class="empty-title">Sin señales por ahora</span>
-      </div>
-    {% else %}
-      {% set etiquetas_insight = {'tardanza_creciente': 'Tardanza creciente', 'cumplimiento_bajando': 'Cumplimiento bajando', 'cerca_alerta_tardanza': 'Cerca de alerta (tardanza)', 'cerca_alerta_falta': 'Cerca de alerta (falta)', 'riesgo_semana': 'Riesgo esta semana'} %}
-      {% set tipos_presentes_insight = insights | map(attribute='tipo') | unique | list %}
-      <div class="filtro-tipos" id="filtro-tipos-insight">
-        <span class="chip-tipo activo" data-tipo="">Todos ({{ insights|length }})</span>
-        {% for t in tipos_presentes_insight %}
-        {% set n = insights | selectattr('tipo', 'equalto', t) | list | length %}
-        <span class="chip-tipo" data-tipo="{{ t }}">{{ etiquetas_insight.get(t, t) }} ({{ n }})</span>
-        {% endfor %}
-      </div>
-      {% for i in insights %}
-      <div class="insight {{ i.severidad }}" data-tipo="{{ i.tipo }}">
-        <div class="icono">{{ i.icono }}</div>
-        <div class="cuerpo">
-          <div class="nombre"><a href="{{ url_for('reportes.ficha', dni=i.dni) }}">{{ i.nombre|title }}</a></div>
-          <p class="mensaje">{{ i.mensaje }}</p>
-          {% if i.detalle_fechas %}
-            <p class="detalle">Fechas: {{ i.detalle_fechas|join(', ') }}</p>
-          {% elif i.detalle_semanas %}
-            <p class="detalle">{% for d in i.detalle_semanas %}{{ d.semana }}: {{ d.pct }}%{{ ', ' if not loop.last }}{% endfor %}</p>
-          {% elif i.detalle_dias %}
-            <p class="detalle">{% for d in i.detalle_dias %}{{ d.fecha }}: {{ d.horas_trabajadas }}/{{ d.horas_a_trabajar }}h{{ ', ' if not loop.last }}{% endfor %}</p>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    {% endif %}
   </div>
-  <script>
-    // Señales tempranas -- filtro de tipo independiente del de alertas de
-    // arriba (#filtro-tipos), mismo patrón que ya usaba Desempeño.
-    document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (chip) {
-      chip.addEventListener("click", function () {
-        document.querySelectorAll("#filtro-tipos-insight .chip-tipo").forEach(function (c) { c.classList.remove("activo"); });
-        chip.classList.add("activo");
-        var tipo = chip.getAttribute("data-tipo");
-        document.querySelectorAll(".insight").forEach(function (card) {
-          card.classList.toggle("oculto-tipo", tipo !== "" && card.getAttribute("data-tipo") !== tipo);
-        });
-      });
-    });
-  </script>
   <script>
     // Foco en un día puntual (Davor, 2026-08-28: "debo tener el filtro por
     // día, predeterminado el día actual, para darle foco a ello") -- las
