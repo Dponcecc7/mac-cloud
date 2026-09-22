@@ -523,8 +523,19 @@
             {% if not d.trabaja %}
               <td colspan="3" class="empty">No trabaja este día (sin fila en Patrón Recurrente)</td>
             {% else %}
-              <td>{{ d.entrada }} – {{ d.salida }}</td>
-              <td>{{ d.canal or "—" }}</td>
+              <td>
+                {{ d.entrada }} – {{ d.salida }}
+                {% if usuario.rol in ("analista", "admin") %}
+                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora entrada programada', '{{ d.dia }}', '{{ d.entrada or '' }}')">Editar entrada</a>
+                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora salida programada', '{{ d.dia }}', '{{ d.salida or '' }}')">Editar salida</a>
+                {% endif %}
+              </td>
+              <td>
+                {{ d.canal or "—" }}
+                {% if usuario.rol in ("analista", "admin") %}
+                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Canal del día', '{{ d.dia }}', '{{ d.canal or '' }}')">Editar</a>
+                {% endif %}
+              </td>
               <td>
                 {% if d.hubo_cambio %}
                   <span class="badge-cambio" title="Patrón base: {{ d.entrada }}–{{ d.salida }}, {{ d.canal or '—' }}">
@@ -636,6 +647,23 @@
           document.getElementById('historial-fecha-hasta').value = fechaIso;
           for (const opt of document.getElementById('historial-dia').options) { opt.selected = false; }
           document.getElementById('historial-valor').focus();
+        }
+
+        // "Editar" en Patrón recurrente actual (Davor, 2026-09-22: "aca
+        // ponme para editar en los días") -- mismo mecanismo que
+        // prefillHistorial() de arriba, pero para un DÍA DE LA SEMANA
+        // recurrente (no una fecha puntual): deja el rango de fechas vacío
+        // (el analista define desde cuándo rige el cambio) y marca ese día
+        // en el multi-select, con el valor actual precargado como punto de
+        // partida para corregir.
+        function prefillHistorialDia(campo, dia, valorActual) {
+          document.getElementById('historial-campo').value = campo;
+          document.getElementById('historial-valor').value = valorActual;
+          document.getElementById('historial-fecha-desde').value = '';
+          document.getElementById('historial-fecha-hasta').value = '';
+          for (const opt of document.getElementById('historial-dia').options) { opt.selected = (opt.value === dia); }
+          document.getElementById('historial-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          document.getElementById('historial-fecha-desde').focus();
         }
       </script>
       {% endif %}
