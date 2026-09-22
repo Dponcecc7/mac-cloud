@@ -200,6 +200,14 @@
         <div class="kpi"><div class="valor">{{ resumen.pdvs_visitados }}</div><div class="label">PDVs visitados</div></div>
         <div class="kpi"><div class="valor">{{ (resumen.pct_cumplimiento ~ '%') if resumen.pct_cumplimiento is not none else '—' }}</div><div class="label">% Cumplimiento</div></div>
       </div>
+      {% if usuario.rol in ("analista", "admin") %}
+      <form method="post" action="{{ url_for('reportes.planning_aplicar_reemplazos', mes=periodo_str) }}" style="margin-top:14px;" onsubmit="return confirm('¿Actualizar en la base a quien reemplazó a cada mercaderista dado de baja, para {{ periodo_str }}? Ya se muestra así en pantalla -- esto lo deja escrito de una vez en el Planning guardado.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">
+        <button class="btn ghost" type="submit">↻ Aplicar reemplazos vigentes a este mes</button>
+      </form>
+      <p class="note">Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes, por si algo más adelante lo consulta directo sin pasar por esta pantalla. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.</p>
+      {% endif %}
     </div>
 
     <div class="panel">

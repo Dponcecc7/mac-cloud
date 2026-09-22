@@ -178,6 +178,40 @@ def reasignar_pdv(pdv_id, dni_nuevo, nombre_nuevo):
         session.close()
 
 
+def aplicar_reemplazos_vigentes(periodo):
+    """Persiste en la base el reemplazo vigente de cada PDV del período --
+    Davor, 2026-09-22: "puedes reemplazar los mercaderistas que han sido
+    reemplazados por su reemplazo". planning_del_periodo() ya resuelve
+    esto AL MOSTRAR la pantalla (y al exportar), sin tocar la base -- esto
+    es para el que además quiera dejarlo escrito de una vez en
+    `planning_pdv` (ej. si algo más adelante consulta esa tabla directo,
+    sin pasar por planning_del_periodo()). Devuelve la cantidad de filas
+    que realmente cambiaron -- 0 si ya estaba todo al día.
+
+    Es SEGURO correrlo de nuevo tantas veces como haga falta: una fila que
+    ya tiene al reemplazo vigente no vuelve a cambiar (dni_actual ==
+    dni_original en resolver_cadena_vigente())."""
+    session = get_session()
+    try:
+        filas = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo).all()
+        resueltos = resolver_cadena_vigente({p.dni_asignado for p in filas})
+        n_cambiados = 0
+        for p in filas:
+            r = resueltos.get(p.dni_asignado)
+            if r and r["cambio"]:
+                p.dni_asignado = r["dni"]
+                p.mercaderista_nombre = r["nombre"] or p.mercaderista_nombre
+                n_cambiados += 1
+        if n_cambiados:
+            session.commit()
+        return n_cambiados
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
     session = get_session()
     try:

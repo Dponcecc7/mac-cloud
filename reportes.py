@@ -29,9 +29,9 @@ from patron_recurrente import sin_acentos
 from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
-    guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle, pdvs_fuera_planning,
-    pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning, resumen_por_mercaderista,
-    valores_filtrables, visitas_tradicional,
+    aplicar_reemplazos_vigentes, guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle,
+    pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning,
+    resumen_por_mercaderista, valores_filtrables, visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
@@ -746,6 +746,19 @@ def planning_reasignar_pdv(pdv_id):
         flash(f'PDV {co_li} ({nombre_pdv or "sin nombre"}) reasignado a {nombre_nuevo.strip()}.', "ok")
     except ValueError as e:
         flash(str(e), "error")
+    return redirect(volver)
+
+
+@bp.post("/planning/aplicar-reemplazos")
+@requiere_pagina("reportes_planning")
+def planning_aplicar_reemplazos():
+    desde, hasta, periodo_str = _mes_desde_query()
+    volver = request.form.get("volver") or url_for("reportes.planning", mes=periodo_str)
+    n = aplicar_reemplazos_vigentes(desde)
+    if n:
+        flash(f"{n} PDV(s) de {periodo_str} actualizados al mercaderista que los reemplazó.", "ok")
+    else:
+        flash(f"Nada para actualizar en {periodo_str} -- ya estaba todo al día.", "ok")
     return redirect(volver)
 
 
