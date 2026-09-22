@@ -788,10 +788,21 @@ def planning_exportar():
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
 
     wb = openpyxl.Workbook()
-    ws1 = wb.active
-    ws1.title = "PDVs Pendientes"
+    ws0 = wb.active
+    ws0.title = "Mercaderista x Ciudad"
+    ws0.append(["Mercaderista", "DNI", "Otros DNI vistos (Excel inconsistente)", "Ciudad", "PDVs asignados", "PDVs pendientes", "% Cumplimiento"])
+    for celda in ws0[1]:
+        celda.font = Font(bold=True)
+    for m in por_mercaderista:
+        ws0.append(fila_segura([
+            m["mercaderista"], m["dni"], ", ".join(m["dni_variantes"]) or None, m["ciudad"],
+            m["pdvs_asignados"], m["pdvs_pendientes"], m["pct_cumplimiento"],
+        ]))
+
+    ws1 = wb.create_sheet("PDVs Pendientes")
     ws1.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor"])
     for celda in ws1[1]:
         celda.font = Font(bold=True)

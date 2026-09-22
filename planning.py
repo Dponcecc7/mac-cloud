@@ -10,6 +10,7 @@ Restringido a Davor (admin) y Kevin Llanos (analista, canal_asignado=TRADICIONAL
 importar qué filtro elija quien mira (a diferencia de Cobertura, acá no hay
 selector de canal)."""
 import datetime as dt
+from collections import Counter
 
 import pandas as pd
 
@@ -385,9 +386,10 @@ def pdvs_detalle(planning, v):
 
 def resumen_por_mercaderista(planning, pendientes):
     """Por (mercaderista, ciudad): cuántos PDVs tiene asignados en el
-    Planning del período y cuántos de esos le quedan pendientes de visitar
-    -- Davor, 2026-09-22: "agregar un resumen de mercaderista x ciudad con
-    la cantidad de PDVs que tiene para visitar".
+    Planning del período, cuántos de esos le quedan pendientes de visitar,
+    y su DNI -- Davor, 2026-09-22: "agregar un resumen de mercaderista x
+    ciudad con la cantidad de PDVs que tiene para visitar" + "agregar dni
+    y opción para exportar".
 
     Agrupa por NOMBRE normalizado (no por dni_asignado) -- primera versión
     agrupaba por dni_asignado para no mezclar 2 personas distintas que
@@ -403,23 +405,49 @@ def resumen_por_mercaderista(planning, pendientes):
     vigente (ver planning_del_periodo()) -- el riesgo real de juntar a 2
     personas distintas con el mismo nombre se acepta a propósito, es mucho
     menos común que la inconsistencia de tipeo del DNI en este Excel.
+
+    `ciudad` TAMBIÉN normalizada para agrupar (Davor, 2026-09-22) -- el
+    mismo problema de tipeo del Excel que partió a Jose Quiroz en 15 filas
+    partía también a alguien en 2 filas de "Chiclayo" si una fila tenía un
+    espacio de más o mayúsculas distintas en Ciudad (visto en pantalla:
+    "Gianella Tantalean" repetida 2 veces, ambas mostrando "Chiclayo").
+
+    `dni`: como el DNI SÍ puede variar fila a fila para el mismo
+    mercaderista (ver arriba), se muestra el más repetido del grupo: no es
+    un intento de "adivinar cuál es el correcto", solo el que más veces
+    aparece tal cual está en el Excel. `dni_variantes` lista los otros
+    DNIs distintos vistos en el mismo grupo, para poder avisar en pantalla
+    que hay inconsistencia en vez of esconderla.
+
     Reusa `pendientes` (ya calculado por pdvs_pendientes() en la misma
     request) en vez de volver a cruzar contra las visitas."""
     co_lis_pendientes = {p["co_li"] for p in pendientes}
     conteo = {}
     for p in planning:
         nombre_norm = (p.mercaderista_nombre or "").strip().upper()
-        clave = (nombre_norm, p.ciudad or "—")
-        fila = conteo.setdefault(clave, {"nombre": p.mercaderista_nombre, "asignados": 0, "pendientes": 0})
+        ciudad_norm = (p.ciudad or "").strip().upper()
+        clave = (nombre_norm, ciudad_norm)
+        fila = conteo.setdefault(clave, {
+            "nombre": p.mercaderista_nombre, "ciudad": p.ciudad or "—",
+            "asignados": 0, "pendientes": 0, "dnis": Counter(),
+        })
         fila["asignados"] += 1
         if p.co_li in co_lis_pendientes:
             fila["pendientes"] += 1
+        if p.dni_asignado:
+            fila["dnis"][p.dni_asignado] += 1
 
-    filas = [{
-        "mercaderista": v["nombre"] or "(Sin asignar)", "ciudad": ciudad,
-        "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
-        "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
-    } for (_nombre_norm, ciudad), v in conteo.items()]
+    filas = []
+    for v in conteo.values():
+        dnis_ordenados = v["dnis"].most_common()
+        dni_principal = dnis_ordenados[0][0] if dnis_ordenados else None
+        dni_variantes = [d for d, _n in dnis_ordenados[1:]]
+        filas.append({
+            "mercaderista": v["nombre"] or "(Sin asignar)", "ciudad": v["ciudad"],
+            "dni": dni_principal, "dni_variantes": dni_variantes,
+            "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
+            "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
+        })
     filas.sort(key=lambda f: (f["ciudad"], f["mercaderista"]))
     return filas
 

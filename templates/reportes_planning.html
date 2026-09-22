@@ -215,18 +215,24 @@
       {% if not por_mercaderista %}
         <p class="empty">Sin planning cargado para este período.</p>
       {% else %}
+      <a class="btn ghost" style="margin-bottom:10px; display:inline-block;" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel (incluye esta tabla)</a>
       <div class="table-wrap">
         <table id="tabla-mercaderista">
           <tr>
             <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'dni')">DNI <span class="flecha-orden" id="flecha-mercaderista-dni"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-mercaderista-ciudad"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'asignados')" data-numerico>PDVs asignados <span class="flecha-orden" id="flecha-mercaderista-asignados"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'pendientes')" data-numerico>PDVs pendientes <span class="flecha-orden" id="flecha-mercaderista-pendientes"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'cumplimiento')" data-numerico>% Cumplimiento <span class="flecha-orden" id="flecha-mercaderista-cumplimiento"></span></th>
           </tr>
           {% for m in por_mercaderista %}
-          <tr data-orden-mercaderista="{{ (m.mercaderista or '')|upper }}" data-orden-ciudad="{{ (m.ciudad or '')|upper }}" data-orden-asignados="{{ m.pdvs_asignados }}" data-orden-pendientes="{{ m.pdvs_pendientes }}" data-orden-cumplimiento="{{ m.pct_cumplimiento if m.pct_cumplimiento is not none else -1 }}">
+          <tr data-orden-mercaderista="{{ (m.mercaderista or '')|upper }}" data-orden-dni="{{ m.dni or '' }}" data-orden-ciudad="{{ (m.ciudad or '')|upper }}" data-orden-asignados="{{ m.pdvs_asignados }}" data-orden-pendientes="{{ m.pdvs_pendientes }}" data-orden-cumplimiento="{{ m.pct_cumplimiento if m.pct_cumplimiento is not none else -1 }}">
             <td>{{ m.mercaderista|title }}</td>
+            <td>
+              {{ m.dni or '—' }}
+              {% if m.dni_variantes %}<span style="color:var(--bad); font-size:11px; cursor:help;" title="El Excel trae también: {{ m.dni_variantes|join(', ') }} para el mismo mercaderista -- typo probable, conviene corregirlo en el Excel de origen.">⚠</span>{% endif %}
+            </td>
             <td>{{ (m.ciudad or '—')|title }}</td>
             <td>{{ m.pdvs_asignados }}</td>
             <td {{ 'class=celda-cero' if m.pdvs_pendientes > 0 else '' }}>{{ m.pdvs_pendientes }}</td>
