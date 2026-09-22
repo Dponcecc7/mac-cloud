@@ -125,22 +125,41 @@ def overrides_supervisor_canal(session, dnis, usuario_actual):
     puntual (Davor, 2026-08-29): un mercaderista compartido entre canales
     puede tener un supervisor real distinto por Tradicional que por
     Farmacia/AU, fijo por canal (no varía según qué canal le toque
-    trabajar ese día puntual, por eso no es PatronRecurrente). {} si el
-    usuario no tiene canal_asignado o no hay `dnis` que consultar -- la
-    inmensa mayoría de personas nunca tiene fila en persona_supervisor_canal,
-    así que en ese caso simplemente seguí usando Persona.supervisor_dni."""
-    canal_asignado = getattr(usuario_actual, "canal_asignado", None) if usuario_actual else None
-    if not canal_asignado or not dnis:
+    trabajar ese día puntual, por eso no es PatronRecurrente). {} si no hay
+    `dnis` que consultar -- la inmensa mayoría de personas nunca tiene fila
+    en persona_supervisor_canal, así que en ese caso simplemente seguí
+    usando Persona.supervisor_dni.
+
+    Sin canal_asignado (admin, o un analista sin canal fijo -- ve TODOS los
+    canales a la vez, ej. Reporte diario de Davor): no hay un solo canal
+    para elegir la fila correcta, pero si TODOS los canales de esa persona
+    ya apuntan al MISMO supervisor no hace falta desambiguar -- se usa ese
+    (Davor, 2026-09-22: Chaupi Cuba Marilin Cecilia, Multicanal
+    Farmacia+Autoservicio con el mismo supervisor Jesús Marquez en los 2,
+    aparecía SIN supervisor en Reporte diario porque antes esta función
+    devolvía {} entero para cualquiera sin canal_asignado). Si los
+    supervisores difieren entre canales, sigue sin resolver acá -- elegir
+    CUÁL de los 2 mostrar sin saber qué canal trabajó ese día puntual sería
+    inventar un dato, no resolver la ambigüedad."""
+    if not dnis:
         return {}
-    filas = (
-        session.query(PersonaSupervisorCanal.dni, PersonaSupervisorCanal.supervisor_dni)
-        .filter(
-            PersonaSupervisorCanal.dni.in_(dnis),
-            func.upper(PersonaSupervisorCanal.canal) == canal_asignado.strip().upper(),
+    canal_asignado = getattr(usuario_actual, "canal_asignado", None) if usuario_actual else None
+    if canal_asignado:
+        filas = (
+            session.query(PersonaSupervisorCanal.dni, PersonaSupervisorCanal.supervisor_dni)
+            .filter(
+                PersonaSupervisorCanal.dni.in_(dnis),
+                func.upper(PersonaSupervisorCanal.canal) == canal_asignado.strip().upper(),
+            )
+            .all()
         )
-        .all()
-    )
-    return dict(filas)
+        return dict(filas)
+    todos = todos_overrides_supervisor_canal(session, dnis)
+    return {
+        dni: pares[0][1]
+        for dni, pares in todos.items()
+        if len({supervisor_dni for _canal, supervisor_dni in pares}) == 1
+    }
 
 
 def todos_overrides_supervisor_canal(session, dnis):
