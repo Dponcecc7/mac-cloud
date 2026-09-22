@@ -14,7 +14,15 @@ Davor, 2026-09-21 -- tres reglas nuevas combinadas con lo anterior:
 3. Nueva alerta "cumplimiento_bajo": % Cumplimiento SIN faltas (elegido por
    Davor sobre el % normal, ver UMBRAL_CUMPLIMIENTO_BAJO) por debajo de 70%
    en el mes -- calculado automáticamente cada mes (no un conteo manual
-   acumulado), reusando horas_semanales.py."""
+   acumulado), reusando horas_semanales.py.
+
+Davor, 2026-09-22 -- "fusionar tardanza y cerca de alerta (tardanza)" /
+"Falta y Cerca de alerta (falta)": el aviso preventivo de "a una
+tardanza/falta de la alerta formal" (antes tipo "cerca_alerta_tardanza"/
+"cerca_alerta_falta", calculado aparte en recomendaciones.py) ahora es
+el mismo tipo "tardanza"/"falta" con nivel=0, un paso antes del umbral
+(cantidad == UMBRAL-1) -- un solo chip/criterio por métrica en vez de 2
+que confundían."""
 import datetime as dt
 import os
 import sys
@@ -201,7 +209,17 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             # mismo día tuvo tardanza UN día, no dos. Sin cambio para el 99%
             # de la gente (1 fila por día): nunique() == len() ahí.
             cantidad = grupo["fecha"].nunique()
-            if cantidad < UMBRAL:
+            # UMBRAL - 1 (no UMBRAL), Davor 2026-09-22 ("fusionar tardanza y
+            # cerca de alerta (tardanza)" / "Falta y Cerca de alerta
+            # (falta)") -- antes el aviso preventivo de "a una tardanza/
+            # falta de la alerta formal" vivía en recomendaciones.py como
+            # un tipo/chip APARTE (cerca_alerta_tardanza/cerca_alerta_falta),
+            # calculado con su propio loop sobre el mismo umbral -- 2 chips
+            # para la misma métrica que solo confundían ("¿no es lo
+            # mismo?"). Fusionado acá: mismo tipo "tardanza"/"falta",
+            # mismo cálculo, nivel=0 para el caso preventivo (cantidad ==
+            # UMBRAL-1) en vez de un tipo separado.
+            if cantidad < UMBRAL - 1:
                 continue
             nivel = cantidad // UMBRAL
             # Al llegar al máximo de memorándums (Davor, 2026-09-21: "máximo
@@ -209,11 +227,16 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             # pasa a ser un caso a observar para la renovación -- mismo
             # criterio de severidad que ya usan jornada_critica/sin_descanso.
             escalado = tipo == "tardanza" and nivel >= MAX_MEMORANDUM
-            mensaje = (
-                f"Observar renovación -- alcanzó el máximo de {MAX_MEMORANDUM} memorándums por tardanzas ({cantidad} este periodo)"
-                if escalado else
-                f"{mensaje_base} ({nivel}x -- {cantidad} {tipo}s este periodo)"
-            )
+            if nivel == 0:
+                mensaje = (
+                    f"A una tardanza de activar la alerta formal de memorándum ({cantidad} este periodo)"
+                    if tipo == "tardanza" else
+                    f"A una falta de activar la alerta formal de observación ({cantidad} este periodo)"
+                )
+            elif escalado:
+                mensaje = f"Observar renovación -- alcanzó el máximo de {MAX_MEMORANDUM} memorándums por tardanzas ({cantidad} este periodo)"
+            else:
+                mensaje = f"{mensaje_base} ({nivel}x -- {cantidad} {tipo}s este periodo)"
             alertas.append({
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": tipo,
                 "cantidad": cantidad, "nivel": nivel, "critico": escalado,

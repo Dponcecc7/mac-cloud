@@ -9,14 +9,13 @@ import datetime as dt
 
 import pandas as pd
 
-from alertas import SALIDA_ANTICIPADA_MIN, UMBRAL, _tiene_sustento
+from alertas import SALIDA_ANTICIPADA_MIN, _tiene_sustento
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from scoping import aplicar_filtros_extra, condicion_scope
 
-UMBRAL_CAIDA_PCT = 15  # puntos porcentuales de caída en % Cumplimiento sin faltas (B)
-UMBRAL_RIESGO_SEMANA_PCT = 80  # (D) -- mismo umbral "amarillo" que ya usa reporte_semanal.py
+UMBRAL_RIESGO_SEMANA_PCT = 80  # (B) -- mismo umbral "amarillo" que ya usa reporte_semanal.py
 
 # Resumen de perfil / puntaje del mes (Davor, 2026-08-24, pesos ajustados
 # 2026-08-24) -- 4 métricas del mes en curso, cada una normalizada a 0-100
@@ -35,13 +34,13 @@ def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
                      detalle=None):
     """Devuelve la lista de insights/alertas predictivas para el equipo
     visible de `usuario_actual` -- o para un solo `dni_filtro` (ficha
-    individual, el acceso ya se valida aparte). `desde` acota el bloque C
-    ("a un paso de la alerta formal", que cuenta sobre ese rango en vez de
-    forzar el mes calendario completo -- Davor, 2026-08-26: quería poder
-    filtrar Desempeño por días sueltos, no solo mes completo); default
-    `hasta.replace(day=1)` si no se pasa, igual que antes. `hasta` es la
-    fecha de referencia para "esta semana"/"días transcurridos" (default
-    hoy real). `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`:
+    individual, el acceso ya se valida aparte). `desde` ya no se usa acá
+    (el bloque que lo necesitaba, "a un paso de la alerta formal", se
+    fusionó dentro de alertas.py::alertas_periodo() -- Davor, 2026-09-22:
+    "fusionar tardanza y cerca de alerta (tardanza)") -- se mantiene en la
+    firma para no romper a quien ya lo pasa. `hasta` es la fecha de
+    referencia para "esta semana"/"días transcurridos" (default hoy real).
+    `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`:
     filtros extra de Reportes (solo admin/analista, ver scoping.aplicar_filtros_extra).
 
     `detalle` (Davor, 2026-09-01, 503 en Render por timeout): si ya se trajo
@@ -66,29 +65,8 @@ def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
     detalle = detalle.copy()
     detalle["semana_iso"] = detalle["fecha"].apply(lambda f: f.isocalendar()[1])
     semanas = sorted(detalle["semana_iso"].unique())
-    semanas_cerradas = [s for s in semanas if s != num_actual]
-
-    resumenes_semana = {}
-    for num_sem, grupo in detalle.groupby("semana_iso"):
-        resumenes_semana[num_sem] = resumen_por_persona(grupo).set_index("dni")
 
     tardanzas_semana = detalle[detalle["estado_base"] == "TARDANZA"].groupby(["dni", "semana_iso"]).size()
-
-    mes_desde = desde or hasta.replace(day=1)
-    detalle_mes = detalle[detalle["fecha"] >= pd.Timestamp(mes_desde)]
-    tardanzas_mes = detalle_mes[detalle_mes["estado_base"] == "TARDANZA"].groupby("dni").size()
-    # Mismo criterio que alertas.py: descanso médico/licencia/feriado
-    # regional tienen sustento, no cuentan para "a un paso de la alerta
-    # formal" (esa regla espeja directamente el umbral de alertas.py).
-    # Ojo: .apply() sobre una columna de 0 filas puede devolver un resultado
-    # con el índice roto (mismo bug ya encontrado en alertas.py) -- solo se
-    # filtra si hay algo que filtrar.
-    faltas_solo = detalle_mes[detalle_mes["estado_base"] == "FALTA"]
-    if len(faltas_solo):
-        faltas_sin_sustento = faltas_solo[~faltas_solo["comentario"].apply(_tiene_sustento)]
-    else:
-        faltas_sin_sustento = faltas_solo
-    faltas_mes = faltas_sin_sustento.groupby("dni").size()
 
     insights = []
     for dni in detalle["dni"].unique():
@@ -110,45 +88,7 @@ def insights_equipo(usuario_actual, dni_filtro=None, desde=None, hasta=None,
                     "detalle_fechas": [f.strftime("%d/%m") for f in fechas_t],
                 })
 
-        # B) Cumplimiento de horas en baja -- compara el promedio de las 2
-        # últimas semanas CERRADAS contra las 2 anteriores a esas (la semana
-        # en curso no cuenta, todavía no terminó).
-        semana_pct_cerradas = [
-            (s, resumenes_semana[s].loc[dni, "pct_cumplimiento_sin_faltas"])
-            for s in semanas_cerradas if dni in resumenes_semana[s].index
-        ]
-        semana_pct_cerradas = [(s, p) for s, p in semana_pct_cerradas if pd.notna(p)]
-        if len(semana_pct_cerradas) >= 4:
-            recientes, previas = semana_pct_cerradas[-2:], semana_pct_cerradas[-4:-2]
-            prom_recientes = sum(p for _, p in recientes) / len(recientes)
-            prom_previas = sum(p for _, p in previas) / len(previas)
-            caida = prom_previas - prom_recientes
-            if caida >= UMBRAL_CAIDA_PCT:
-                insights.append({
-                    "dni": dni, "nombre": nombre, "tipo": "cumplimiento_bajando", "icono": "📉", "severidad": "media",
-                    "mensaje": f"Cumplimiento de horas en baja — cayó {caida:.0f} puntos vs. 2 semanas atrás.",
-                    "detalle_semanas": [{"semana": f"S{s}", "pct": round(p, 1)} for s, p in (previas + recientes)],
-                })
-
-        # C) A un paso de la alerta formal (ver alertas.py, UMBRAL=3) --
-        # aviso preventivo antes de que se dispare la alerta de verdad.
-        t_mes, f_mes = int(tardanzas_mes.get(dni, 0)), int(faltas_mes.get(dni, 0))
-        if t_mes == UMBRAL - 1:
-            fechas_t_mes = sorted(detalle_mes[(detalle_mes["dni"] == dni) & (detalle_mes["estado_base"] == "TARDANZA")]["fecha"])
-            insights.append({
-                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta_tardanza", "icono": "⚠️", "severidad": "baja",
-                "mensaje": f"A una tardanza de activar la alerta formal de memorándum ({t_mes} este mes).",
-                "detalle_fechas": [f.strftime("%d/%m") for f in fechas_t_mes],
-            })
-        if f_mes == UMBRAL - 1:
-            fechas_f_mes = sorted(faltas_sin_sustento[faltas_sin_sustento["dni"] == dni]["fecha"])
-            insights.append({
-                "dni": dni, "nombre": nombre, "tipo": "cerca_alerta_falta", "icono": "🛑", "severidad": "baja",
-                "mensaje": f"A una falta de activar la alerta formal de observación ({f_mes} este mes).",
-                "detalle_fechas": [f.strftime("%d/%m") for f in fechas_f_mes],
-            })
-
-        # D) Riesgo de no llegar al objetivo de la semana en curso -- compara
+        # B) Riesgo de no llegar al objetivo de la semana en curso -- compara
         # horas trabajadas vs a trabajar SOLO de los días ya transcurridos
         # (no toda la semana, que penalizaría siempre hasta el sábado).
         avance = detalle[(detalle["dni"] == dni) & (detalle["semana_iso"] == num_actual) & (detalle["fecha"] <= pd.Timestamp(hasta))]

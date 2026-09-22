@@ -336,11 +336,14 @@ def _señal_como_alerta(i):
     usa alertas_periodo(), para poder mostrarlos en una sola lista (Davor,
     2026-09-22: "las alertas de la parte inferior se deben combinar con las
     de arriba"). Severidad -> nivel (para el orden y el badge), igual que
-    alertas.py usa nivel/critico. Ningún tipo de alerta real (tardanza,
-    falta, etc.) coincide con un tipo de señal, así que no hay choque de
-    colores/CSS -- las señales simplemente no tienen regla de color propia
-    y quedan con el borde neutro por defecto, distinguiéndose visualmente
-    de las alertas ya disparadas sin necesidad de una sección aparte."""
+    alertas.py usa nivel/critico. Ningún tipo de SEÑAL restante
+    (tardanza_creciente, riesgo_semana) coincide con un tipo de alerta
+    real, así que no hay choque de colores/CSS -- las señales simplemente
+    no tienen regla de color propia y quedan con el borde neutro por
+    defecto, distinguiéndose visualmente de las alertas ya disparadas sin
+    necesidad de una sección aparte. (Las que SÍ coincidían --
+    cerca_alerta_tardanza/cerca_alerta_falta -- se fusionaron dentro de
+    alertas.py::alertas_periodo() el mismo día, ver su docstring.)"""
     if "detalle_semanas" in i:
         fechas, motivos = [], [f"{d['semana']}: {d['pct']}%" for d in i["detalle_semanas"]]
     elif "detalle_dias" in i:
