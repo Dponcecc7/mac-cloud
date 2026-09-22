@@ -384,6 +384,40 @@ def pdvs_detalle(planning, v):
     return filas
 
 
+class _UnionFind:
+    """Union-Find mínimo (sin rank, con path compression) -- suficiente
+    para el volumen de este Planning (unos cientos de mercaderistas, no
+    millones de nodos)."""
+
+    def __init__(self):
+        self.padre = {}
+
+    def find(self, x):
+        self.padre.setdefault(x, x)
+        raiz = x
+        while self.padre[raiz] != raiz:
+            raiz = self.padre[raiz]
+        while self.padre[x] != raiz:
+            self.padre[x], x = raiz, self.padre[x]
+        return raiz
+
+    def union(self, a, b):
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self.padre[ra] = rb
+
+
+def _ciudad_normalizada(ciudad):
+    """None si `ciudad` es basura de tipeo (vacío, o solo puntuación/
+    espacios, ej. "." tal cual se vio en producción: "Jose Quiroz" con
+    Ciudad="." en el Excel) -- Davor, 2026-09-22: "porque ciudad sale
+    blanco". No es un bug de este código: el Excel de Planning trae eso
+    tal cual en esa fila -- esto solo evita mostrar el "." pelado y evita
+    que compita como una "ciudad" distinta de un simple campo vacío."""
+    texto = (ciudad or "").strip()
+    return texto if texto.strip(".-_/ ") else None
+
+
 def resumen_por_mercaderista(planning, pendientes):
     """Por (mercaderista, ciudad): cuántos PDVs tiene asignados en el
     Planning del período, cuántos de esos le quedan pendientes de visitar,
@@ -391,59 +425,79 @@ def resumen_por_mercaderista(planning, pendientes):
     ciudad con la cantidad de PDVs que tiene para visitar" + "agregar dni
     y opción para exportar".
 
-    Agrupa por NOMBRE normalizado (no por dni_asignado) -- primera versión
-    agrupaba por dni_asignado para no mezclar 2 personas distintas que
-    compartan nombre por coincidencia, pero eso reventó en producción con
-    el dato real: el Excel de Planning trae 1 fila por PDV tipeada a mano,
-    y un mismo mercaderista (ej. "Jose Quiroz") terminaba con un DNI
-    LIGERAMENTE distinto tipeado en cada fila (typo/copiar-pegar, la
-    columna DNI del Excel no es confiable fila a fila) -- salía partido en
-    ~15 filas de "1 PDV" en vez de sus PDVs sumados en una sola fila
-    (Davor, 2026-09-22: "porque aparece un mercaderista así con 1 PDV").
-    El nombre, en cambio, sí venía consistente en todas sus filas. Sigue
-    usando dni_asignado/mercaderista_nombre YA RESUELTOS al reemplazo
-    vigente (ver planning_del_periodo()) -- el riesgo real de juntar a 2
-    personas distintas con el mismo nombre se acepta a propósito, es mucho
-    menos común que la inconsistencia de tipeo del DNI en este Excel.
+    Identifica a cada mercaderista con un Union-Find sobre NOMBRE
+    normalizado Y dni_asignado -- dos filas del Excel son "la misma
+    persona" si comparten el nombre normalizado O el DNI (o ambos),
+    encadenado transitivamente. Ni el nombre ni el DNI solos alcanzan en
+    este Excel (1 fila tipeada a mano por PDV):
+    - Agrupar solo por DNI partía a "Jose Quiroz" en ~15 filas de 1 PDV
+      porque el DNI traía un typo distinto en cada fila (hallazgo real,
+      2026-09-22).
+    - Agrupar SOLO por nombre (el fix de ese día) resultaba en el problema
+      inverso: si en ALGUNAS filas el nombre también venía escrito
+      distinto pero el DNI sí calzaba con otras filas suyas, esas filas
+      quedaban afuera de su grupo -- "Eddie Macalopu tiene más clientes en
+      el Planning" de lo que mostraba esta tabla (Davor, 2026-09-22).
+    El Union-Find une ambos criterios transitivamente: si la fila A
+    comparte nombre con B, y B comparte DNI con C, las 3 quedan en el
+    mismo grupo aunque A y C no compartan nada directamente entre sí.
 
-    `ciudad` TAMBIÉN normalizada para agrupar (Davor, 2026-09-22) -- el
-    mismo problema de tipeo del Excel que partió a Jose Quiroz en 15 filas
-    partía también a alguien en 2 filas de "Chiclayo" si una fila tenía un
-    espacio de más o mayúsculas distintas en Ciudad (visto en pantalla:
-    "Gianella Tantalean" repetida 2 veces, ambas mostrando "Chiclayo").
+    `ciudad` también agrupa por su forma normalizada (mismo criterio,
+    evita que un espacio/mayúscula de más la parta en 2 filas -- caso
+    real: "Gianella Tantalean" repetida 2 veces bajo "Chiclayo"). Un
+    Ciudad vacío o solo puntuación (ver _ciudad_normalizada()) cae en el
+    bucket "—", no compite como ciudad real.
 
-    `dni`: como el DNI SÍ puede variar fila a fila para el mismo
-    mercaderista (ver arriba), se muestra el más repetido del grupo: no es
-    un intento de "adivinar cuál es el correcto", solo el que más veces
-    aparece tal cual está en el Excel. `dni_variantes` lista los otros
-    DNIs distintos vistos en el mismo grupo, para poder avisar en pantalla
-    que hay inconsistencia en vez of esconderla.
+    `dni`/`mercaderista`: el más repetido del grupo (Counter.most_common)
+    -- no es "adivinar cuál es el correcto", solo el más frecuente tal
+    cual aparece en el Excel. Las variantes de DNI se listan en
+    `dni_variantes` para avisar la inconsistencia en vez de esconderla.
 
     Reusa `pendientes` (ya calculado por pdvs_pendientes() en la misma
     request) en vez de volver a cruzar contra las visitas."""
+    uf = _UnionFind()
+    for p in planning:
+        nombre_norm = (p.mercaderista_nombre or "").strip().upper()
+        if nombre_norm and p.dni_asignado:
+            uf.union(("nombre", nombre_norm), ("dni", p.dni_asignado))
+        elif nombre_norm:
+            uf.find(("nombre", nombre_norm))
+        elif p.dni_asignado:
+            uf.find(("dni", p.dni_asignado))
+
+    def _grupo_persona(p):
+        nombre_norm = (p.mercaderista_nombre or "").strip().upper()
+        if nombre_norm:
+            return uf.find(("nombre", nombre_norm))
+        if p.dni_asignado:
+            return uf.find(("dni", p.dni_asignado))
+        return ("sin_asignar",)
+
     co_lis_pendientes = {p["co_li"] for p in pendientes}
     conteo = {}
     for p in planning:
-        nombre_norm = (p.mercaderista_nombre or "").strip().upper()
-        ciudad_norm = (p.ciudad or "").strip().upper()
-        clave = (nombre_norm, ciudad_norm)
+        ciudad_norm = _ciudad_normalizada(p.ciudad)
+        clave = (_grupo_persona(p), (ciudad_norm or "—").upper())
         fila = conteo.setdefault(clave, {
-            "nombre": p.mercaderista_nombre, "ciudad": p.ciudad or "—",
-            "asignados": 0, "pendientes": 0, "dnis": Counter(),
+            "ciudad": ciudad_norm or "—", "asignados": 0, "pendientes": 0,
+            "dnis": Counter(), "nombres": Counter(),
         })
         fila["asignados"] += 1
         if p.co_li in co_lis_pendientes:
             fila["pendientes"] += 1
         if p.dni_asignado:
             fila["dnis"][p.dni_asignado] += 1
+        if p.mercaderista_nombre:
+            fila["nombres"][p.mercaderista_nombre] += 1
 
     filas = []
     for v in conteo.values():
         dnis_ordenados = v["dnis"].most_common()
         dni_principal = dnis_ordenados[0][0] if dnis_ordenados else None
         dni_variantes = [d for d, _n in dnis_ordenados[1:]]
+        nombre_principal = v["nombres"].most_common(1)[0][0] if v["nombres"] else None
         filas.append({
-            "mercaderista": v["nombre"] or "(Sin asignar)", "ciudad": v["ciudad"],
+            "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": v["ciudad"],
             "dni": dni_principal, "dni_variantes": dni_variantes,
             "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
             "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
