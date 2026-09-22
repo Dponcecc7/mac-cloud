@@ -204,8 +204,8 @@
               {% if vista == 'reporte' %}<th style="width:4.5%">Entrada corregida</th><th style="width:4.5%">Salida corregida</th>{% endif %}
             </tr>
             {% for f in filas %}
-            {% set eb = (f.estado or '').split(' (')[0] %}
-            {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+            {% set eb = f.estado_efectivo %}
+            {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'ASISTIÓ':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
             {% set pendiente = f.entrada_pendiente or f.salida_pendiente %}
             {% set estado_tags = eb_corto + (',Pendiente confirmar hora' if pendiente else '') %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
@@ -223,7 +223,7 @@
               <td>{{ f.entrada_prog or '' }}</td>
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
-                <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
+                <span class="badge {{ {'ASISTIÓ A TIEMPO':'ok','ASISTIÓ':'ok','TARDANZA':'warn','FALTA':'bad'}.get(eb, 'neutro') }}">{{ eb_corto }}</span>
                 {% if pendiente %}<span class="badge warn" style="margin-left:4px;" title="Falta confirmar la hora real -- escribila en Entrada/Salida corregida">⚠ Confirmar</span>{% endif %}
               </td>
               <td>

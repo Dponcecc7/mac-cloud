@@ -360,6 +360,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         supervisor_dni_efectivo = overrides_sup.get(c.dni, p.supervisor_dni) if p else None
         supervisor_nombre = nombre_supervisor_de.get(supervisor_dni_efectivo) if supervisor_dni_efectivo else None
         salida_anticipada = fuente_salida.salida_anticipada_min if fuente_salida else None
+        comentario_entrada_val = _homologar_motivo(override_entrada.get(c.dni, c.comentario_supervisor)) or ""
         filas.append({
             "dni": c.dni,
             "mercaderista": nombre_de.get(c.dni, c.dni),
@@ -380,10 +381,19 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             "entrada_real": c.entrada_real,
             "entrada_corregida": c.fuente_dato == "Corregido manualmente (Tabla 3)",
             "estado": c.estado,
+            # estado_efectivo (Davor, 2026-09-22: "aparece como Asistió, pero
+            # en el reporte diario sale como Falta") -- MISMO problema que ya
+            # se había resuelto para "Faltas/Vacaciones/Vacantes de hoy" en
+            # Marcar asistencia (ver _estado_para_mostrar): una corrección
+            # recién guardada (override_entrada, vía CorreccionWeb) recién se
+            # refleja en `c.estado` en la PRÓXIMA corrida del pipeline -- acá
+            # también hay que reconciliar contra el comentario ya cargado,
+            # no solo en ese panel puntual.
+            "estado_efectivo": _estado_para_mostrar(c.estado, comentario_entrada_val),
             # _homologar_motivo() saca el prefijo redundante "Falta" (el
             # badge de Estado ya dice "Falta"), tolerando variantes de
             # formato -- ver docstring de la función.
-            "comentario_entrada": _homologar_motivo(override_entrada.get(c.dni, c.comentario_supervisor)) or "",
+            "comentario_entrada": comentario_entrada_val,
             "salida_prog": fuente_salida.salida_esperada if fuente_salida else None,
             "salida_real": fuente_salida.salida_real if fuente_salida else None,
             "salida_corregida": bool(fuente_salida and fuente_salida.fuente_dato == "Corregido manualmente (Tabla 3)"),
@@ -590,7 +600,7 @@ def _faltas_vacaciones_vacantes(filas):
         if _estado_base(f["estado"]) in ("FALTA", "VACANTE", "VACACIONES") and not _es_pendiente(f)
     ]
     for f in seleccionadas:
-        f["estado_efectivo"] = _estado_para_mostrar(f["estado"], f.get("comentario_entrada"))
+        f.setdefault("estado_efectivo", _estado_para_mostrar(f["estado"], f.get("comentario_entrada")))
     return sorted(seleccionadas, key=lambda f: (f["estado_efectivo"], f["mercaderista"]))
 
 
