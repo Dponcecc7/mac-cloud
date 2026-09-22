@@ -31,6 +31,17 @@
   --accent2:#a78bfa; --accent2-bg:#2e1f57;
 }
 
+/* ---- Header fijo al hacer scroll (Davor, 2026-09-22: "que el panel
+   celeste sea fijo cuando se desliza hacia abajo") -- cada template ya
+   trae su propio `header.top { background:...; padding:...; }`; acá solo
+   se agrega el `position`/`z-index` que le falta, sin reescribir los 24
+   templates que lo usan. `position:sticky` (no `fixed`) para no tener que
+   agregar padding-top compensatorio en cada página -- el header sigue
+   ocupando su lugar en el flujo normal, solo se "pega" arriba recién
+   cuando el scroll lo alcanza. z-index por debajo de #mac-progress
+   (9999, la barra de carga) pero por encima del contenido normal. */
+header.top { position:sticky; top:0; z-index:500; }
+
 /* ---- Toggle de tema (boton en el nav de cada pagina) ------------------ */
 .theme-toggle {
   background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); color:#eaf3fb;
