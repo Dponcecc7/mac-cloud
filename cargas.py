@@ -440,14 +440,19 @@ def headcount_submit():
                 for dni, row in ((_dni(r["DNI"]), r) for _, r in p.iterrows())
                 if dni in dnis_propios
             ]
-            # Se borra SOLO (dni, dia_semana) que se va a re-insertar, no
-            # todo el patron del dni -- antes un upload PARCIAL (ej. Yeny
-            # sube solo lunes/miércoles/viernes de un compartido) borraba
-            # también los días de Diego que no venían en su archivo. Con
-            # esto, cada analista solo toca los días que trae su propio
-            # Excel, sin importar de quién sean los demás días.
-            for dni, dia, *_r in filas_patron:
-                session.query(PatronRecurrente).filter_by(dni=dni, dia_semana=dia).delete()
+            # Se borra SOLO (dni, dia_semana, canal_dia) que se va a
+            # re-insertar, no todo el patron del dni -- antes un upload
+            # PARCIAL (ej. Yeny sube solo lunes/miércoles/viernes de un
+            # compartido) borraba también los días de Diego que no venían
+            # en su archivo. Con esto, cada analista solo toca los días que
+            # trae su propio Excel, sin importar de quién sean los demás
+            # días. canal_dia en el filtro (Davor, 2026-09-22, soporte de 2
+            # turnos/día) -- sin esto, un Multicanal con turno Farmacia
+            # (subido por Diego) y turno Autoservicio (subido por Yeny) el
+            # MISMO día de semana: re-subir el Excel de cualquiera de los 2
+            # borraba también la fila del OTRO canal, no solo la propia.
+            for dni, dia, _hora_ent, _hora_sal, canal_dia, _refrigerio in filas_patron:
+                session.query(PatronRecurrente).filter_by(dni=dni, dia_semana=dia, canal_dia=canal_dia).delete()
             session.flush()
             for dni, dia, hora_ent, hora_sal, canal_dia, refrigerio in filas_patron:
                 session.add(PatronRecurrente(
