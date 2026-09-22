@@ -30,8 +30,8 @@ from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle, pdvs_fuera_planning,
-    pdvs_pendientes, periodos_disponibles, resumen_planning, resumen_por_mercaderista, valores_filtrables,
-    visitas_tradicional,
+    pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning, resumen_por_mercaderista,
+    valores_filtrables, visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
@@ -655,6 +655,20 @@ def planning_cargar():
 
     flash(f"Planning de {periodo_carga_str} cargado: {n} PDVs.", "ok")
     return redirect(url_for("reportes.planning", mes=periodo_carga_str))
+
+
+@bp.post("/planning/pdv/<int:pdv_id>/reasignar")
+@requiere_pagina("reportes_planning")
+def planning_reasignar_pdv(pdv_id):
+    volver = request.form.get("volver") or url_for("reportes.planning")
+    dni_nuevo = request.form.get("dni_asignado", "")
+    nombre_nuevo = request.form.get("mercaderista_nombre", "")
+    try:
+        co_li, nombre_pdv = reasignar_pdv(pdv_id, dni_nuevo, nombre_nuevo)
+        flash(f'PDV {co_li} ({nombre_pdv or "sin nombre"}) reasignado a {nombre_nuevo.strip()}.', "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(volver)
 
 
 @bp.get("/planning/plantilla.xlsx")

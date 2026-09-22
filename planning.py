@@ -142,6 +142,42 @@ def guardar_planning(df, periodo, cargado_por):
         session.close()
 
 
+def reasignar_pdv(pdv_id, dni_nuevo, nombre_nuevo):
+    """Corrige a mano el DNI/mercaderista de UN PDV puntual del Planning ya
+    cargado -- Davor, 2026-09-22: "puedo tener opción de editar el
+    planning?", después de encontrar el caso real de Jose Quiroz con un
+    DNI mal tipeado en una fila del Excel (ver resumen_por_mercaderista()).
+    Corregir acá 1 fila no hace falta re-subir el Excel completo del mes.
+
+    OJO: guardar_planning() BORRA y vuelve a insertar TODAS las filas del
+    período en cada carga (ver su docstring) -- si alguien re-sube el
+    Excel de ese mismo mes más adelante, esta corrección puntual se pierde
+    igual que si nunca se hubiera hecho, porque la fila vieja (con este
+    `pdv_id`) ya no existe. Sirve para corregir sin re-subir, no reemplaza
+    corregir el Excel de origen si se va a volver a cargar ese mes."""
+    dni_nuevo = (dni_nuevo or "").strip() or None
+    nombre_nuevo = (nombre_nuevo or "").strip() or None
+    if not nombre_nuevo:
+        raise ValueError("El nombre del mercaderista no puede quedar vacío.")
+    if dni_nuevo and not dni_nuevo.isdigit():
+        raise ValueError(f'"{dni_nuevo}" no es un DNI válido -- solo dígitos.')
+
+    session = get_session()
+    try:
+        pdv = session.get(PlanningPdv, pdv_id)
+        if pdv is None:
+            raise ValueError(f"No se encontró el PDV #{pdv_id}.")
+        pdv.dni_asignado = dni_nuevo
+        pdv.mercaderista_nombre = nombre_nuevo
+        session.commit()
+        return pdv.co_li, pdv.nombre_pdv
+    except ValueError:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
     session = get_session()
     try:
@@ -268,8 +304,8 @@ def pdvs_pendientes(planning, v):
     pendientes = [p for p in planning if p.co_li not in visitados]
     pendientes.sort(key=lambda p: (p.nombre_pdv or ""))
     return [{
-        "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-        "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
+        "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
+        "region": p.region, "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
         "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
     } for p in pendientes]
 
@@ -294,8 +330,8 @@ def pdvs_detalle(planning, v):
         realizadas = int(conteo.get(p.co_li, 0))
         planificadas = int(p.dias_programados or 0)
         filas.append({
-            "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-            "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
+            "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
+            "region": p.region, "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
             "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
             "visitas_planificadas": planificadas, "visitas_realizadas": realizadas,
             "pct_cumplimiento": round(realizadas / planificadas * 100, 1) if planificadas else None,

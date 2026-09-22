@@ -251,6 +251,9 @@
             <td>
               {{ (p.mercaderista or '—')|title }}
               {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
+              {% if usuario.rol in ("analista", "admin") %}
+              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
+              {% endif %}
             </td>
             <td>{{ (p.supervisor or '—')|title }}</td>
           </tr>
@@ -285,6 +288,9 @@
             <td>
               {{ (p.mercaderista or '—')|title }}
               {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
+              {% if usuario.rol in ("analista", "admin") %}
+              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
+              {% endif %}
             </td>
             <td>{{ p.visitas_planificadas }}</td>
             <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
@@ -329,6 +335,46 @@
       {% endif %}
     </div>
   </div>
+
+<dialog id="dlg-editar-pdv" style="border:none; border-radius:14px; padding:0; max-width:380px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
+  <form method="post" id="form-editar-pdv" style="padding:20px 22px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">
+    <p style="margin:0 0 4px; font-weight:700; font-size:14px;">Reasignar PDV</p>
+    <p id="dlg-editar-pdv-info" style="margin:0 0 14px; font-size:12px; color:var(--muted);"></p>
+    <label style="display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px;">DNI del mercaderista</label>
+    <input type="text" name="dni_asignado" id="dlg-editar-pdv-dni" class="ipt-filtro" style="width:100%; margin-bottom:12px; font:inherit; font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid var(--line);">
+    <label style="display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px;">Nombre del mercaderista</label>
+    <input type="text" name="mercaderista_nombre" id="dlg-editar-pdv-nombre" required style="width:100%; margin-bottom:14px; font:inherit; font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid var(--line);">
+    <p class="note" style="margin:0 0 14px;">Corrige solo este PDV puntual -- si el Excel de Planning de este mes se vuelve a subir más adelante, esta corrección se pierde (la carga reemplaza todas las filas del mes).</p>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" id="dlg-editar-pdv-cancelar" class="btn ghost" style="padding:8px 16px;">Cancelar</button>
+      <button type="submit" class="btn primary" style="padding:8px 16px;">Guardar</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dlg = document.getElementById('dlg-editar-pdv');
+    var form = document.getElementById('form-editar-pdv');
+    var info = document.getElementById('dlg-editar-pdv-info');
+    var inputDni = document.getElementById('dlg-editar-pdv-dni');
+    var inputNombre = document.getElementById('dlg-editar-pdv-nombre');
+
+    window.abrirEditarPdv = function (pdvId, coLi, nombrePdv, dniActual, nombreActual) {
+      form.action = '/reportes/planning/pdv/' + pdvId + '/reasignar';
+      info.textContent = (nombrePdv || 'PDV') + ' (CO_LI ' + coLi + ')';
+      inputDni.value = dniActual || '';
+      inputNombre.value = nombreActual || '';
+      dlg.showModal();
+      inputNombre.focus();
+    };
+
+    document.getElementById('dlg-editar-pdv-cancelar').addEventListener('click', function () {
+      dlg.close('cancelar');
+    });
+  })();
+</script>
 
 <script>
 var ordenActual = {};
