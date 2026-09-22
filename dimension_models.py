@@ -103,7 +103,14 @@ class PatronRecurrente(Base):
     canal_dia = Column(String(50))
     refrigerio = Column(String(30))
 
-    __table_args__ = (UniqueConstraint("dni", "dia_semana", name="uq_patron_dni_dia"),)
+    # dni+dia_semana+canal_dia, no solo dni+dia_semana (Davor, 2026-09-22) --
+    # un Multicanal puede tener DOS turnos genuinos el mismo día de semana
+    # (ej. Farmacia 07-12 y Autoservicio 13-18, cada uno con su propio
+    # horario), así que dos filas que difieren solo en canal_dia son válidas
+    # a propósito. canal_dia nunca es NULL en la práctica (cargas.py usa
+    # Persona.canal como respaldo si viene vacío), así que ensanchar el
+    # constraint no rompe ninguna fila existente.
+    __table_args__ = (UniqueConstraint("dni", "dia_semana", "canal_dia", name="uq_patron_dni_dia_canal"),)
 
 
 class PersonaSupervisorCanal(Base):

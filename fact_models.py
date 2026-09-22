@@ -22,6 +22,12 @@ class ClasificacionDiaria(Base):
     fecha = Column(Date, nullable=False)
     dia_semana = Column(String(15))
     canal_esperado = Column(String(50))
+    # canal_turno (Davor, 2026-09-22, soporte de 2 turnos/día para
+    # Multicanal): igual a canal_esperado para el 99% de la gente (1 solo
+    # turno) -- separado como su propia columna, no reusar canal_esperado
+    # a secas, para poder ensanchar el UniqueConstraint sin ambigüedad y
+    # para que sobreviva si algún día canal_esperado cambia de semántica.
+    canal_turno = Column(String(50))
     canales_marcados = Column(String(200))
     entrada_esperada = Column(String(10))  # texto "HH:MM:SS", igual que el Excel -- evita ambiguedad de TIME con NULL/formatos
     entrada_real = Column(String(10))
@@ -36,7 +42,10 @@ class ClasificacionDiaria(Base):
     alerta_analista = Column(Boolean, default=False)
     procesado_en = Column(TIMESTAMP, server_default=func.now())
 
-    __table_args__ = (UniqueConstraint("dni", "fecha", name="uq_clasificacion_dni_fecha"),)
+    # dni+fecha+canal_turno, no solo dni+fecha -- mismo motivo que
+    # PatronRecurrente (dimension_models.py): un Multicanal de 2 turnos
+    # genera 2 filas el mismo día, una por canal.
+    __table_args__ = (UniqueConstraint("dni", "fecha", "canal_turno", name="uq_clasificacion_dni_fecha_canal"),)
 
 
 def crear_tablas():
