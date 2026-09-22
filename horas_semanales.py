@@ -23,7 +23,7 @@ import pandas as pd
 from alertas import _tiene_sustento, SALIDA_ANTICIPADA_MIN
 from dimension_models import Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
-from patron_recurrente import cargar_patron_recurrente, sin_acentos, WD_NORM
+from patron_recurrente import cargar_patron_recurrente, canal_para_historial, sin_acentos, valor_patron_para_canal, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -172,12 +172,15 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
 
     def _refrigerio_min_para(row):
         dia_norm = WD_NORM.get(row["fecha"].weekday())
-        # canal_esperado en la clave (Davor, 2026-09-22, 2 turnos/día) --
-        # un Multicanal puede tener un refrigerio distinto por turno, ver
-        # cargar_patron_recurrente(). Para el 99% de la gente (1 turno) esto
-        # es la misma clave de siempre, solo con el canal ya puesto.
-        valor_patron = refrigerio_map.get((row["dni"], dia_norm, row["canal_esperado"]))
-        valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron, canal=row["canal_esperado"])
+        # canal en la clave (Davor, 2026-09-22, 2 turnos/día) -- un
+        # Multicanal puede tener un refrigerio distinto por turno, ver
+        # cargar_patron_recurrente(). canal_esperado puede venir COMPUESTO
+        # ("Autoservicio, Tradicional", turno que cubre varios canales con
+        # el MISMO horario -- caso real Maritza) -- valor_patron_para_canal()
+        # prueba cada canal del compuesto. Para el 99% de la gente (1 turno,
+        # 1 canal) esto es la misma clave de siempre.
+        valor_patron = valor_patron_para_canal(refrigerio_map, row["dni"], dia_norm, row["canal_esperado"])
+        valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron, canal=canal_para_historial(row["canal_esperado"]))
         return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
     r["_refrigerio_min"] = r.apply(_refrigerio_min_para, axis=1)

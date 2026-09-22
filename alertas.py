@@ -24,7 +24,7 @@ import pandas as pd
 from cobertura import alertas_cobertura
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
-from patron_recurrente import cargar_patron_recurrente, dnis_con_domingo, sin_acentos, WD_NORM
+from patron_recurrente import cargar_patron_recurrente, canal_para_historial, dnis_con_domingo, sin_acentos, valor_patron_para_canal, WD_NORM
 from scoping import aplicar_filtros_extra, condicion_scope
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -65,10 +65,12 @@ def _fmt_min(minutos):
 
 def _refrigerio_min_para(row, refrigerio_map, idx_historial):
     dia_norm = WD_NORM.get(row.fecha.weekday())
-    # canal_esperado en la clave (Davor, 2026-09-22, 2 turnos/día) -- ver
-    # cargar_patron_recurrente(). Sin cambio para el 99% de la gente (1 turno).
-    valor_patron = refrigerio_map.get((row.dni, dia_norm, row.canal_esperado))
-    valor_final = valor_efectivo(idx_historial, row.dni, "Refrigerio", row.fecha, valor_patron, canal=row.canal_esperado)
+    # canal en la clave (Davor, 2026-09-22, 2 turnos/día) -- ver
+    # cargar_patron_recurrente(). canal_esperado puede venir COMPUESTO
+    # ("Autoservicio, Tradicional", caso real Maritza) -- valor_patron_para_canal()
+    # prueba cada canal del compuesto. Sin cambio para el 99% de la gente (1 turno).
+    valor_patron = valor_patron_para_canal(refrigerio_map, row.dni, dia_norm, row.canal_esperado)
+    valor_final = valor_efectivo(idx_historial, row.dni, "Refrigerio", row.fecha, valor_patron, canal=canal_para_historial(row.canal_esperado))
     return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
 

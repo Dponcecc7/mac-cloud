@@ -142,36 +142,58 @@ def _parse_hora_corregida(valor, dni, fecha, lado):
     return pd.NaT
 
 
-def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial, canales_programados_hoy=None):
+def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial, canales_programados_hoy=None, canales_turno=None):
     """Calcula la fila de un dia-persona-TURNO. Copiada TAL CUAL de
     MAC/motor_clasificacion_diaria.py -- no tocar sin revisar el original
     primero (ver docstring del modulo), EXCEPTO por `canales_programados_hoy`
-    (Davor, 2026-09-22, soporte de 2 turnos/día para Multicanal -- caso real
-    dni 73897404): el set de TODOS los canales que esta persona tiene
-    programados hoy (1 elemento para el 99% de la gente, 2 si es un
-    Multicanal con turno AM/PM real). None (valor por default, usado por
-    los tests existentes que llaman esta función con 1 solo pat) equivale a
-    "solo este canal" -- cero cambio de comportamiento para 1 turno."""
-    # Canal primero (Davor, 2026-09-22, soporte de 2 turnos/día) -- hace
-    # falta saberlo ANTES de pedir entrada/salida esperada, para que un
-    # override de Historial puntual de un solo turno de un Multicanal
-    # (ver valor_efectivo()) no se le aplique también al otro turno.
-    canal_esp_norm = str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, pat[col_canal_dia])).strip()
-    entrada_esp = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha, pat[col_ent], canal=canal_esp_norm)
-    salida_esp = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha, pat[col_sal], canal=canal_esp_norm)
-    canales_hoy_todos = canales_programados_hoy if canales_programados_hoy else {canal_esp_norm}
+    y `canales_turno` (Davor, 2026-09-22, soporte de 2 turnos/día).
+
+    `canales_turno`: el set de canales que representa ESTA fila/turno --
+    1 elemento para el 99% de la gente, o VARIOS si un turno cubre más de
+    un canal con el MISMO horario (caso real: Maritza, dni 46064286, "los
+    días lunes/miércoles/viernes ve Tradicional Y Autoservicio" -- un solo
+    horario compartido, no 2 horarios distintos). None (default, usado por
+    los tests existentes) = se deriva como antes, un solo canal desde
+    pat[col_canal_dia].
+
+    `canales_programados_hoy`: el set de TODOS los canales que esta persona
+    tiene programados hoy, sumando TODOS sus turnos/grupos de ese día (para
+    "trabajó en canal distinto"). None = igual a `canales_turno` -- ningún
+    otro turno hoy."""
+    if canales_turno:
+        canales_turno = set(canales_turno)
+        # Solo con un único canal en el turno tiene sentido buscar un
+        # override de Historial ESPECÍFICO de ese canal -- un turno que ya
+        # cubre varios canales (caso Maritza) no tiene una identidad de
+        # canal única a la que apuntar, así que solo ve overrides genéricos
+        # (sin canal), igual que el 99% de la gente.
+        canal_para_historial = next(iter(canales_turno)) if len(canales_turno) == 1 else None
+        canal_esp_norm = ", ".join(sorted(canales_turno))
+    else:
+        # Camino de siempre (compat con llamadores/tests que no pasan
+        # canales_turno): un solo canal, derivado de Historial de cambios
+        # igual que antes de esta feature.
+        canal_esp_norm = str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, pat[col_canal_dia])).strip()
+        canales_turno = {canal_esp_norm}
+        canal_para_historial = canal_esp_norm
+    entrada_esp = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha, pat[col_ent], canal=canal_para_historial)
+    salida_esp = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha, pat[col_sal], canal=canal_para_historial)
+    canales_hoy_todos = set(canales_programados_hoy) if canales_programados_hoy else canales_turno
 
     visitas_dia_todas = v[(v["nro_documento"] == dni) & (v["fecha_inicio_dt"] == fecha)]
-    if len(canales_hoy_todos) > 1:
-        # 2 turnos genuinos hoy -- cada turno solo ve las visitas de SU
-        # propio canal para entrada/salida real (filtrar por canal es más
-        # robusto que inferir por franja horaria: el canal ya es un tag
-        # inequívoco en cada visita, un horario que se solapa unos minutos
-        # no lo es). El camino de 1 solo turno NUNCA entra acá -- ver abajo.
-        visitas_dia = visitas_dia_todas[visitas_dia_todas["canal_visita"] == canal_esp_norm]
+    if canales_hoy_todos != canales_turno:
+        # Turno de horario propio dentro de un día con VARIOS turnos/grupos
+        # -- solo ve las visitas de SUS PROPIOS canales para entrada/salida
+        # real (filtrar por canal es más robusto que inferir por franja
+        # horaria: el canal ya es un tag inequívoco en cada visita, un
+        # horario que se solapa unos minutos no lo es). El camino de 1 solo
+        # turno/grupo hoy (99% de la gente, y también el caso Maritza --
+        # 1 solo turno que cubre 2 canales) NUNCA entra acá -- ver abajo.
+        visitas_dia = visitas_dia_todas[visitas_dia_todas["canal_visita"].isin(canales_turno)]
     else:
-        # Camino de 1 solo turno (la inmensa mayoría) -- CERO cambio de
-        # comportamiento respecto a antes de esta feature.
+        # Camino de 1 solo turno/grupo hoy -- CERO cambio de comportamiento
+        # respecto a antes de esta feature, sea que cubra 1 canal (99% de
+        # la gente) o varios con el mismo horario (caso Maritza).
         visitas_dia = visitas_dia_todas
     visitas_validas = visitas_dia[visitas_dia["geofence_ok"]]
     salida_anticipada = None
@@ -375,16 +397,31 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
     if sin_marcacion_valida and fuente == "Aplicativo":
         alerta_analista = True
 
-    trabajo_otro_canal = len(canales_marcados) > 0 and canal_esp_norm not in canales_marcados
-    if len(canales_hoy_todos) > 1:
-        # Multicanal (Davor, 2026-09-22): una visita que no matchea NINGUNO
-        # de los 2 canales programados hoy (dato mal cargado en Athena, o de
-        # verdad un tercer canal puntual) se marca en AMBOS turnos -- mejor
-        # mostrar de más que esconder una visita rara (decisión explícita,
-        # no default silencioso). El camino de 1 turno nunca entra acá.
-        canales_ajenos = [c for c in visitas_dia_todas["canal_visita"].unique() if c not in canales_hoy_todos]
+    if len(canales_turno) == 1 and canales_hoy_todos == canales_turno:
+        # Camino de SIEMPRE (1 solo turno con 1 solo canal -- 99% de la
+        # gente) -- fórmula ORIGINAL, sin tocar: alcanza con haber visitado
+        # ese canal AL MENOS una vez para no marcar la alerta (es "laxa" a
+        # propósito, no exige que TODO lo marcado sea ese canal).
+        trabajo_otro_canal = len(canales_marcados) > 0 and canal_esp_norm not in canales_marcados
+    else:
+        # Turno que cubre VARIOS canales él solo (Davor, 2026-09-22, caso
+        # real: Maritza, dni 46064286 -- "ve Tradicional Y Autoservicio",
+        # mismo horario) y/o hay otro(s) turno(s)/grupo(s) el mismo día
+        # (caso Chaupi, dni 73897404, horarios distintos por canal) -- acá
+        # la fórmula laxa de arriba no alcanza (para Chaupi cada fila ya
+        # viene pre-filtrada a su propio canal, así que SIEMPRE "matchea";
+        # para Maritza, visitar su otro canal asignado no debe tapar una
+        # visita realmente ajena). Chequeo ESTRICTO en su lugar: se marca
+        # si aparece un canal que no está entre NINGUNO de los programados
+        # hoy (ni de este turno ni de otro), usando TODAS las visitas del
+        # día (no las ya filtradas a este turno) -- mejor mostrar de más
+        # que esconder una visita rara (decisión explícita, no default
+        # silencioso).
+        fuente_ajenos_validas = visitas_dia_todas[visitas_dia_todas["geofence_ok"]]
+        fuente_ajenos = fuente_ajenos_validas if len(fuente_ajenos_validas) else visitas_dia_todas
+        canales_ajenos = [c for c in fuente_ajenos["canal_visita"].unique() if c not in canales_hoy_todos]
+        trabajo_otro_canal = bool(canales_ajenos)
         if canales_ajenos:
-            trabajo_otro_canal = True
             canales_marcados = sorted(set(canales_marcados) | set(canales_ajenos))
 
     return {
@@ -606,7 +643,7 @@ def main():
     idx_historial = cargar_historial()
     rangos_por_dni = {}
     for (dni_h, _campo), entradas in idx_historial.items():
-        rangos_por_dni.setdefault(dni_h, []).extend((fd, fh, dia) for fd, fh, _v, dia in entradas)
+        rangos_por_dni.setdefault(dni_h, []).extend((fd, fh, dia) for fd, fh, _v, dia, _canal in entradas)
 
     def tiene_cambio_historial(dni, fecha_date):
         for fd, fh, dia_semana in rangos_por_dni.get(dni, []):
@@ -679,11 +716,27 @@ def main():
             else:
                 pat_filas = [pat_grupo]
 
-            # Canales programados hoy (los 2 turnos si aplica) -- resuelto
-            # vía valor_efectivo() igual que canal_esp_norm dentro de
-            # clasificar_dia(), para que un override de Historial de
+            # Agrupa las filas de Patrón por horario COMPARTIDO (Davor,
+            # 2026-09-22, caso real: Maritza, dni 46064286 -- "los días
+            # lunes/miércoles/viernes ve Tradicional Y Autoservicio", un
+            # solo horario, no 2 horarios distintos). 2 filas con el MISMO
+            # (entrada, salida) programada son UN solo turno que cubre
+            # varios canales -- se procesan juntas, una sola fila de salida.
+            # 2 filas con horario DISTINTO (ej. Farmacia 07-12, Autoservicio
+            # 13-18) son 2 turnos independientes -- se procesan por
+            # separado, como ya se hacía. El 99% de la gente (1 sola fila)
+            # cae en un grupo de 1, sin ningún cambio de comportamiento.
+            grupos_por_horario = {}
+            for fila_pat in pat_filas:
+                clave_horario = (fila_pat[col_ent], fila_pat[col_sal])
+                grupos_por_horario.setdefault(clave_horario, []).append(fila_pat)
+            grupos_turno = list(grupos_por_horario.values())
+
+            # Canales programados hoy (TODOS los grupos combinados) --
+            # resuelto vía valor_efectivo() igual que canal_esp_norm dentro
+            # de clasificar_dia(), para que un override de Historial de
             # cambios también participe acá al decidir si una visita es de
-            # "otro canal" o de uno de los turnos legítimos del día.
+            # "otro canal" o de uno de los turnos/grupos legítimos del día.
             canales_hoy_todos = {
                 str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, fila_pat[col_canal_dia])).strip()
                 for fila_pat in pat_filas
@@ -691,7 +744,12 @@ def main():
 
             registro_sup = sup_idx.get(clave)
 
-            for pat in pat_filas:
+            for grupo in grupos_turno:
+                pat = grupo[0]  # entrada/salida son iguales entre las filas del mismo grupo -- cualquiera sirve
+                canales_turno = {
+                    str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, fila_pat[col_canal_dia])).strip()
+                    for fila_pat in grupo
+                }
                 # Cualquier bug no anticipado en clasificar_dia() para UN
                 # dni/fecha/turno puntual (ej. los dos apagones reales de
                 # 2026-08-25 y 2026-08-26, ambos "un solo dato mal tipeado
@@ -707,7 +765,7 @@ def main():
                 try:
                     fila = clasificar_dia(dni, persona["Nombre completo"], fecha, weekday, pat,
                                            col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial,
-                                           canales_programados_hoy=canales_hoy_todos)
+                                           canales_programados_hoy=canales_hoy_todos, canales_turno=canales_turno)
                 except Exception as e:
                     print(f"ADVERTENCIA: no se pudo clasificar DNI {dni} en {fecha.date()} -- {e!r} -- se omite, la corrida sigue con el resto.")
                     continue

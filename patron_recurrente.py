@@ -51,6 +51,36 @@ def cargar_patron_recurrente(session, atributo):
     }
 
 
+def canal_para_historial(canal_esperado):
+    """Igual criterio que motor_clasificacion.py::clasificar_dia() -- un
+    canal_esperado COMPUESTO (turno que cubre varios canales, ver
+    valor_patron_para_canal()) no tiene una identidad de canal única a la
+    que un override de Historial pueda apuntar, así que solo ve overrides
+    GENÉRICOS (sin canal). Para el 99% de la gente (1 solo canal, sin
+    coma) devuelve el mismo canal tal cual."""
+    if canal_esperado and ", " in canal_esperado:
+        return None
+    return canal_esperado
+
+
+def valor_patron_para_canal(mapa, dni, dia_norm, canal_esperado):
+    """Busca en un dict armado por cargar_patron_recurrente() -- `canal_esperado`
+    puede venir COMPUESTO (ej. "Autoservicio, Tradicional", Davor 2026-09-22,
+    turno único que cubre varios canales con el MISMO horario -- caso real:
+    Maritza, dni 46064286, "los días lunes/miércoles/viernes ve Tradicional
+    Y Autoservicio"). El mapa está indexado por canal INDIVIDUAL (una fila
+    de Patrón por canal), así que se prueba cada canal del compuesto por
+    separado hasta encontrar uno con fila -- en este caso comparten el
+    mismo refrigerio/horario, así que cualquiera de los 2 que tenga fila
+    sirve. Para el 99% de la gente (1 solo canal, sin coma) esto es
+    exactamente `mapa.get((dni, dia_norm, canal_esperado))`, sin cambios."""
+    for canal in (canal_esperado or "").split(", "):
+        valor = mapa.get((dni, dia_norm, canal))
+        if valor is not None:
+            return valor
+    return None
+
+
 CANAL_DIA_CANONICO = {
     "tradicional": "Tradicional",
     "autoservicio": "Autoservicio", "autoservicios": "Autoservicio", "autorsevicios": "Autoservicio",
