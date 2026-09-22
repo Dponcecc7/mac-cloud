@@ -222,6 +222,20 @@ def _resolver_ayer_por_dni(session, fecha, feriados_set):
     return ayer, {ayer, ayer_domingo}, (lambda dni: ayer_domingo if dni in dnis_domingo else ayer)
 
 
+def _ayer_de_este_turno(ayer_filas, canal_turno_hoy):
+    """Elige, de la lista de filas de "ayer" de un dni (0, 1 o 2 -- ver
+    filas_ayer en _cargar_reporte()), la que corresponde al MISMO turno/canal
+    que la fila de hoy -- para el 99% de la gente (1 sola fila de ayer) es
+    exactamente el comportamiento de siempre. Con 2 (Multicanal), empareja
+    por canal_turno; si ninguna matchea (dato raro/incompleto), None en vez
+    de inventar cuál de las 2 corresponde."""
+    if not ayer_filas:
+        return None
+    if len(ayer_filas) == 1:
+        return ayer_filas[0]
+    return next((a for a in ayer_filas if a.canal_turno == canal_turno_hoy), None)
+
+
 def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, salida_mismo_dia=False, dni_filtro=None):
     """Devuelve (resumen_dict, filas, frescura) para `fecha` -- None, None, None
     si no hay ninguna fila ese día (motor todavía no corrió para esa fecha).
@@ -295,13 +309,19 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
             .filter(ClasificacionDiaria.fecha == fecha, ClasificacionDiaria.dni.in_(personas.keys()))
             .all()
         )
-        filas_ayer = {
-            c.dni: c for c in
+        # Lista por dni, no un solo valor (Davor, 2026-09-22, soporte de 2
+        # turnos/día para Multicanal) -- un Multicanal puede tener 2 filas
+        # de "ayer", una por canal; una clave sin canal se pisaba en
+        # silencio (dict-comprehension se queda con la última iterada). Ver
+        # _ayer_de_este_turno() más abajo, donde se empareja por canal.
+        filas_ayer = {}
+        for c in (
             session.query(ClasificacionDiaria)
             .filter(ClasificacionDiaria.fecha.in_(fechas_ayer_posibles), ClasificacionDiaria.dni.in_(personas.keys()))
             .all()
-            if c.fecha == ayer_de(c.dni)
-        }
+        ):
+            if c.fecha == ayer_de(c.dni):
+                filas_ayer.setdefault(c.dni, []).append(c)
         # DNIs ya marcados hoy desde "Marcar asistencia" (correcciones_web) --
         # la Tabla 3 ya tiene su fila, pero clasificacion_diaria.comentario_supervisor
         # recien se actualiza cuando el motor vuelve a correr. Sin esto, la
@@ -355,7 +375,7 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         # lista de vacantes pendientes, independiente de este reporte).
         if p is not None and p.fecha_baja is not None and p.fecha_baja <= fecha:
             continue
-        ayer_c = filas_ayer.get(c.dni)
+        ayer_c = _ayer_de_este_turno(filas_ayer.get(c.dni), c.canal_turno)
         fuente_salida = c if salida_mismo_dia else ayer_c
         supervisor_dni_efectivo = overrides_sup.get(c.dni, p.supervisor_dni) if p else None
         supervisor_nombre = nombre_supervisor_de.get(supervisor_dni_efectivo) if supervisor_dni_efectivo else None
@@ -419,11 +439,26 @@ def _cargar_reporte(fecha, usuario_actual=None, rol_filtro=None, region_filtro=N
         if c.procesado_en and (ultima_sync is None or c.procesado_en > ultima_sync):
             ultima_sync = c.procesado_en
 
+    # Cuenta PERSONAS distintas, no filas (Davor, 2026-09-22, soporte de 2
+    # turnos/día) -- alguien con 2 turnos hoy (Multicanal) no debe contar el
+    # doble en "total" ni en cada categoría. Si sus 2 turnos difieren de
+    # estado, cuenta bajo el PEOR de los dos (mismo criterio "peor estado
+    # gana" que la celda de Tareo del mes en reportes.py::ficha()), para no
+    # esconder que algo salió mal en uno de los turnos. Para el 99% de la
+    # gente (1 sola fila por dni) esto da exactamente lo mismo que contar
+    # filas -- cero cambio de comportamiento.
+    _orden_severidad_estado = {"FALTA": 0, "TARDANZA": 1, "ASISTIÓ A TIEMPO": 2}
+    peor_estado_por_dni = {}
+    for f in filas:
+        eb = _estado_base(f["estado"])
+        actual = peor_estado_por_dni.get(f["dni"])
+        if actual is None or _orden_severidad_estado.get(eb, 9) < _orden_severidad_estado.get(actual, 9):
+            peor_estado_por_dni[f["dni"]] = eb
     resumen = {
-        "asistio": sum(1 for f in filas if _estado_base(f["estado"]) == "ASISTIÓ A TIEMPO"),
-        "tardanza": sum(1 for f in filas if _estado_base(f["estado"]) == "TARDANZA"),
-        "falta": sum(1 for f in filas if _estado_base(f["estado"]) == "FALTA"),
-        "total": len(filas),
+        "asistio": sum(1 for eb in peor_estado_por_dni.values() if eb == "ASISTIÓ A TIEMPO"),
+        "tardanza": sum(1 for eb in peor_estado_por_dni.values() if eb == "TARDANZA"),
+        "falta": sum(1 for eb in peor_estado_por_dni.values() if eb == "FALTA"),
+        "total": len(peor_estado_por_dni),
     }
     # procesado_en se guarda con func.now() de Postgres -- en UTC, no hora
     # Peru. Sin esto, "Datos hasta las X" mostraba la hora UTC directo (5
