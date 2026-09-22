@@ -205,13 +205,17 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
     # olvidar que ese dia yo le coloque otra hora").
     session = get_session()
     try:
-        correcciones = {
-            c.dni: c for c in session.query(ClasificacionDiaria).filter(
-                ClasificacionDiaria.dni.in_(v["dni"].unique().tolist()),
-                ClasificacionDiaria.fecha == fecha,
-                ClasificacionDiaria.fuente_dato == "Corregido manualmente (Tabla 3)",
-            ).all()
-        }
+        # Lista por dni, no un solo valor (Davor, 2026-09-22, soporte de 2
+        # turnos/día) -- un Multicanal puede tener 2 correcciones el mismo
+        # día, una por canal; una clave sin desambiguar se pisaba en
+        # silencio (dict-comprehension se queda con la última iterada).
+        correcciones = {}
+        for c in session.query(ClasificacionDiaria).filter(
+            ClasificacionDiaria.dni.in_(v["dni"].unique().tolist()),
+            ClasificacionDiaria.fecha == fecha,
+            ClasificacionDiaria.fuente_dato == "Corregido manualmente (Tabla 3)",
+        ).all():
+            correcciones.setdefault(c.dni, []).append(c)
     finally:
         session.close()
 
@@ -230,15 +234,29 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
             }
             for _, row in grupo.sort_values("hora_inicio_td").iterrows()
         ]
-        correccion = correcciones.get(dni)
+        correcciones_dni = correcciones.get(dni, [])
         correccion_manual = None
-        if correccion:
+        if len(correcciones_dni) == 1:
+            correccion = correcciones_dni[0]
             partes = []
             if correccion.entrada_real:
                 partes.append(f"entrada {correccion.entrada_real[:5]}")
             if correccion.salida_real:
                 partes.append(f"salida {correccion.salida_real[:5]}")
             correccion_manual = " y ".join(partes) if partes else None
+        elif len(correcciones_dni) > 1:
+            # Multicanal con 2 turnos corregidos el mismo día -- una nota
+            # por turno, con su canal, para no esconder ninguna de las 2.
+            notas_por_turno = []
+            for correccion in correcciones_dni:
+                partes = []
+                if correccion.entrada_real:
+                    partes.append(f"entrada {correccion.entrada_real[:5]}")
+                if correccion.salida_real:
+                    partes.append(f"salida {correccion.salida_real[:5]}")
+                if partes:
+                    notas_por_turno.append(f"{correccion.canal_turno}: " + " y ".join(partes))
+            correccion_manual = " · ".join(notas_por_turno) if notas_por_turno else None
 
         personas.append({
             "dni": dni, "nombre": nombre, "ciudad": ciudad,
