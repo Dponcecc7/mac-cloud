@@ -418,17 +418,36 @@ def headcount_submit():
         for _, row in m.iterrows():
             dni = _dni(row["DNI"])
             existente = session.get(Persona, dni)
+            # Canal de ESTA fila (mismo cálculo de mas abajo, adelantado
+            # acá porque hace falta para decidir si es "compartido" antes
+            # de llegar a esa parte del loop) -- canonizar_canal() para que
+            # "Autoservicios"/"Autoservicio" comparen igual contra
+            # existente.canal, ya guardado canonizado.
+            canal_fila = canonizar_canal(canal_propio or _texto(row["Canal"]))
             # Mercaderista compartido entre canales (Davor, 2026-08-27): si
             # el dueño actual es OTRO analista pero de un canal DISTINTO al
-            # mío, no es un error de tipeo -- es la misma persona trabajando
-            # ambos canales en días distintos (ver PatronRecurrente.canal_dia
-            # mas abajo). No le piso sus datos base (nombre/rol/etc, siguen
-            # siendo del dueño original); solo se van a fusionar mis días de
-            # Patrón para este DNI. Si el canal es el MISMO, sigue siendo
-            # conflicto real (probable DNI mal tipeado).
+            # de ESTA fila, no es un error de tipeo -- es la misma persona
+            # trabajando ambos canales en días distintos (ver
+            # PatronRecurrente.canal_dia mas abajo). No le piso sus datos
+            # base (nombre/rol/etc, siguen siendo del dueño original); solo
+            # se van a fusionar mis días de Patrón para este DNI. Si el
+            # canal es el MISMO, sigue siendo conflicto real (probable DNI
+            # mal tipeado).
+            #
+            # Antes esto solo miraba `canal_propio` (el canal_asignado FIJO
+            # del que sube el archivo, ej. Diego=Farmacia) -- un admin/Kevin
+            # (sin canal_asignado fijo) NUNCA tenía canal_propio, así que
+            # para ellos es_compartido daba False SIEMPRE, aunque el Excel sí
+            # trajera un canal distinto al que ya tenía esa persona (hallazgo
+            # real, Davor, 2026-09-22: "porque sale ese error, si le estoy
+            # cargando un nuevo canal" -- admin intentando agregarle
+            # Multicanal a alguien de Diego). Ahora compara contra el canal
+            # de ESTA FILA (canal_propio si el uploader tiene uno fijo, si no
+            # lo que diga el Excel), así que funciona para cualquiera que
+            # suba el archivo, no solo para analistas con canal_asignado.
             es_compartido = (
                 existente is not None and existente.analista_propietario != propietario
-                and canal_propio and (existente.canal or "").strip().upper() != canal_propio
+                and canal_fila and (existente.canal or "").strip().upper() != canal_fila.strip().upper()
             )
             if existente and existente.analista_propietario != propietario and not es_compartido:
                 conflictos.append({
@@ -478,11 +497,9 @@ def headcount_submit():
             # Yeny), se ignora la columna del Excel y se usa el suyo; si no
             # (Kevin, Davor) se sigue respetando lo tipeado, sin cambio de
             # comportamiento.
-            # canonizar_canal() (Davor, 2026-09-04: "Homologa autoservicio y
-            # autoservicios"): el Excel trae texto libre -- "Autoservicios"
-            # (plural) y "Autoservicio" (singular) son el MISMO canal pero
-            # sin esto quedaban guardados como 2 valores distintos.
-            canal = canonizar_canal(canal_propio or _texto(row["Canal"]))
+            # Ya calculado más arriba (canal_fila) para decidir es_compartido
+            # -- se reusa acá tal cual, mismo valor.
+            canal = canal_fila
 
             datos = dict(
                 nombre_completo=nombre, rol=rol, canal=canal, region=_texto(row["Región"]),
