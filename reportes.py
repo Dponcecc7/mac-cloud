@@ -948,22 +948,38 @@ def ficha(dni):
     # una Falta sin justificar ("F") -- un domingo futuro sigue en blanco,
     # todavía no pasó. El resto de días sin fila (feriado, antes del
     # ingreso, todavía no procesado) se muestra como "—", sin cambios.
-    por_fecha = {row["fecha"].date(): row for _, row in detalle_mes.iterrows()} if len(detalle_mes) else {}
+    # Grupo por fecha, no un solo valor (Davor, 2026-09-22, soporte de 2
+    # turnos/día) -- un Multicanal puede tener 2 filas el mismo día, una por
+    # canal; una clave sin desambiguar se pisaba en silencio (dict-
+    # comprehension se queda con la última iterada). Para el 99% de la
+    # gente (1 sola fila por día) esto no cambia nada.
+    por_fecha = {}
+    if len(detalle_mes):
+        for _, row in detalle_mes.iterrows():
+            por_fecha.setdefault(row["fecha"].date(), []).append(row)
+    # "Peor estado gana" cuando 2 turnos el mismo día no coinciden -- no
+    # esconder que uno salió mal solo porque el otro salió bien.
+    _severidad_codigo_tareo = {"F": 0, "T": 1, "PC": 2, "?": 3, "V": 4, "DM": 5, "D": 6, "A": 7}
     tareo_mes = []
     fecha_cursor = mes_desde
     while fecha_cursor <= mes_hasta:
-        row = por_fecha.get(fecha_cursor)
-        if row is None:
+        grupo = por_fecha.get(fecha_cursor)
+        if not grupo:
             if fecha_cursor.weekday() == 6 and not trabaja_domingo:
                 codigo, clase, titulo = "D", "info", "Descanso (domingo, sin Patrón Recurrente ese día)"
             elif fecha_cursor.weekday() == 6 and trabaja_domingo and fecha_cursor <= hoy:
                 codigo, clase, titulo = "F", "bad", "Falta -- domingo con Patrón Recurrente registrado, sin marcación ni motivo"
             else:
                 codigo, clase, titulo = "—", "muted", "Sin marcación (no le tocaba trabajar)"
-        else:
+        elif len(grupo) == 1:
+            row = grupo[0]
             estado_base = row["estado"].split(" (")[0]
             codigo, clase = _codigo_tareo(estado_base, row["comentario"])
             titulo = row["estado"]
+        else:
+            candidatos = [(row, _codigo_tareo(row["estado"].split(" (")[0], row["comentario"])) for row in grupo]
+            codigo, clase = min((par[1] for par in candidatos), key=lambda cc: _severidad_codigo_tareo.get(cc[0], 9))
+            titulo = " / ".join(sorted({row["estado"] for row in grupo}))
         tareo_mes.append({
             "fecha": fecha_cursor, "dia": fecha_cursor.day, "dia_semana": DIAS_ES[fecha_cursor.weekday()][:2],
             "codigo": codigo, "clase": clase, "titulo": titulo,
@@ -1116,25 +1132,18 @@ def ficha(dni):
     # con las 4 horas (entrada/salida real y programada) -- Davor,
     # 2026-08-26: "deberia salir detalle de las salidas anticipadas quiza
     # junto con tardanzas... Detalle entrada, entrada programada, salida,
-    # salida programada". salida_anticipada_min no viene en detalle_mes
-    # (calcular_detalle_semana no la trae), se consulta aparte -- mismo
-    # patrón que resumen_perfil_equipo() en recomendaciones.py.
-    session = get_session()
-    try:
-        salida_anticipada_por_fecha = dict(
-            session.query(ClasificacionDiaria.fecha, ClasificacionDiaria.salida_anticipada_min)
-            .filter(ClasificacionDiaria.dni == dni, ClasificacionDiaria.fecha >= mes_desde, ClasificacionDiaria.fecha <= mes_hasta)
-            .all()
-        )
-    finally:
-        session.close()
-
+    # salida programada". Usa directamente detalle_mes["salida_anticipada_min"]
+    # (ya viene de la MISMA columna en la query de calcular_detalle_semana())
+    # en vez de una consulta+dict aparte por fecha -- esa consulta separada
+    # pisaba en silencio un turno con el otro para un Multicanal de 2 turnos
+    # el mismo día (Davor, 2026-09-22); por fila, sin dict-por-fecha
+    # intermedio, no hay nada que pisar.
     tardanzas_mes = []
     if len(detalle_mes):
         for _, row in detalle_mes.sort_values("fecha", ascending=False).iterrows():
             estado_base = row["estado"].split(" (")[0]
             es_tardanza = estado_base == "TARDANZA"
-            sal_ant = salida_anticipada_por_fecha.get(row["fecha"].date())
+            sal_ant = row["salida_anticipada_min"] if pd.notna(row["salida_anticipada_min"]) else None
             es_salida_temprana = sal_ant is not None and sal_ant > SALIDA_ANTICIPADA_MIN
             if not es_tardanza and not es_salida_temprana:
                 continue
