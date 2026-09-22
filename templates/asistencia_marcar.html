@@ -644,6 +644,25 @@
             pendiente.form.appendChild(hidden);
           }
           hidden.value = fechaInput.value;
+          // form.submit() (a diferencia de clickear un <button>) NO manda
+          // el par name/value del botón que "activó" el envío -- acá nunca
+          // se clickea ninguno, así que el "accion=Falta" del botón ✕ Falta
+          // se perdía siempre y el servidor, sin ninguna acción reconocida,
+          // redirigía sin guardar nada (Davor, 2026-09-22: "le he colocado
+          // vacaciones... pero no se sale" -- confirmado con la base: cero
+          // filas escritas, ni en Postgres ni en el Excel de SharePoint).
+          // Este bloque solo se dispara desde selects de "Motivo"/"Cambiar
+          // motivo" ligados al botón Falta, así que agregarlo a mano acá es
+          // siempre correcto (y no molesta a los forms de "guardar()", que
+          // ignoran "accion" por completo).
+          var accion = pendiente.form.querySelector('input[name="accion"]');
+          if (!accion) {
+            accion = document.createElement('input');
+            accion.type = 'hidden';
+            accion.name = 'accion';
+            pendiente.form.appendChild(accion);
+          }
+          accion.value = 'Falta';
           // Enviar el form directo al confirmar -- antes hacía falta un
           // segundo clic aparte en "Falta" para que esto se guardara de
           // verdad, y ese paso extra se estaba salteando en la práctica.
