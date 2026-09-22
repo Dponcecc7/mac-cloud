@@ -111,7 +111,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
                 ClasificacionDiaria.entrada_esperada, ClasificacionDiaria.entrada_real,
                 ClasificacionDiaria.salida_esperada, ClasificacionDiaria.salida_real,
                 Persona.region, Persona.ciudad, Persona.supervisor_dni,
-                ClasificacionDiaria.salida_anticipada_min,
+                ClasificacionDiaria.salida_anticipada_min, ClasificacionDiaria.canal_esperado,
             )
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
@@ -151,7 +151,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     r = pd.DataFrame(filas, columns=[
         "dni", "nombre", "fecha", "estado", "comentario",
         "entrada_esperada", "entrada_real", "salida_esperada", "salida_real",
-        "region", "ciudad", "supervisor_dni", "salida_anticipada_min",
+        "region", "ciudad", "supervisor_dni", "salida_anticipada_min", "canal_esperado",
     ])
     r["fecha"] = pd.to_datetime(r["fecha"])
     r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
@@ -163,7 +163,11 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
 
     def _refrigerio_min_para(row):
         dia_norm = WD_NORM.get(row["fecha"].weekday())
-        valor_patron = refrigerio_map.get((row["dni"], dia_norm))
+        # canal_esperado en la clave (Davor, 2026-09-22, 2 turnos/día) --
+        # un Multicanal puede tener un refrigerio distinto por turno, ver
+        # cargar_patron_recurrente(). Para el 99% de la gente (1 turno) esto
+        # es la misma clave de siempre, solo con el canal ya puesto.
+        valor_patron = refrigerio_map.get((row["dni"], dia_norm, row["canal_esperado"]))
         valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron)
         return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 

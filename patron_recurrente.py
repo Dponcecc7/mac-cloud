@@ -30,11 +30,23 @@ def sin_acentos(s):
 
 
 def cargar_patron_recurrente(session, atributo):
-    """{(dni, dia_normalizado): valor} para `atributo` de PatronRecurrente
-    (ej. "refrigerio", "hora_salida_prog") -- una sola query, reusada donde
-    antes horas_semanales.py/alertas.py/cobertura.py repetían la misma."""
+    """{(dni, dia_normalizado, canal_dia): valor} para `atributo` de
+    PatronRecurrente (ej. "refrigerio", "hora_salida_prog") -- una sola
+    query, reusada donde antes horas_semanales.py/alertas.py/cobertura.py
+    repetían la misma.
+
+    La clave incluye canal_dia desde 2026-09-22 (Davor, soporte de 2
+    turnos/día para Multicanal) -- un Multicanal puede tener 2 filas de
+    Patrón el mismo (dni, dia_semana), una por canal, y una clave sin canal
+    pisaría una con la otra acá (dict-comprehension se queda con la última
+    iterada). cargas.py siempre guarda canal_dia ya canonizado
+    (canonizar_canal_dia()), así que compara igual contra el canal de la
+    fila que ya tenga cada llamador (canal_esperado de ClasificacionDiaria,
+    o tipo_negocio mapeado a canal en cobertura.py) sin necesidad de
+    normalizar de nuevo acá. Para el 99% de la gente (1 solo turno) esto no
+    cambia nada -- solo hay una fila, con una sola clave."""
     return {
-        (p.dni, sin_acentos(p.dia_semana)): getattr(p, atributo)
+        (p.dni, sin_acentos(p.dia_semana), p.canal_dia): getattr(p, atributo)
         for p in session.query(PatronRecurrente).all()
     }
 

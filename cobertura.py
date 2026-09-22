@@ -20,6 +20,11 @@ from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
+# Mismo mapeo que usa el motor (TIPO_NEGOCIO_A_CANAL) para pasar de
+# "tipo_negocio" (texto crudo de Athena, ej. "AUTOSERVICIOS") al vocabulario
+# canónico de PatronRecurrente.canal_dia (ej. "Autoservicio") -- necesario
+# desde 2026-09-22 para buscar en cargar_patron_recurrente() por canal.
+from motor_clasificacion import TIPO_NEGOCIO_A_CANAL  # noqa: E402
 
 GEOFENCE_MAX_M = 200
 # Reglas de "Visita larga" por canal (Davor, 2026-08-29) -- antes 60 min
@@ -283,7 +288,11 @@ def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
         por_persona = {}
         for _, row in ultimas.iterrows():
             weekday = row["fecha_inicio"].weekday()
-            salida_prog = salida_prog_map.get((row["dni"], WD_NORM.get(weekday)))
+            # canal en la clave (Davor, 2026-09-22, 2 turnos/día) -- ver
+            # cargar_patron_recurrente(). tipo_negocio (Athena) mapeado al
+            # mismo vocabulario canónico que usa PatronRecurrente.canal_dia.
+            canal_visita = TIPO_NEGOCIO_A_CANAL.get(row["tipo_negocio"])
+            salida_prog = salida_prog_map.get((row["dni"], WD_NORM.get(weekday), canal_visita))
             salida_prog = valor_efectivo(idx_historial, row["dni"], "Hora salida programada", row["fecha_inicio"], salida_prog)
             if salida_prog is None:
                 continue
