@@ -185,8 +185,11 @@
         </label>
         <button class="btn primary" type="submit">Cargar</button>
         <a class="btn ghost" href="{{ url_for('reportes.planning_plantilla') }}">↓ Descargar plantilla</a>
+        {% if periodos_disponibles and periodo_str in periodos_disponibles %}
+        <a class="btn ghost" href="{{ url_for('reportes.planning_descargar', mes=periodo_str) }}">↓ Descargar lo ya cargado de {{ periodo_str }}</a>
+        {% endif %}
       </form>
-      <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes. Si no estás seguro del formato, descargá la plantilla y compará las columnas contra tu archivo.</p>
+      <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes. Si no estás seguro del formato, descargá la plantilla y compará las columnas contra tu archivo. "Descargar lo ya cargado" te devuelve el Planning actual de este mes en el mismo formato -- útil si perdiste el Excel original y necesitás corregir varias filas a la vez (los días puntuales marcados como "programados" son una reconstrucción a partir del total, no necesariamente los mismos días del archivo original).</p>
     </div>
 
     <div class="panel">

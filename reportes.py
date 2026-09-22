@@ -625,6 +625,84 @@ def _plantilla_planning():
     return buf
 
 
+def _planning_actual_excel(periodo, planning_periodo):
+    """Excel del Planning YA CARGADO de `periodo`, en el mismo formato que
+    espera parsear_planning() -- Davor, 2026-09-22: "que me devuelvas la
+    plantilla que cargue, para ahí mismo sino corregirlo, no encuentro la
+    que subí". Corregir varios errores a la vez en Excel (ej. varios DNIs
+    con typo, ver reasignar_pdv()) y volver a subirlo acá es más rápido
+    que "Editar" fila por fila.
+
+    OJO -- lo único que NO se puede reconstruir tal cual es EN QUÉ DÍAS
+    puntuales estaba programada cada visita: solo se guardó el TOTAL
+    (`dias_programados`, ver planning.py::_dias_programados()), no la
+    fecha de cada golpe marcada en el Excel original. Acá se marcan los
+    primeros N días del mes (N = dias_programados de esa fila) como marca
+    sintética -- el TOTAL que trae el archivo al volver a subirlo es
+    correcto, pero el día puntual marcado puede no ser el mismo que en el
+    Excel que se subió la primera vez."""
+    dias_en_mes = calendar.monthrange(periodo.year, periodo.month)[1]
+    cols_fecha = [f"{d}/{periodo.month:02d}/{periodo.year}" for d in range(1, dias_en_mes + 1)]
+
+    def _fila(p):
+        marcas = ["X" if d <= (p.dias_programados or 0) else None for d in range(1, dias_en_mes + 1)]
+        return [
+            p.co_li, p.nombre_pdv, p.ciudad, p.region, p.subcanal, p.mercado,
+            p.dni_asignado, p.mercaderista_nombre, p.supervisor,
+        ] + marcas
+
+    mayorista = [p for p in planning_periodo if p.tipo == "Mayorista"]
+    minorista = [p for p in planning_periodo if p.tipo == "Minorista"]
+
+    wb = openpyxl.Workbook()
+
+    ws1 = wb.active
+    ws1.title = "Mayorista"
+    encabezado1 = COLUMNAS_MAYORISTA_ESPERADAS + cols_fecha
+    ws1.append(encabezado1)
+    for celda in ws1[1]:
+        celda.font = Font(bold=True)
+    for p in mayorista:
+        ws1.append(_fila(p))
+    for i, col in enumerate(encabezado1, start=1):
+        ws1.column_dimensions[ws1.cell(row=1, column=i).column_letter].width = max(12, len(str(col)) + 2)
+
+    ws2 = wb.create_sheet("Minorista")
+    ws2.cell(row=1, column=1, value=f"Planning actual de {periodo.strftime('%m/%Y')} -- corregí lo que haga falta y volvé a subirlo en \"Cobertura vs Planning\".")
+    encabezado2 = COLUMNAS_MINORISTA_ESPERADAS + cols_fecha
+    for i, col in enumerate(encabezado2, start=1):
+        celda = ws2.cell(row=4, column=i, value=col)
+        celda.font = Font(bold=True)
+        ws2.column_dimensions[celda.column_letter].width = max(12, len(str(col)) + 2)
+    for fila_idx, p in enumerate(minorista, start=5):
+        for col_idx, valor in enumerate(_fila(p), start=1):
+            ws2.cell(row=fila_idx, column=col_idx, value=valor)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@bp.get("/planning/descargar.xlsx")
+@requiere_pagina("reportes_planning")
+def planning_descargar():
+    desde, hasta, periodo_str = _mes_desde_query()
+    periodo = desde
+    # SIN filtros de región/ciudad/supervisor a propósito -- esto es para
+    # corregir y volver a subir el mes COMPLETO, no la vista filtrada de
+    # pantalla.
+    planning_periodo = planning_del_periodo(periodo)
+    if not planning_periodo:
+        flash(f"No hay Planning cargado para {periodo_str} -- no hay nada que descargar.", "error")
+        return redirect(url_for("reportes.planning", mes=periodo_str))
+    return send_file(
+        _planning_actual_excel(periodo, planning_periodo), as_attachment=True,
+        download_name=f"Planning_{periodo_str}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @bp.post("/planning/cargar")
 @requiere_pagina("reportes_planning")
 def planning_cargar():
