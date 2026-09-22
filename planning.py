@@ -264,13 +264,21 @@ def visitas_tradicional(desde, hasta, usuario_actual):
 
 
 def periodos_disponibles():
-    """Meses con al menos un PlanningPdv cargado, más recientes primero --
-    para el selector de período (default: mes actual, aunque todavía no
-    tenga nada cargado)."""
+    """["2026-09", ...] -- meses con al menos un PlanningPdv cargado, más
+    recientes primero, en el MISMO formato "YYYY-MM" que ?mes= / periodo_str
+    (default: mes actual, aunque todavía no tenga nada cargado).
+
+    String, no `date` (Davor, 2026-09-22) -- el template compara
+    `periodo_str in periodos_disponibles` para decidir si mostrar
+    "Descargar lo ya cargado de <mes>"; comparar un str contra `date`
+    nunca da True, así que ese botón no aparecía NUNCA aunque el mes sí
+    tuviera Planning cargado (hallazgo real: "donde descargo el planning
+    actual tal cual cargué en el mismo formato" -- el botón ya existía,
+    pero la condición lo escondía siempre)."""
     session = get_session()
     try:
         periodos = sorted({p for (p,) in session.query(PlanningPdv.periodo).distinct().all()}, reverse=True)
-        return periodos
+        return [p.strftime("%Y-%m") for p in periodos]
     finally:
         session.close()
 
