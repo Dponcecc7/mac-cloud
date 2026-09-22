@@ -210,6 +210,131 @@ def plantilla_patron():
                       mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+def _dnis_en_scope(session, propietario, es_admin):
+    """None = sin restricción (admin, ve TODO el Maestro); si no, el set de
+    DNIs que pertenecen a `propietario` (Persona.analista_propietario) --
+    mismo criterio de dueño que ya usa headcount_submit() para decidir a
+    quién le pisa datos un DNI repetido."""
+    if es_admin:
+        return None
+    return {dni for (dni,) in session.query(Persona.dni).filter(Persona.analista_propietario == propietario).all()}
+
+
+def _headcount_actual_excel(session, dnis_scope):
+    """Excel del Maestro Headcount YA CARGADO, en el mismo formato que
+    espera parsear_maestro() -- Davor, 2026-09-22: "que tenga la opción de
+    descargar todo el acumulado de la información, tanto de data maestro
+    headcount [como] data patrón recurrente". Corregir varias filas a mano
+    (o simplemente tener un respaldo) sin depender de guardar el Excel que
+    se subió la primera vez."""
+    query = session.query(Persona)
+    if dnis_scope is not None:
+        query = query.filter(Persona.dni.in_(dnis_scope))
+    personas = query.order_by(Persona.nombre_completo).all()
+
+    # Nombre de CUALQUIER persona, no solo las del scope -- para resolver
+    # supervisor_dni -> nombre en "Supervisor asignado" tal como lo espera
+    # parsear_maestro() (texto libre, no DNI). Un supervisor puede estar
+    # FUERA del scope del propietario (mismo criterio que
+    # headcount_submit()::supervisores_propios, armado contra TODA la
+    # tabla, no solo lo suyo).
+    nombre_por_dni = dict(session.query(Persona.dni, Persona.nombre_completo).all())
+
+    dnis_export = {p.dni for p in personas}
+    overrides_sup, overrides_zona = {}, {}
+    if dnis_export:
+        for o in session.query(PersonaSupervisorCanal).filter(PersonaSupervisorCanal.dni.in_(dnis_export)).all():
+            overrides_sup.setdefault(o.dni, {})[o.canal] = o.supervisor_dni
+        for o in session.query(PersonaZonaCanal).filter(PersonaZonaCanal.dni.in_(dnis_export)).all():
+            overrides_zona.setdefault(o.dni, {})[o.canal] = o.zona
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Maestro Headcount"
+    ws.cell(row=1, column=1, value="Maestro Headcount actual").font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value='Descarga de lo ya cargado -- corregí lo que haga falta y volvé a subirlo en "Cargar Headcount".')
+    columnas = COLUMNAS_MAESTRO_ESPERADAS + [COL_SUP_FARMACIA_AU, COL_SUP_TRADICIONAL, COL_ZONA_FARMACIA_AU, COL_ZONA_TRADICIONAL]
+    for i, col in enumerate(columnas, start=1):
+        celda = ws.cell(row=4, column=i, value=col)
+        celda.font = Font(bold=True)
+        ws.column_dimensions[celda.column_letter].width = max(14, len(col) + 2)
+
+    for fila_idx, p in enumerate(personas, start=5):
+        sup_p = overrides_sup.get(p.dni, {})
+        zona_p = overrides_zona.get(p.dni, {})
+        valores = [
+            p.dni, p.nombre_completo, p.fecha_ingreso, p.fecha_baja, p.estado,
+            p.reemplaza_a_dni, ("Sí" if p.es_reingreso else "No"), p.rol, p.canal, p.region,
+            p.ciudad, p.zona, nombre_por_dni.get(p.supervisor_dni),
+            p.correo, p.motivo_baja, p.registrado_por, p.fecha_registro,
+            nombre_por_dni.get(sup_p.get("FARMACIA") or sup_p.get("AUTOSERVICIO")),
+            nombre_por_dni.get(sup_p.get("TRADICIONAL")),
+            zona_p.get("FARMACIA") or zona_p.get("AUTOSERVICIO"), zona_p.get("TRADICIONAL"),
+        ]
+        for col_idx, valor in enumerate(valores, start=1):
+            ws.cell(row=fila_idx, column=col_idx, value=valor)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def _patron_actual_excel(session, dnis_scope):
+    """Excel del Patrón Recurrente YA CARGADO, en el mismo formato que
+    espera parsear_patron() -- ver _headcount_actual_excel()."""
+    query = session.query(PatronRecurrente)
+    if dnis_scope is not None:
+        query = query.filter(PatronRecurrente.dni.in_(dnis_scope))
+    filas = query.order_by(PatronRecurrente.dni).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Patrón recurrente"
+    ws.cell(row=1, column=1, value="Patrón Recurrente actual").font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value='Descarga de lo ya cargado -- corregí lo que haga falta y volvé a subirlo en "Cargar Headcount".')
+    for i, col in enumerate(COLUMNAS_PATRON_ESPERADAS, start=1):
+        celda = ws.cell(row=4, column=i, value=col)
+        celda.font = Font(bold=True)
+        ws.column_dimensions[celda.column_letter].width = max(14, len(col) + 2)
+
+    for fila_idx, f in enumerate(filas, start=5):
+        valores = [f.dni, f.dia_semana, f.hora_entrada_prog, f.hora_salida_prog, f.canal_dia, f.refrigerio]
+        for col_idx, valor in enumerate(valores, start=1):
+            ws.cell(row=fila_idx, column=col_idx, value=valor)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@bp.get("/descargar/maestro.xlsx")
+@requiere_pagina("cargar_headcount")
+def descargar_maestro():
+    session = get_session()
+    try:
+        dnis_scope = _dnis_en_scope(session, current_user.email, current_user.rol == "admin")
+        buf = _headcount_actual_excel(session, dnis_scope)
+    finally:
+        session.close()
+    return send_file(buf, as_attachment=True, download_name="Maestro_Headcount_actual.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@bp.get("/descargar/patron.xlsx")
+@requiere_pagina("cargar_headcount")
+def descargar_patron():
+    session = get_session()
+    try:
+        dnis_scope = _dnis_en_scope(session, current_user.email, current_user.rol == "admin")
+        buf = _patron_actual_excel(session, dnis_scope)
+    finally:
+        session.close()
+    return send_file(buf, as_attachment=True, download_name="Patron_Recurrente_actual.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @bp.get("/headcount")
 @requiere_pagina("cargar_headcount")
 def headcount_form():

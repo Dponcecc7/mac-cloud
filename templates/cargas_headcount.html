@@ -110,6 +110,15 @@
         <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_maestro') }}"><span class="ico">⬇</span> Plantilla Maestro Headcount (.xlsx)</a>
         <a class="btn-plantilla" href="{{ url_for('cargas.plantilla_patron') }}"><span class="ico">⬇</span> Plantilla Patrón Recurrente (.xlsx)</a>
       </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Descargar lo ya cargado</p>
+      <p class="sub" style="margin-bottom:12px;">Todo lo que ya está en el sistema, en el mismo formato que espera la carga -- útil para corregir varias filas a mano o tener un respaldo sin depender del Excel original.</p>
+      <div class="plantillas">
+        <a class="btn-plantilla" href="{{ url_for('cargas.descargar_maestro') }}"><span class="ico">⬇</span> Maestro Headcount actual (.xlsx)</a>
+        <a class="btn-plantilla" href="{{ url_for('cargas.descargar_patron') }}"><span class="ico">⬇</span> Patrón Recurrente actual (.xlsx)</a>
+      </div>
       <details style="margin-top:14px;">
         <summary>Ver qué va en cada campo</summary>
 
