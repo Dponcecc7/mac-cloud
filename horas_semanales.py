@@ -177,7 +177,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         # cargar_patron_recurrente(). Para el 99% de la gente (1 turno) esto
         # es la misma clave de siempre, solo con el canal ya puesto.
         valor_patron = refrigerio_map.get((row["dni"], dia_norm, row["canal_esperado"]))
-        valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron)
+        valor_final = valor_efectivo(idx_historial, row["dni"], "Refrigerio", row["fecha"], valor_patron, canal=row["canal_esperado"])
         return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
     r["_refrigerio_min"] = r.apply(_refrigerio_min_para, axis=1)

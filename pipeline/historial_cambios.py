@@ -29,8 +29,13 @@ DIA_SEMANA_MAP = {
 
 
 def cargar_historial():
-    """Devuelve un indice {(dni, campo_lower): [(fecha_desde, fecha_hasta, valor, dia_semana), ...]},
-    identico en forma al original -- valor_efectivo() no necesita cambios."""
+    """Devuelve un indice {(dni, campo_lower): [(fecha_desde, fecha_hasta, valor, dia_semana, canal), ...]}.
+
+    `canal` (Davor, 2026-09-22, soporte de 2 turnos/día) -- None (todas las
+    filas de Historial existentes antes de esta fecha, y cualquiera cargada
+    sin elegir canal) significa "aplica a TODOS los turnos de ese día"; con
+    un canal puntual (ej. "Farmacia"), solo aplica al turno de ESE canal de
+    un Multicanal -- ver valor_efectivo()."""
     session = get_session()
     try:
         filas = session.query(HistorialCambio).all()
@@ -59,7 +64,8 @@ def cargar_historial():
         else:
             dia_semana = pd.NA
         key = (str(h.dni).strip(), h.campo.strip().lower())
-        idx.setdefault(key, []).append((h.fecha_desde, h.fecha_hasta, h.valor_nuevo, dia_semana))
+        canal = h.canal.strip() if h.canal else None
+        idx.setdefault(key, []).append((h.fecha_desde, h.fecha_hasta, h.valor_nuevo, dia_semana, canal))
     return idx
 
 
@@ -83,32 +89,46 @@ def _hora_valida(valor):
     return texto
 
 
-def valor_efectivo(idx, dni, campo, fecha, valor_default):
+def valor_efectivo(idx, dni, campo, fecha, valor_default, canal=None):
     """Si hay un cambio vigente en `fecha` para (dni, campo), devuelve ese
     valor; si no, devuelve valor_default (lo que diga Maestro/Patron). Si la
     fila tiene un "Día de la semana" especifico, solo se considera vigente
     cuando `fecha` cae en ese dia -- permite cambios permanentes limitados a
-    un dia de la semana (ej. "todos los martes desde tal fecha")."""
+    un dia de la semana (ej. "todos los martes desde tal fecha").
+
+    `canal` (Davor, 2026-09-22, soporte de 2 turnos/día) -- el canal del
+    turno que está pidiendo el valor (motor_clasificacion.py pasa
+    canal_esp_norm; los llamadores de reportes/alertas pasan el canal de su
+    propia fila). Un override SIN canal (el 99% de las filas de Historial,
+    incluidas TODAS las anteriores a esta fecha) aplica sin importar qué
+    turno pregunte. Un override CON canal solo aplica cuando el turno que
+    pregunta es de ESE canal -- si ambos tipos están vigentes la misma
+    fecha, gana el más específico (con canal) sobre el genérico."""
     if fecha is None:
         return valor_default
     if hasattr(fecha, "date"):
         fecha = fecha.date()
     candidatos = idx.get((str(dni).strip(), campo.lower()), [])
     vigentes = [
-        (d, h, v) for d, h, v, dia_semana in candidatos
+        (d, h, v, canal_entry) for d, h, v, dia_semana, canal_entry in candidatos
         if d <= fecha and (pd.isna(h) or h >= fecha) and (pd.isna(dia_semana) or dia_semana == fecha.weekday())
+        and (canal_entry is None or canal is None or canal_entry == canal)
     ]
     if not vigentes:
         return valor_default
-    vigentes.sort(key=lambda x: x[0])
+    # (específico primero=False, fecha_desde) -- ascendente, así que el
+    # último tras ordenar es el más específico (con canal) y, entre esos,
+    # el de fecha_desde más reciente.
+    vigentes.sort(key=lambda x: (x[3] is not None, x[0]))
+    valor_elegido = vigentes[-1][2]
     if campo.lower() in _CAMPOS_HORA:
-        valor_normalizado = _hora_valida(vigentes[-1][2])
+        valor_normalizado = _hora_valida(valor_elegido)
         if valor_normalizado is None:
             # Un "hh:mm"/texto no rescatable acá tumbaba TODO el motor de
             # clasificación horas después, sin ningún aviso (apagón real
             # 2026-08-25/26) -- se ignora el override y se cae al patrón
             # por defecto en vez de propagar basura.
-            print(f"ADVERTENCIA historial_cambios: valor de hora inválido {vigentes[-1][2]!r} para DNI {dni}, campo '{campo}' ({fecha}) -- se ignora, se usa el patrón por defecto.")
+            print(f"ADVERTENCIA historial_cambios: valor de hora inválido {valor_elegido!r} para DNI {dni}, campo '{campo}' ({fecha}) -- se ignora, se usa el patrón por defecto.")
             return valor_default
         return valor_normalizado
-    return vigentes[-1][2]
+    return valor_elegido

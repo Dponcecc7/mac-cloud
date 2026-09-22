@@ -565,18 +565,20 @@
             <th class="th-ordenable" onclick="ordenarPorHistorial('desde')">Desde <span class="flecha-orden" id="flecha-h-desde"></span></th>
             <th class="th-ordenable" onclick="ordenarPorHistorial('hasta')">Hasta <span class="flecha-orden" id="flecha-h-hasta"></span></th>
             <th class="th-ordenable" onclick="ordenarPorHistorial('dia')">Día <span class="flecha-orden" id="flecha-h-dia"></span></th>
+            <th class="th-ordenable" onclick="ordenarPorHistorial('canal')">Canal <span class="flecha-orden" id="flecha-h-canal"></span></th>
             <th class="th-ordenable" onclick="ordenarPorHistorial('comentario')">Comentario <span class="flecha-orden" id="flecha-h-comentario"></span></th>
             <th></th>
           </tr>
           {% for c in historial_persona %}
           <tr data-orden-campo="{{ (c.campo or '')|upper }}" data-orden-valor="{{ (c.valor_nuevo or '')|upper }}"
               data-orden-desde="{{ c.fecha_desde.isoformat() }}" data-orden-hasta="{{ c.fecha_hasta.isoformat() if c.fecha_hasta else '' }}"
-              data-orden-dia="{{ (c.dia_semana or '')|upper }}" data-orden-comentario="{{ (c.comentario or '')|upper }}">
+              data-orden-dia="{{ (c.dia_semana or '')|upper }}" data-orden-canal="{{ (c.canal or '')|upper }}" data-orden-comentario="{{ (c.comentario or '')|upper }}">
             <td>{{ c.campo }}</td>
             <td>{{ c.valor_nuevo }}</td>
             <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
             <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
             <td>{{ c.dia_semana or "Todos" }}</td>
+            <td>{{ c.canal or "Todos" }}</td>
             <td>{{ c.comentario or "—" }}</td>
             <td>
               {% if usuario.rol in ("analista", "admin") %}
@@ -630,6 +632,13 @@
           <div>
             <label>Comentario (opcional)</label>
             <input type="text" name="comentario">
+          </div>
+          <div>
+            <label>Canal (opcional -- solo si es Multicanal con 2 turnos)</label>
+            <select name="canal">
+              <option value="">Todos los turnos</option>
+              {% for c in ("Tradicional", "Farmacia", "Autoservicio") %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
           </div>
         </div>
         <button class="enviar" type="submit">Registrar cambio</button>

@@ -184,6 +184,13 @@ class HistorialCambio(Base):
     fecha_desde = Column(Date, nullable=False)
     fecha_hasta = Column(Date, nullable=True)
     dia_semana = Column(String(15), nullable=True)
+    # canal (Davor, 2026-09-22, soporte de 2 turnos/día) -- NULL (default,
+    # todas las filas existentes) significa "aplica a TODOS los turnos de
+    # ese día" -- el 99% de la gente (1 solo turno) nunca necesita esto. Con
+    # un canal puntual (ej. "Farmacia"), el cambio solo aplica al turno de
+    # ESE canal de un Multicanal, sin tocar el otro -- ver
+    # pipeline/historial_cambios.py::valor_efectivo().
+    canal = Column(String(50), nullable=True)
     comentario = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
 

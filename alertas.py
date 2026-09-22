@@ -68,7 +68,7 @@ def _refrigerio_min_para(row, refrigerio_map, idx_historial):
     # canal_esperado en la clave (Davor, 2026-09-22, 2 turnos/día) -- ver
     # cargar_patron_recurrente(). Sin cambio para el 99% de la gente (1 turno).
     valor_patron = refrigerio_map.get((row.dni, dia_norm, row.canal_esperado))
-    valor_final = valor_efectivo(idx_historial, row.dni, "Refrigerio", row.fecha, valor_patron)
+    valor_final = valor_efectivo(idx_historial, row.dni, "Refrigerio", row.fecha, valor_patron, canal=row.canal_esperado)
     return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
 

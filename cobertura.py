@@ -311,7 +311,7 @@ def alertas_cobertura(desde, hasta, usuario_actual, dni_filtro=None,
             # mismo vocabulario canónico que usa PatronRecurrente.canal_dia.
             canal_visita = TIPO_NEGOCIO_A_CANAL.get(row["tipo_negocio"])
             salida_prog = salida_prog_map.get((row["dni"], WD_NORM.get(weekday), canal_visita))
-            salida_prog = valor_efectivo(idx_historial, row["dni"], "Hora salida programada", row["fecha_inicio"], salida_prog)
+            salida_prog = valor_efectivo(idx_historial, row["dni"], "Hora salida programada", row["fecha_inicio"], salida_prog, canal=canal_visita)
             if salida_prog is None:
                 continue
             salida_prog_td = pd.to_timedelta(str(salida_prog))

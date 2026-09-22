@@ -82,6 +82,11 @@
           <option value="">Todos los días</option>
           {% for d in dias_semana %}<option value="{{ d }}" {{ 'selected' if cambio.dia_semana == d else '' }}>{{ d }}</option>{% endfor %}
         </select>
+        <label>Canal (opcional -- solo si es Multicanal con 2 turnos)</label>
+        <select name="canal">
+          <option value="">Todos los turnos</option>
+          {% for c in ("Tradicional", "Farmacia", "Autoservicio") %}<option value="{{ c }}" {{ 'selected' if cambio.canal == c else '' }}>{{ c }}</option>{% endfor %}
+        </select>
         <label>Comentario (opcional)</label>
         <textarea name="comentario" rows="2">{{ cambio.comentario or '' }}</textarea>
         <div class="acciones">

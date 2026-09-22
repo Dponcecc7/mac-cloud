@@ -115,6 +115,12 @@ def _leer_datos_comunes(form):
     fecha_desde = form.get("fecha_desde", "").strip()
     fecha_hasta = form.get("fecha_hasta", "").strip() or None
     comentario = form.get("comentario", "").strip() or None
+    # canal (Davor, 2026-09-22, soporte de 2 turnos/día) -- opcional, solo
+    # tiene sentido para un Multicanal con 2 filas de Patrón el mismo día;
+    # vacío (el 99% de los casos) = "aplica a todos los turnos", igual que
+    # siempre. canonizar_canal_dia() para calzar con el mismo vocabulario
+    # que compara valor_efectivo() contra canal_esp_norm del motor.
+    canal = canonizar_canal_dia(form.get("canal", "").strip()) or None
 
     if not dni or campo not in CAMPOS_VALIDOS or not valor_nuevo or not fecha_desde:
         return None, "Completá DNI, Campo, Valor nuevo y Fecha desde."
@@ -141,7 +147,7 @@ def _leer_datos_comunes(form):
         return None, "La fecha hasta no puede ser anterior a la fecha desde."
     return {
         "dni": dni, "campo": campo, "valor_nuevo": valor_nuevo,
-        "fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta, "comentario": comentario,
+        "fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta, "comentario": comentario, "canal": canal,
     }, None
 
 

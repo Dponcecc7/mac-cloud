@@ -152,9 +152,13 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
     Multicanal con turno AM/PM real). None (valor por default, usado por
     los tests existentes que llaman esta función con 1 solo pat) equivale a
     "solo este canal" -- cero cambio de comportamiento para 1 turno."""
-    entrada_esp = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha, pat[col_ent])
-    salida_esp = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha, pat[col_sal])
+    # Canal primero (Davor, 2026-09-22, soporte de 2 turnos/día) -- hace
+    # falta saberlo ANTES de pedir entrada/salida esperada, para que un
+    # override de Historial puntual de un solo turno de un Multicanal
+    # (ver valor_efectivo()) no se le aplique también al otro turno.
     canal_esp_norm = str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, pat[col_canal_dia])).strip()
+    entrada_esp = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha, pat[col_ent], canal=canal_esp_norm)
+    salida_esp = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha, pat[col_sal], canal=canal_esp_norm)
     canales_hoy_todos = canales_programados_hoy if canales_programados_hoy else {canal_esp_norm}
 
     visitas_dia_todas = v[(v["nro_documento"] == dni) & (v["fecha_inicio_dt"] == fecha)]
