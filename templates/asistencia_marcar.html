@@ -530,6 +530,7 @@
             <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
             <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
             <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+            <input type="time" name="hora_ingreso" class="ipt-filtro sm" style="width:90px;" title="Hora de ingreso (opcional)" value="{{ p.entrada_real[:5] if eb == 'ASISTIÓ' and p.entrada_real else '' }}">
             <button class="btn sm ok" type="submit" name="accion" value="Asistió">✓ Asistió</button>
             <select name="motivo_descanso">
               <option value="">Día de descanso...</option>
