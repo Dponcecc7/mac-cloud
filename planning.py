@@ -311,17 +311,27 @@ def resumen_por_mercaderista(planning, pendientes):
     -- Davor, 2026-09-22: "agregar un resumen de mercaderista x ciudad con
     la cantidad de PDVs que tiene para visitar".
 
-    Agrupa por dni_asignado (no por el nombre, que es texto libre del Excel
-    y 2 personas distintas podrían compartirlo por coincidencia) -- ya viene
-    resuelto al reemplazo vigente por planning_del_periodo(), así que un
-    mercaderista que cubrió el planning de otro que se fue aparece con su
-    propio total, no mezclado bajo 2 nombres. Reusa `pendientes` (ya
-    calculado por pdvs_pendientes() en la misma request) en vez de volver a
-    cruzar contra las visitas."""
+    Agrupa por NOMBRE normalizado (no por dni_asignado) -- primera versión
+    agrupaba por dni_asignado para no mezclar 2 personas distintas que
+    compartan nombre por coincidencia, pero eso reventó en producción con
+    el dato real: el Excel de Planning trae 1 fila por PDV tipeada a mano,
+    y un mismo mercaderista (ej. "Jose Quiroz") terminaba con un DNI
+    LIGERAMENTE distinto tipeado en cada fila (typo/copiar-pegar, la
+    columna DNI del Excel no es confiable fila a fila) -- salía partido en
+    ~15 filas de "1 PDV" en vez de sus PDVs sumados en una sola fila
+    (Davor, 2026-09-22: "porque aparece un mercaderista así con 1 PDV").
+    El nombre, en cambio, sí venía consistente en todas sus filas. Sigue
+    usando dni_asignado/mercaderista_nombre YA RESUELTOS al reemplazo
+    vigente (ver planning_del_periodo()) -- el riesgo real de juntar a 2
+    personas distintas con el mismo nombre se acepta a propósito, es mucho
+    menos común que la inconsistencia de tipeo del DNI en este Excel.
+    Reusa `pendientes` (ya calculado por pdvs_pendientes() en la misma
+    request) en vez de volver a cruzar contra las visitas."""
     co_lis_pendientes = {p["co_li"] for p in pendientes}
     conteo = {}
     for p in planning:
-        clave = (p.dni_asignado, p.ciudad or "—")
+        nombre_norm = (p.mercaderista_nombre or "").strip().upper()
+        clave = (nombre_norm, p.ciudad or "—")
         fila = conteo.setdefault(clave, {"nombre": p.mercaderista_nombre, "asignados": 0, "pendientes": 0})
         fila["asignados"] += 1
         if p.co_li in co_lis_pendientes:
@@ -331,7 +341,7 @@ def resumen_por_mercaderista(planning, pendientes):
         "mercaderista": v["nombre"] or "(Sin asignar)", "ciudad": ciudad,
         "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
         "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
-    } for (_dni, ciudad), v in conteo.items()]
+    } for (_nombre_norm, ciudad), v in conteo.items()]
     filas.sort(key=lambda f: (f["ciudad"], f["mercaderista"]))
     return filas
 
