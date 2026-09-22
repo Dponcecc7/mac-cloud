@@ -140,7 +140,17 @@ def resolver_cadena_vigente(dnis):
     es un snapshot del DNI que estaba en el Excel de Planning al momento de
     subirlo, sin ninguna relación con Persona -- esto lo resuelve recién al
     MOSTRAR el Planning, para no tener que volver a subir el Excel cada vez
-    que alguien renuncia y entra su reemplazo."""
+    que alguien renuncia y entra su reemplazo.
+
+    La cadena NO avanza desde un DNI que está Activo hoy (Davor, 2026-09-22,
+    mismo día: "porque no aparece Jose Quiñonez" -- caso real, DNI
+    44965255). `reemplaza_a_dni` queda escrito una vez y nunca se borra; si
+    esa persona vuelve a estar Activa más tarde (reingreso con un headcount
+    nuevo, como Jose el 02/09 después de que Yuridia lo "reemplazara" el
+    18/08), el registro viejo de reemplazo sigue ahí pero ya no aplica -- sin
+    este chequeo, sus PDVs del Planning se le seguían atribuyendo a Yuridia
+    para siempre, aunque él estuviera trabajando de nuevo bajo su propio
+    nombre."""
     dnis = {d for d in dnis if d}
     if not dnis:
         return {}
@@ -158,6 +168,7 @@ def resolver_cadena_vigente(dnis):
                 Persona.reemplaza_a_dni, Persona.dni, Persona.nombre_completo,
             ).filter(Persona.reemplaza_a_dni.isnot(None)).all()
         }
+        estado_de = dict(session.query(Persona.dni, Persona.estado).all())
     finally:
         session.close()
 
@@ -165,7 +176,7 @@ def resolver_cadena_vigente(dnis):
     for dni_original in dnis:
         dni_actual, nombre_actual = dni_original, None
         vistos = {dni_original}
-        while dni_actual in sucesor_de:
+        while dni_actual in sucesor_de and estado_de.get(dni_actual) != "Activo":
             dni_siguiente, nombre_siguiente = sucesor_de[dni_actual]
             if dni_siguiente in vistos:
                 break  # corte de seguridad ante un ciclo de datos corrupto -- no debería pasar nunca
