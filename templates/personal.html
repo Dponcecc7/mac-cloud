@@ -39,7 +39,11 @@
     .form-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:10px; align-items:end; }
     @media (max-width:1300px) { .form-row { grid-template-columns:repeat(4, 1fr); } }
     label.field { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
-    table { border-collapse:collapse; width:100%; }
+    /* border-collapse:separate + border-spacing:0 (Davor, 2026-09-22) --
+       position:sticky en th/td no aplica con border-collapse:collapse en
+       la mayoría de navegadores; separate se ve igual (sin bordes
+       verticales declarados) pero sticky sí funciona. */
+    table { border-collapse:separate; border-spacing:0; width:100%; }
     th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; }
     th { background:var(--bg); font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); position:sticky; top:0; }
     th.th-ordenable { cursor:pointer; user-select:none; }

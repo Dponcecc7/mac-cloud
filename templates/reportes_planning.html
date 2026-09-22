@@ -61,7 +61,11 @@
     .carga-form input[type=month], .carga-form input[type=file] { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
 
     .table-wrap { overflow-x:auto; max-height:60vh; }
-    table { border-collapse:collapse; width:100%; font-size:12px; }
+    /* border-collapse:separate + border-spacing:0 (Davor, 2026-09-22) --
+       position:sticky en th/td no aplica con border-collapse:collapse en
+       la mayoría de navegadores; separate se ve igual (sin bordes
+       verticales declarados) pero sticky sí funciona. */
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
     th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
     td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
     tr:last-child td { border-bottom:none; }

@@ -48,7 +48,14 @@
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
 
     .table-wrap { overflow-x:auto; max-height:70vh; }
-    table { border-collapse:collapse; width:100%; font-size:12px; }
+    /* border-collapse:separate (no collapse) + border-spacing:0 (Davor,
+       2026-09-22: "que sea así fijo la parte de deslizar hacia la
+       derecha") -- position:sticky en th/td de una tabla con
+       border-collapse:collapse simplemente NO aplica en la mayoría de
+       navegadores (limitación real de CSS, no config nuestra); con
+       border-spacing:0 se ve exactamente igual (sin líneas dobles, no hay
+       bordes verticales declarados) pero sticky sí funciona. */
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
     th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; background:var(--card); position:sticky; top:0; }
     td { padding:6px 9px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:center; }
     td.info { text-align:left; }
