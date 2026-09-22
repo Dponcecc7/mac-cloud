@@ -484,6 +484,23 @@ def headcount_submit():
 
             if es_compartido:
                 compartidos.append(dni)
+                # Persona.canal queda escrito literal "MULTICANAL" (Davor,
+                # 2026-09-22: "le cargue un nuevo headcount a Tantalean pero
+                # no aparece como multicanal y dos filas para zona") -- antes
+                # esta rama solo fusionaba Patrón/overrides sin tocar el
+                # canal base, así que alguien recién detectado como
+                # compartido se quedaba mostrando su canal viejo (ej.
+                # "Farmacia") para siempre. scoping.py y el dashboard ya
+                # esperaban este valor literal (ver su docstring, "ej.
+                # canal='MULTICANAL'"), y personal.html usa exactamente
+                # `p.canal == "MULTICANAL"` para destrabar los 2 campos de
+                # Zona/Supervisor (Tradicional | Farmacia-AU) en vez de uno
+                # solo -- sin este cambio ninguna carga real llegaba a poner
+                # ese valor, así que esa UI nunca se activaba. Idempotente:
+                # si ya era "MULTICANAL" (tercer canal, o re-carga), no pasa
+                # nada nuevo.
+                if (existente.canal or "").strip().upper() != "MULTICANAL":
+                    existente.canal = "MULTICANAL"
                 continue
 
             sup_texto = _texto(row["Supervisor asignado"])
@@ -612,7 +629,7 @@ def headcount_submit():
 
     mensaje = (
         f"Carga completa: {len(nuevas)} personas nuevas, {len(actualizadas)} actualizadas, "
-        f"{len(compartidos)} compartidas con otro canal (se fusionó su Patrón, sin tocar sus datos base), "
+        f"{len(compartidos)} compartidas con otro canal (marcadas Multicanal, se fusionó su Patrón sin tocar nombre/rol/etc.), "
         f"{len(conflictos)} en conflicto, {n_patron} filas de Patrón agregadas."
     )
     if n_overrides:
