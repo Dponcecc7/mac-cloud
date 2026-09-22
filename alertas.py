@@ -194,7 +194,11 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
         if tipo == "falta" and len(grupo_tipo):
             grupo_tipo = grupo_tipo[~grupo_tipo["comentario"].apply(_tiene_sustento)]
         for dni, grupo in grupo_tipo.groupby("dni"):
-            cantidad = len(grupo)
+            # fecha.nunique(), no len(grupo) (Davor, 2026-09-22, soporte de
+            # 2 turnos/día) -- un Multicanal con tardanza en sus 2 turnos el
+            # mismo día tuvo tardanza UN día, no dos. Sin cambio para el 99%
+            # de la gente (1 fila por día): nunique() == len() ahí.
+            cantidad = grupo["fecha"].nunique()
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
@@ -212,7 +216,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": tipo,
                 "cantidad": cantidad, "nivel": nivel, "critico": escalado,
                 "mensaje": mensaje,
-                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "fechas": sorted({f.strftime("%d/%m") for f in grupo["fecha"]}),
                 # pd.isna(), no "c or ..." -- un comentario vacío puede llegar
                 # como NaN de pandas (float), y "NaN or x" da NaN (NaN es
                 # truthy), así que se colaba hasta el .strip() y explotaba.
@@ -225,7 +229,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
     grupo_canal = r[r["trabajo_otro_canal"] == True]  # noqa: E712 -- comparación explícita, no "is True", por si viene como NaN/None
     if len(grupo_canal):
         for dni, grupo in grupo_canal.groupby("dni"):
-            cantidad = len(grupo)
+            cantidad = grupo["fecha"].nunique()  # ver comentario de arriba (2 turnos/día)
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
@@ -233,7 +237,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "otro_canal",
                 "cantidad": cantidad, "nivel": nivel,
                 "mensaje": f"Trabajó en canal distinto al asignado ({nivel}x -- {cantidad} días este periodo)",
-                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "fechas": sorted({f.strftime("%d/%m") for f in grupo["fecha"]}),
                 "motivos": sorted({
                     f"{(row.canal_esperado or '—')} → {(row.canales_marcados or '—')}"
                     for row in grupo.itertuples()
@@ -248,16 +252,18 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
     grupo_salida = r[r["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN]
     if len(grupo_salida):
         for dni, grupo in grupo_salida.groupby("dni"):
-            cantidad = len(grupo)
+            cantidad = grupo["fecha"].nunique()  # ver comentario de arriba (2 turnos/día)
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
+            # detalles NO se dedupea por fecha -- cada turno tiene su propia
+            # entrada/salida real, información genuina aunque comparta día.
             detalles = [_detalle_salida(row, refrigerio_map, idx_historial) for row in grupo.sort_values("fecha").itertuples()]
             alertas.append({
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "salida_temprana",
                 "cantidad": cantidad, "nivel": nivel,
                 "mensaje": f"Salida anticipada recurrente ({nivel}x -- {cantidad} días este periodo)",
-                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "fechas": sorted({f.strftime("%d/%m") for f in grupo["fecha"]}),
                 "motivos": [texto for texto, _critico in detalles],
             })
 
@@ -282,7 +288,11 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
             ]
             if not filas_criticas:
                 continue
-            cantidad = len(filas_criticas)
+            # Fechas distintas, no ocurrencias -- 2 turnos ambos críticos el
+            # mismo día es 1 día crítico, no 2 (Davor, 2026-09-22). La lista
+            # de motivos/fechas de abajo SÍ mantiene cada ocurrencia (cada
+            # turno tiene su propio detalle real, información genuina).
+            cantidad = len({f for f, _ in filas_criticas})
             alertas.append({
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "jornada_critica",
                 "cantidad": cantidad, "nivel": cantidad, "critico": True,
@@ -298,7 +308,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
     grupo_manual = r[r["fuente_dato"] == FUENTE_CORREGIDO_MANUAL]
     if len(grupo_manual):
         for dni, grupo in grupo_manual.groupby("dni"):
-            cantidad = len(grupo)
+            cantidad = grupo["fecha"].nunique()  # ver comentario de arriba (2 turnos/día)
             if cantidad < UMBRAL:
                 continue
             nivel = cantidad // UMBRAL
@@ -306,7 +316,7 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 "dni": dni, "nombre": grupo["nombre"].iloc[0], "tipo": "corregido_manual",
                 "cantidad": cantidad, "nivel": nivel,
                 "mensaje": f"No está marcando por su cuenta -- hora puesta a mano {cantidad} días este periodo",
-                "fechas": sorted(f.strftime("%d/%m") for f in grupo["fecha"]),
+                "fechas": sorted({f.strftime("%d/%m") for f in grupo["fecha"]}),
                 "motivos": [],
             })
 
@@ -365,7 +375,11 @@ def alertas_periodo(desde, hasta, usuario_actual, dni_filtro=None,
                 ]
                 if not len(grupo_semana):
                     continue  # sin ninguna fila esa semana (recién ingresó, etc.) -- no hay nada que evaluar
-                descansos = int(grupo_semana["es_descanso_explicito"].sum())
+                # .groupby("fecha").any() antes de sumar, no la serie cruda
+                # (Davor, 2026-09-22, 2 turnos/día) -- 2 turnos con descanso
+                # marcado el mismo día son 1 día de descanso, no 2. Sin
+                # cambio para el 99% de la gente (1 fila por día).
+                descansos = int(grupo_semana.groupby("fecha")["es_descanso_explicito"].any().sum())
                 if not tiene_domingo_patron:
                     descansos += 1
                 if descansos == 1:
