@@ -83,6 +83,11 @@
     .badge.warn { background:var(--warn); }
     .badge.bad { background:var(--bad); }
     .badge.neutro { background:var(--line); color:var(--muted); }
+    /* Multicanal con 2 turnos el mismo día (Davor, 2026-09-22) -- para que
+       las 2 filas se lean como "una persona, dos turnos" en vez de parecer
+       una fila duplicada por error, sea cual sea el orden en que la tabla
+       esté ordenada (rowspan no sirve acá, se rompería al reordenar). */
+    .chip-turno { display:inline-block; margin-top:2px; padding:1px 7px; border-radius:999px; font-size:9.5px; font-weight:700; background:var(--brand); color:#fff; white-space:nowrap; }
     td.corregida { background:#efe3f5; font-weight:700; }
     td.temprana { background:var(--bad-bg); color:var(--bad); font-weight:700; }
 
@@ -203,6 +208,11 @@
               <th style="width:10%">Comentario salida</th>
               {% if vista == 'reporte' %}<th style="width:4.5%">Entrada corregida</th><th style="width:4.5%">Salida corregida</th>{% endif %}
             </tr>
+            {# Multicanal con 2 turnos el mismo día (Davor, 2026-09-22) --
+               conteo por dni para poder marcar cada fila con un chip
+               "2 turnos", sea cual sea el orden en que se muestren. #}
+            {% set conteo_dni = {} %}
+            {% for f in filas %}{% set _ = conteo_dni.update({f.dni: conteo_dni.get(f.dni, 0) + 1}) %}{% endfor %}
             {% for f in filas %}
             {% set eb = f.estado_efectivo %}
             {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'ASISTIÓ':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
@@ -219,7 +229,10 @@
               <td>{{ (f.ciudad or '')|title }}</td>
               <td>{{ (f.rol or '')|title }}</td>
               <td>{{ f.canal_hoy_mostrar|title }}</td>
-              <td>{{ f.mercaderista|title }}</td>
+              <td>
+                {{ f.mercaderista|title }}
+                {% if conteo_dni.get(f.dni, 0) > 1 %}<br><span class="chip-turno" title="Esta persona tiene más de un turno hoy -- cada fila es un canal distinto">🔀 2 turnos</span>{% endif %}
+              </td>
               <td>{{ f.entrada_prog or '' }}</td>
               <td class="{{ 'corregida' if f.entrada_corregida else '' }}">{{ f.entrada_real or '' }}</td>
               <td>
