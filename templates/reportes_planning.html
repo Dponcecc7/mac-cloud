@@ -200,6 +200,34 @@
     </div>
 
     <div class="panel">
+      <p class="panel-title">Mercaderista x Ciudad — PDVs asignados ({{ por_mercaderista|length }})</p>
+      {% if not por_mercaderista %}
+        <p class="empty">Sin planning cargado para este período.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-mercaderista">
+          <tr>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-mercaderista-ciudad"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'asignados')" data-numerico>PDVs asignados <span class="flecha-orden" id="flecha-mercaderista-asignados"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'pendientes')" data-numerico>PDVs pendientes <span class="flecha-orden" id="flecha-mercaderista-pendientes"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista', 'cumplimiento')" data-numerico>% Cumplimiento <span class="flecha-orden" id="flecha-mercaderista-cumplimiento"></span></th>
+          </tr>
+          {% for m in por_mercaderista %}
+          <tr data-orden-mercaderista="{{ (m.mercaderista or '')|upper }}" data-orden-ciudad="{{ (m.ciudad or '')|upper }}" data-orden-asignados="{{ m.pdvs_asignados }}" data-orden-pendientes="{{ m.pdvs_pendientes }}" data-orden-cumplimiento="{{ m.pct_cumplimiento if m.pct_cumplimiento is not none else -1 }}">
+            <td>{{ m.mercaderista|title }}</td>
+            <td>{{ (m.ciudad or '—')|title }}</td>
+            <td>{{ m.pdvs_asignados }}</td>
+            <td {{ 'class=celda-cero' if m.pdvs_pendientes > 0 else '' }}>{{ m.pdvs_pendientes }}</td>
+            <td {{ 'class=celda-cero' if m.pct_cumplimiento is not none and m.pct_cumplimiento < 50 else '' }}>{{ (m.pct_cumplimiento ~ '%') if m.pct_cumplimiento is not none else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
       <p class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</p>
       {% if not pendientes %}
         <p class="empty">Sin planning cargado para este período, o todos los PDVs ya tienen al menos una visita.</p>
@@ -220,7 +248,10 @@
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.region or '—')|title }}</td>
-            <td>{{ (p.mercaderista or '—')|title }}</td>
+            <td>
+              {{ (p.mercaderista or '—')|title }}
+              {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
+            </td>
             <td>{{ (p.supervisor or '—')|title }}</td>
           </tr>
           {% endfor %}
@@ -251,7 +282,10 @@
             <td>{{ p.nombre_pdv or '—' }}</td>
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
-            <td>{{ (p.mercaderista or '—')|title }}</td>
+            <td>
+              {{ (p.mercaderista or '—')|title }}
+              {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
+            </td>
             <td>{{ p.visitas_planificadas }}</td>
             <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
             <td {{ 'class=celda-cero' if p.pct_cumplimiento is not none and p.pct_cumplimiento < 50 else '' }}>{{ (p.pct_cumplimiento ~ '%') if p.pct_cumplimiento is not none else '—' }}</td>
@@ -306,7 +340,7 @@ function ordenarPor(tabla_id, campo) {
   var actual = ordenActual[tabla_id];
   var asc = (actual && actual.campo === campo) ? !actual.asc : true;
   ordenActual[tabla_id] = { campo: campo, asc: asc };
-  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento';
+  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento' || campo === 'asignados' || campo === 'pendientes';
   filas.sort(function (a, b) {
     var va = a.getAttribute('data-orden-' + campo) || '';
     var vb = b.getAttribute('data-orden-' + campo) || '';

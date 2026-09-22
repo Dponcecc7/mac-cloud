@@ -16,6 +16,7 @@ import pandas as pd
 from cobertura import _cargar_visitas
 from dimension_models import PlanningPdv, get_session
 from parseo_headcount import validar_columnas
+from reemplazos import resolver_cadena_vigente
 
 COLUMNAS_MAYORISTA_ESPERADAS = [
     "CO_LI", "NOMBRE PDV", "CIUDAD", "REGIÓN", "SUBCANAL", "NOMBRE DEL MERCADO",
@@ -151,9 +152,26 @@ def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, superv
             query = query.filter(PlanningPdv.ciudad == ciudad_filtro)
         if supervisor_filtro:
             query = query.filter(PlanningPdv.supervisor == supervisor_filtro)
-        return query.all()
+        filas = query.all()
     finally:
         session.close()
+
+    # Reemplazo vigente (Davor, 2026-09-22: "que también automáticamente se
+    # cambiara la persona según entraba su reemplazo") -- dni_asignado/
+    # mercaderista_nombre son el snapshot del Excel al momento de la carga;
+    # acá se pisan EN MEMORIA (las filas ya están fuera de la sesión, esto
+    # no toca la base) con quien las reemplazó, si a esa fecha ya hubo un
+    # reemplazo procesado por "Agregar reemplazo". `mercaderista_nombre_original`
+    # queda aparte para poder avisarlo en pantalla en vez de pisarlo en
+    # silencio -- ver reportes_planning.html.
+    resueltos = resolver_cadena_vigente({p.dni_asignado for p in filas})
+    for p in filas:
+        r = resueltos.get(p.dni_asignado)
+        if r and r["cambio"]:
+            p.mercaderista_nombre_original = p.mercaderista_nombre
+            p.dni_asignado = r["dni"]
+            p.mercaderista_nombre = r["nombre"] or p.mercaderista_nombre
+    return filas
 
 
 def visitas_tradicional(desde, hasta, usuario_actual):
@@ -252,6 +270,7 @@ def pdvs_pendientes(planning, v):
     return [{
         "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
         "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
+        "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
     } for p in pendientes]
 
 
@@ -277,11 +296,43 @@ def pdvs_detalle(planning, v):
         filas.append({
             "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
             "region": p.region, "mercaderista": p.mercaderista_nombre, "supervisor": p.supervisor,
+            "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
             "visitas_planificadas": planificadas, "visitas_realizadas": realizadas,
             "pct_cumplimiento": round(realizadas / planificadas * 100, 1) if planificadas else None,
             "fecha_ultima_visita": ultima.get(p.co_li).date() if p.co_li in ultima and pd.notna(ultima.get(p.co_li)) else None,
         })
     filas.sort(key=lambda f: (f["pct_cumplimiento"] if f["pct_cumplimiento"] is not None else -1))
+    return filas
+
+
+def resumen_por_mercaderista(planning, pendientes):
+    """Por (mercaderista, ciudad): cuántos PDVs tiene asignados en el
+    Planning del período y cuántos de esos le quedan pendientes de visitar
+    -- Davor, 2026-09-22: "agregar un resumen de mercaderista x ciudad con
+    la cantidad de PDVs que tiene para visitar".
+
+    Agrupa por dni_asignado (no por el nombre, que es texto libre del Excel
+    y 2 personas distintas podrían compartirlo por coincidencia) -- ya viene
+    resuelto al reemplazo vigente por planning_del_periodo(), así que un
+    mercaderista que cubrió el planning de otro que se fue aparece con su
+    propio total, no mezclado bajo 2 nombres. Reusa `pendientes` (ya
+    calculado por pdvs_pendientes() en la misma request) en vez de volver a
+    cruzar contra las visitas."""
+    co_lis_pendientes = {p["co_li"] for p in pendientes}
+    conteo = {}
+    for p in planning:
+        clave = (p.dni_asignado, p.ciudad or "—")
+        fila = conteo.setdefault(clave, {"nombre": p.mercaderista_nombre, "asignados": 0, "pendientes": 0})
+        fila["asignados"] += 1
+        if p.co_li in co_lis_pendientes:
+            fila["pendientes"] += 1
+
+    filas = [{
+        "mercaderista": v["nombre"] or "(Sin asignar)", "ciudad": ciudad,
+        "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
+        "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
+    } for (_dni, ciudad), v in conteo.items()]
+    filas.sort(key=lambda f: (f["ciudad"], f["mercaderista"]))
     return filas
 
 

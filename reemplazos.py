@@ -123,3 +123,53 @@ def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_
         session.close()
 
     return log
+
+
+def resolver_cadena_vigente(dnis):
+    """{dni_original: {"dni", "nombre", "cambio"}} -- a quién le corresponde
+    HOY cada `dni` de entrada, caminando hacia adelante la cadena de
+    reemplazos (Persona.reemplaza_a_dni apunta del DNI NUEVO hacia el DNI
+    que reemplazó) hasta llegar a alguien que todavía nadie más reemplazó.
+    `cambio=False` y mismo dni/nombre=None si no hubo ningún reemplazo
+    registrado para ese DNI.
+
+    A diferencia del resto de este archivo, esto NO es una copia de
+    MAC/ventana_reemplazos.py -- es funcionalidad nueva, solo para la nube
+    (Davor, 2026-09-22: "que también automáticamente se cambiara la persona
+    según entraba su reemplazo"). Usado por planning.py: PlanningPdv.dni_asignado
+    es un snapshot del DNI que estaba en el Excel de Planning al momento de
+    subirlo, sin ninguna relación con Persona -- esto lo resuelve recién al
+    MOSTRAR el Planning, para no tener que volver a subir el Excel cada vez
+    que alguien renuncia y entra su reemplazo."""
+    dnis = {d for d in dnis if d}
+    if not dnis:
+        return {}
+
+    session = get_session()
+    try:
+        # Un solo query trae TODA la tabla de sucesores (reemplaza_a_dni no
+        # nulo) -- la tabla personas es chica (cientos de filas, no miles
+        # como el Planning), así que resolver la cadena en memoria es más
+        # simple y muchísimo más rápido que 1 consulta por cada DNI del
+        # Planning (miles de filas -- ver _consolidar_por_pdv()).
+        sucesor_de = {
+            reemplaza_a: (dni, nombre)
+            for reemplaza_a, dni, nombre in session.query(
+                Persona.reemplaza_a_dni, Persona.dni, Persona.nombre_completo,
+            ).filter(Persona.reemplaza_a_dni.isnot(None)).all()
+        }
+    finally:
+        session.close()
+
+    resultado = {}
+    for dni_original in dnis:
+        dni_actual, nombre_actual = dni_original, None
+        vistos = {dni_original}
+        while dni_actual in sucesor_de:
+            dni_siguiente, nombre_siguiente = sucesor_de[dni_actual]
+            if dni_siguiente in vistos:
+                break  # corte de seguridad ante un ciclo de datos corrupto -- no debería pasar nunca
+            dni_actual, nombre_actual = dni_siguiente, nombre_siguiente
+            vistos.add(dni_actual)
+        resultado[dni_original] = {"dni": dni_actual, "nombre": nombre_actual, "cambio": dni_actual != dni_original}
+    return resultado

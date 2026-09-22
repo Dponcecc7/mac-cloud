@@ -23,8 +23,8 @@ from flask import Blueprint, flash, redirect, render_template, request, send_fil
 from flask_login import current_user
 from openpyxl.styles import Font
 
-from dimension_models import HistorialCambio, Persona, get_session
-from patron_recurrente import canonizar_canal_dia
+from dimension_models import HistorialCambio, PatronRecurrente, Persona, get_session
+from patron_recurrente import canonizar_canal_dia, sin_acentos
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import condicion_scope
 
@@ -319,6 +319,69 @@ def crear():
         session.commit()
         sufijo = f" ({len(dias_a_guardar)} días)" if len(dias_a_guardar) > 1 else ""
         flash(f"Cambio registrado para {persona.nombre_completo.title()}{sufijo}.", "ok")
+    finally:
+        session.close()
+    return redirect(volver)
+
+
+@bp.route("/patron/agregar-canal", methods=["POST"])
+@_analista_requerido
+def agregar_canal_patron():
+    """Agrega un canal adicional al turno de uno o varios días, copiando el
+    horario que ese día ya tiene en Patrón Recurrente -- para el caso
+    Multicanal de un solo turno que cubre 2 canales (Davor, 2026-09-22,
+    caso real: Maritza, dni 46064286, "lunes/miércoles/viernes ve
+    Tradicional Y Autoservicio", mismo horario).
+
+    Antes la única forma de esto era re-subir el Excel de Patrón Recurrente
+    completo (Davor: "el proceso que me indicas seria muy engorroso") --
+    "Historial de cambios" no sirve para esto porque solo REEMPLAZA el
+    valor de un campo, nunca agrega una fila nueva (por eso un cambio de
+    "Canal del día" a un valor que ya era el mismo no hacía nada, visto en
+    la ficha de Maritza: "Valor nuevo" quedó igual al canal que ya tenía)."""
+    volver = request.form.get("volver") or url_for("historial.listar")
+    dni = request.form.get("dni", "").strip()
+    canal_nuevo = canonizar_canal_dia(request.form.get("canal", "").strip())
+    dias = [d for d in request.form.getlist("dia_semana") if d in DIAS_SEMANA]
+
+    if not dni or not canal_nuevo or not dias:
+        flash("Completá Canal y al menos un día.", "error")
+        return redirect(volver)
+
+    session = get_session()
+    try:
+        persona = _persona_en_scope(session, dni)
+        if not persona:
+            flash(f"No se encontró a nadie con DNI {dni} en tu alcance.", "error")
+            return redirect(volver)
+
+        por_dia = {}
+        for fila in session.query(PatronRecurrente).filter_by(dni=dni).all():
+            por_dia.setdefault(sin_acentos(fila.dia_semana), []).append(fila)
+
+        agregados, omitidos = [], []
+        for dia in dias:
+            filas_dia = por_dia.get(sin_acentos(dia), [])
+            if not filas_dia:
+                omitidos.append(f"{dia} (sin horario base ahí -- cargalo primero por Cargar Headcount)")
+                continue
+            if any((f.canal_dia or "").strip().lower() == canal_nuevo.lower() for f in filas_dia):
+                omitidos.append(f"{dia} (ya tiene {canal_nuevo})")
+                continue
+            base = filas_dia[0]  # mismo horario para todos los canales de un día Multicanal (caso Maritza)
+            session.add(PatronRecurrente(
+                dni=dni, dia_semana=dia,
+                hora_entrada_prog=base.hora_entrada_prog, hora_salida_prog=base.hora_salida_prog,
+                canal_dia=canal_nuevo, refrigerio=base.refrigerio,
+            ))
+            agregados.append(dia)
+
+        if agregados:
+            session.commit()
+            flash(f"{canal_nuevo} agregado a {persona.nombre_completo.title()} para: {', '.join(agregados)}."
+                  + (f" Omitidos: {'; '.join(omitidos)}." if omitidos else ""), "ok")
+        else:
+            flash("No se agregó nada. " + "; ".join(omitidos), "error")
     finally:
         session.close()
     return redirect(volver)

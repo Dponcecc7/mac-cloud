@@ -518,39 +518,72 @@
             <th>Día</th><th>Horario</th><th>Canal del día</th><th>Vigente hoy</th>
           </tr>
           {% for d in patron_semanal %}
-          <tr {{ 'class=fila-sin-patron' if not d.trabaja else '' }}>
-            <td>{{ d.dia }}</td>
             {% if not d.trabaja %}
+            <tr class="fila-sin-patron">
+              <td>{{ d.dia }}</td>
               <td colspan="3" class="empty">No trabaja este día (sin fila en Patrón Recurrente)</td>
+            </tr>
             {% else %}
-              <td>
-                {{ d.entrada }} – {{ d.salida }}
-                {% if usuario.rol in ("analista", "admin") %}
-                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora entrada programada', '{{ d.dia }}', '{{ d.entrada or '' }}')">Editar entrada</a>
-                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora salida programada', '{{ d.dia }}', '{{ d.salida or '' }}')">Editar salida</a>
-                {% endif %}
-              </td>
-              <td>
-                {{ d.canal or "—" }}
-                {% if usuario.rol in ("analista", "admin") %}
-                <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Canal del día', '{{ d.dia }}', '{{ d.canal or '' }}')">Editar</a>
-                {% endif %}
-              </td>
-              <td>
-                {% if d.hubo_cambio %}
-                  <span class="badge-cambio" title="Patrón base: {{ d.entrada }}–{{ d.salida }}, {{ d.canal or '—' }}">
-                    ⚠ {{ d.entrada_efectiva }}–{{ d.salida_efectiva }}, {{ d.canal_efectivo or "—" }}
-                  </span>
-                {% else %}
-                  <span class="empty">Sin cambios</span>
-                {% endif %}
-              </td>
+              {% for t in d.turnos %}
+              <tr>
+                {% if loop.first %}<td {{ 'rowspan=' ~ d.turnos|length if d.turnos|length > 1 else '' }}>{{ d.dia }}</td>{% endif %}
+                <td>
+                  {{ t.entrada }} – {{ t.salida }}
+                  {% if usuario.rol in ("analista", "admin") %}
+                  <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora entrada programada', '{{ d.dia }}', '{{ t.entrada or '' }}')">Editar entrada</a>
+                  <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Hora salida programada', '{{ d.dia }}', '{{ t.salida or '' }}')">Editar salida</a>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ t.canal or "—" }}
+                  {% if usuario.rol in ("analista", "admin") %}
+                  <a class="chico" style="text-decoration:none;" href="javascript:void(0)" onclick="prefillHistorialDia('Canal del día', '{{ d.dia }}', '{{ t.canal or '' }}')">Editar</a>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if t.hubo_cambio %}
+                    <span class="badge-cambio" title="Patrón base: {{ t.entrada }}–{{ t.salida }}, {{ t.canal or '—' }}">
+                      ⚠ {{ t.entrada_efectiva }}–{{ t.salida_efectiva }}, {{ t.canal_efectivo or "—" }}
+                    </span>
+                  {% else %}
+                    <span class="empty">Sin cambios</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
             {% endif %}
-          </tr>
           {% endfor %}
         </table>
       </div>
       <p class="note">"Vigente hoy" muestra el valor EFECTIVO si hay un cambio de "Historial de cambios" corriendo para ese día (ej. un horario o canal distinto desde cierta fecha) -- si no hay ninguno, coincide con el Patrón base.</p>
+
+      {% if usuario.rol in ("analista", "admin") %}
+      <form method="post" action="{{ url_for('historial.agregar_canal_patron') }}" class="historial-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="dni" value="{{ persona.dni }}">
+        <input type="hidden" name="volver" value="{{ url_for('reportes.ficha', dni=persona.dni) }}">
+        <div class="fila3">
+          <div>
+            <label>Agregar canal a día(s) (mismo horario -- Multicanal)</label>
+            <select name="dia_semana" multiple size="4" required>
+              {% for d in dias_semana_historial %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>Canal nuevo</label>
+            <select name="canal" required>
+              <option value="">Elegí un canal</option>
+              {% for c in ("Tradicional", "Farmacia", "Autoservicio") %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button class="enviar" type="submit">Agregar canal</button>
+          </div>
+        </div>
+      </form>
+      <p class="note">Crea una fila nueva de Patrón para cada día elegido, copiando el horario que ese día ya tiene -- para un turno que cubre más de un canal a la vez (ej. Maritza: lunes ve Autoservicio y Tradicional con el mismo horario). El día elegido necesita ya tener un horario cargado (por Cargar Headcount) para poder copiarlo.</p>
+      {% endif %}
     </div>
 
     <div class="panel">

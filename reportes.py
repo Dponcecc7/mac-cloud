@@ -30,7 +30,8 @@ from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle, pdvs_fuera_planning,
-    pdvs_pendientes, periodos_disponibles, resumen_planning, valores_filtrables, visitas_tradicional,
+    pdvs_pendientes, periodos_disponibles, resumen_planning, resumen_por_mercaderista, valores_filtrables,
+    visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
@@ -95,17 +96,32 @@ def _codigo_tareo(estado_base, comentario):
 
 
 def _patron_semanal(dni):
-    """[{dia, trabaja, entrada, salida, canal, hubo_cambio, entrada_efectiva,
-    salida_efectiva, canal_efectivo}, ...] lunes..domingo -- Patrón
-    Recurrente base de `dni` más el valor EFECTIVO hoy (mismo
-    valor_efectivo()/cargar_historial() que ya usa el motor/Horas
-    semanales/Cobertura para aplicar un override de Historial de cambios).
-    Usado por reportes_ficha.html ("Patrón recurrente actual") y por
-    ficha() para saber si el domingo es descanso implícito en "Tareo del
-    mes" (domingo sin fila acá = sin Patrón ese día)."""
+    """[{dia, trabaja, turnos: [{entrada, salida, canal, hubo_cambio,
+    entrada_efectiva, salida_efectiva, canal_efectivo}, ...]}, ...]
+    lunes..domingo -- Patrón Recurrente base de `dni` más el valor EFECTIVO
+    hoy (mismo valor_efectivo()/cargar_historial() que ya usa el motor/
+    Horas semanales/Cobertura para aplicar un override de Historial de
+    cambios). Usado por reportes_ficha.html ("Patrón recurrente actual") y
+    por ficha() para saber si el domingo es descanso implícito en "Tareo
+    del mes" (domingo sin fila acá = sin Patrón ese día).
+
+    `turnos` es una lista, no un solo valor (Davor, 2026-09-22, soporte de
+    Multicanal) -- un día puede tener MÁS de una fila de Patrón (un canal
+    por fila, ver PatronRecurrente.__table_args__), caso real: Maritza (dni
+    46064286) ve Autoservicio Y Tradicional los lunes/miércoles/viernes con
+    el MISMO horario. Antes esta función armaba un dict {día: fila}, que
+    para un día con 2 filas se quedaba en silencio con la ÚLTIMA leída de
+    la base y perdía la otra -- invisible en la Ficha aunque la fila
+    existiera. `canal=canal_base` en cada valor_efectivo() (antes no se
+    pasaba, quedaba en canal=None) es el mismo criterio que
+    motor_clasificacion.py::clasificar_dia() usa para no aplicarle a un
+    turno un override de Historial pensado para OTRO turno del mismo día
+    (canal específico distinto al de esta fila)."""
     session = get_session()
     try:
-        patron_por_dia = {sin_acentos(p.dia_semana): p for p in session.query(PatronRecurrente).filter_by(dni=dni).all()}
+        filas_por_dia = {}
+        for p in session.query(PatronRecurrente).filter_by(dni=dni).order_by(PatronRecurrente.canal_dia).all():
+            filas_por_dia.setdefault(sin_acentos(p.dia_semana), []).append(p)
     finally:
         session.close()
     idx_historial = cargar_historial()
@@ -113,33 +129,35 @@ def _patron_semanal(dni):
     resultado = []
     for wd, dia_es in enumerate(DIAS_ES):
         dia_norm = sin_acentos(dia_es)
-        fila = patron_por_dia.get(dia_norm)
+        filas = filas_por_dia.get(dia_norm, [])
         # Fecha real más reciente que cae en ese día de semana -- hace
         # falta una fecha concreta para que valor_efectivo() pueda evaluar
         # si un override "solo los lunes" está vigente hoy.
         fecha_ref = hoy_patron - dt.timedelta(days=(hoy_patron.weekday() - wd) % 7)
 
-        entrada_base = fila.hora_entrada_prog.strftime("%H:%M") if fila and fila.hora_entrada_prog else None
-        salida_base = fila.hora_salida_prog.strftime("%H:%M") if fila and fila.hora_salida_prog else None
-        canal_base = fila.canal_dia if fila else None
+        turnos = []
+        for fila in filas:
+            entrada_base = fila.hora_entrada_prog.strftime("%H:%M") if fila.hora_entrada_prog else None
+            salida_base = fila.hora_salida_prog.strftime("%H:%M") if fila.hora_salida_prog else None
+            canal_base = fila.canal_dia
 
-        entrada_efectiva = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha_ref, entrada_base)
-        salida_efectiva = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha_ref, salida_base)
-        canal_efectivo = valor_efectivo(idx_historial, dni, "Canal del día", fecha_ref, canal_base)
-        entrada_efectiva = entrada_efectiva[:5] if entrada_efectiva else None
-        salida_efectiva = salida_efectiva[:5] if salida_efectiva else None
+            entrada_efectiva = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha_ref, entrada_base, canal=canal_base)
+            salida_efectiva = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha_ref, salida_base, canal=canal_base)
+            canal_efectivo = valor_efectivo(idx_historial, dni, "Canal del día", fecha_ref, canal_base, canal=canal_base)
+            entrada_efectiva = entrada_efectiva[:5] if entrada_efectiva else None
+            salida_efectiva = salida_efectiva[:5] if salida_efectiva else None
 
-        hubo_cambio = (
-            (entrada_efectiva or "") != (entrada_base or "")
-            or (salida_efectiva or "") != (salida_base or "")
-            or (canal_efectivo or "").strip().upper() != (canal_base or "").strip().upper()
-        )
-        resultado.append({
-            "dia": dia_es, "trabaja": fila is not None,
-            "entrada": entrada_base, "salida": salida_base, "canal": canal_base,
-            "hubo_cambio": hubo_cambio,
-            "entrada_efectiva": entrada_efectiva, "salida_efectiva": salida_efectiva, "canal_efectivo": canal_efectivo,
-        })
+            hubo_cambio = (
+                (entrada_efectiva or "") != (entrada_base or "")
+                or (salida_efectiva or "") != (salida_base or "")
+                or (canal_efectivo or "").strip().upper() != (canal_base or "").strip().upper()
+            )
+            turnos.append({
+                "entrada": entrada_base, "salida": salida_base, "canal": canal_base,
+                "hubo_cambio": hubo_cambio,
+                "entrada_efectiva": entrada_efectiva, "salida_efectiva": salida_efectiva, "canal_efectivo": canal_efectivo,
+            })
+        resultado.append({"dia": dia_es, "trabaja": len(turnos) > 0, "turnos": turnos})
     return resultado
 
 
@@ -553,6 +571,7 @@ def planning():
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
 
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
@@ -560,6 +579,7 @@ def planning():
         region_filtro=region_f or "", ciudad_filtro=ciudad_f or "", supervisor_filtro=supervisor_f or "",
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
+        por_mercaderista=por_mercaderista,
     )
 
 
