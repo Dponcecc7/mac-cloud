@@ -86,8 +86,13 @@ def _upsert_postgres(session, existentes_por_clave, fila):
         return None if pd.isna(v) else v
 
     dni, fecha = fila["DNI"], fila["Fecha"]
+    # canal_turno = canal_esperado (Davor, 2026-09-22, soporte de 2 turnos):
+    # 1 canal = 1 turno, así que reusar este valor como clave del turno es
+    # exacto y no necesita una columna/cálculo aparte -- ver fact_models.py.
+    canal_turno = fila["Canal esperado (Patrón)"]
     fila_bd = dict(
         dni=dni, fecha=fecha, dia_semana=fila["Día"], canal_esperado=fila["Canal esperado (Patrón)"],
+        canal_turno=canal_turno,
         canales_marcados=_limpio(fila["Canal(es) marcado(s)"]), entrada_esperada=fila["Entrada esperada"],
         entrada_real=_limpio(fila["Entrada real"]), salida_esperada=fila["Salida esperada"], salida_real=_limpio(fila["Salida real"]),
         estado=fila["Estado"], salida_anticipada_min=_limpio(fila["Salida anticipada (min)"]),
@@ -104,14 +109,14 @@ def _upsert_postgres(session, existentes_por_clave, fila):
         # que datos que en realidad ya estaban frescos.
         procesado_en=func.now(),
     )
-    existente = existentes_por_clave.get((dni, fecha))
+    existente = existentes_por_clave.get((dni, fecha, canal_turno))
     if existente:
         for k, val in fila_bd.items():
             setattr(existente, k, val)
     else:
         nuevo = ClasificacionDiaria(**fila_bd)
         session.add(nuevo)
-        existentes_por_clave[(dni, fecha)] = nuevo
+        existentes_por_clave[(dni, fecha, canal_turno)] = nuevo
 
 
 def _parse_hora_corregida(valor, dni, fecha, lado):
@@ -137,15 +142,33 @@ def _parse_hora_corregida(valor, dni, fecha, lado):
     return pd.NaT
 
 
-def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial):
-    """Calcula la fila de un dia-persona. Copiada TAL CUAL de
+def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial, canales_programados_hoy=None):
+    """Calcula la fila de un dia-persona-TURNO. Copiada TAL CUAL de
     MAC/motor_clasificacion_diaria.py -- no tocar sin revisar el original
-    primero (ver docstring del modulo)."""
+    primero (ver docstring del modulo), EXCEPTO por `canales_programados_hoy`
+    (Davor, 2026-09-22, soporte de 2 turnos/día para Multicanal -- caso real
+    dni 73897404): el set de TODOS los canales que esta persona tiene
+    programados hoy (1 elemento para el 99% de la gente, 2 si es un
+    Multicanal con turno AM/PM real). None (valor por default, usado por
+    los tests existentes que llaman esta función con 1 solo pat) equivale a
+    "solo este canal" -- cero cambio de comportamiento para 1 turno."""
     entrada_esp = valor_efectivo(idx_historial, dni, "Hora entrada programada", fecha, pat[col_ent])
     salida_esp = valor_efectivo(idx_historial, dni, "Hora salida programada", fecha, pat[col_sal])
     canal_esp_norm = str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, pat[col_canal_dia])).strip()
+    canales_hoy_todos = canales_programados_hoy if canales_programados_hoy else {canal_esp_norm}
 
-    visitas_dia = v[(v["nro_documento"] == dni) & (v["fecha_inicio_dt"] == fecha)]
+    visitas_dia_todas = v[(v["nro_documento"] == dni) & (v["fecha_inicio_dt"] == fecha)]
+    if len(canales_hoy_todos) > 1:
+        # 2 turnos genuinos hoy -- cada turno solo ve las visitas de SU
+        # propio canal para entrada/salida real (filtrar por canal es más
+        # robusto que inferir por franja horaria: el canal ya es un tag
+        # inequívoco en cada visita, un horario que se solapa unos minutos
+        # no lo es). El camino de 1 solo turno NUNCA entra acá -- ver abajo.
+        visitas_dia = visitas_dia_todas[visitas_dia_todas["canal_visita"] == canal_esp_norm]
+    else:
+        # Camino de 1 solo turno (la inmensa mayoría) -- CERO cambio de
+        # comportamiento respecto a antes de esta feature.
+        visitas_dia = visitas_dia_todas
     visitas_validas = visitas_dia[visitas_dia["geofence_ok"]]
     salida_anticipada = None
     alerta_analista = False
@@ -349,6 +372,16 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
         alerta_analista = True
 
     trabajo_otro_canal = len(canales_marcados) > 0 and canal_esp_norm not in canales_marcados
+    if len(canales_hoy_todos) > 1:
+        # Multicanal (Davor, 2026-09-22): una visita que no matchea NINGUNO
+        # de los 2 canales programados hoy (dato mal cargado en Athena, o de
+        # verdad un tercer canal puntual) se marca en AMBOS turnos -- mejor
+        # mostrar de más que esconder una visita rara (decisión explícita,
+        # no default silencioso). El camino de 1 turno nunca entra acá.
+        canales_ajenos = [c for c in visitas_dia_todas["canal_visita"].unique() if c not in canales_hoy_todos]
+        if canales_ajenos:
+            trabajo_otro_canal = True
+            canales_marcados = sorted(set(canales_marcados) | set(canales_ajenos))
 
     return {
         "DNI": dni, "Nombre": nombre, "Fecha": fecha.date() if hasattr(fecha, "date") else fecha,
@@ -417,8 +450,13 @@ def _sincronizar_postgres(res, claves_recalculadas):
     session = get_session()
     try:
         existentes = session.query(ClasificacionDiaria).all()
-        existentes_por_clave = {(row.dni, row.fecha): row for row in existentes}
-        res_por_clave = {(r["DNI"], r["Fecha"]): r for r in res.to_dict("records")}
+        # (dni, fecha, canal_turno), no solo (dni, fecha) -- Davor,
+        # 2026-09-22: un Multicanal de 2 turnos tiene 2 filas el mismo
+        # (dni, fecha), y una clave sin canal pisaría una con la otra acá
+        # (dict-comprehension se queda con la última iterada). canal_turno
+        # = "Canal esperado (Patrón)" de `res` -- ver _upsert_postgres().
+        existentes_por_clave = {(row.dni, row.fecha, row.canal_turno): row for row in existentes}
+        res_por_clave = {(r["DNI"], r["Fecha"], r["Canal esperado (Patrón)"]): r for r in res.to_dict("records")}
 
         n_escritas = 0
         dnis_huerfanos = set()
@@ -623,34 +661,57 @@ def main():
             key_pat = (dni, weekday)
             if key_pat not in p_idx.index:
                 continue
-            pat = p_idx.loc[key_pat]
-            if isinstance(pat, pd.DataFrame):
-                pat = pat.iloc[0]
+            pat_grupo = p_idx.loc[key_pat]
+            # Multicanal con 2 turnos genuinos ese día de semana (Davor,
+            # 2026-09-22) -- pat_grupo es un DataFrame de 2+ filas en vez de
+            # una Series cuando hay más de 1 fila de Patrón para
+            # (dni, weekday), una por canal. ANTES esto se resolvía con
+            # `pat.iloc[0]` (se quedaba con la primera y DESCARTABA
+            # silenciosamente el resto) -- ahora se procesa cada fila/turno
+            # por separado. El camino de 1 turno (pat_grupo ya es una
+            # Series) sigue exactamente igual.
+            if isinstance(pat_grupo, pd.DataFrame):
+                pat_filas = [fila_pat for _, fila_pat in pat_grupo.iterrows()]
+            else:
+                pat_filas = [pat_grupo]
+
+            # Canales programados hoy (los 2 turnos si aplica) -- resuelto
+            # vía valor_efectivo() igual que canal_esp_norm dentro de
+            # clasificar_dia(), para que un override de Historial de
+            # cambios también participe acá al decidir si una visita es de
+            # "otro canal" o de uno de los turnos legítimos del día.
+            canales_hoy_todos = {
+                str(valor_efectivo(idx_historial, dni, "Canal del día", fecha, fila_pat[col_canal_dia])).strip()
+                for fila_pat in pat_filas
+            }
 
             registro_sup = sup_idx.get(clave)
 
-            # Cualquier bug no anticipado en clasificar_dia() para UN
-            # dni/fecha puntual (ej. los dos apagones reales de 2026-08-25
-            # y 2026-08-26, ambos "un solo dato mal tipeado tira abajo TODO
-            # el motor para las ~90 personas y bloquea los pasos 3-8 del
-            # pipeline") ya no debe frenar la corrida entera -- se salta
-            # ese día/persona con un aviso visible en el log, y el resto
-            # del equipo se sigue clasificando normal. Los guards puntuales
-            # (_parse_hora_corregida, valor_efectivo) siguen siendo la
-            # primera línea de defensa porque dan un mensaje más específico
-            # y no pierden el día de esa persona -- esto es la red de
-            # seguridad para lo que todavía no se anticipó.
-            try:
-                fila = clasificar_dia(dni, persona["Nombre completo"], fecha, weekday, pat,
-                                       col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial)
-            except Exception as e:
-                print(f"ADVERTENCIA: no se pudo clasificar DNI {dni} en {fecha.date()} -- {e!r} -- se omite, la corrida sigue con el resto.")
-                continue
-            resultados_nuevos.append(fila)
-            if ya_procesado and tiene_correccion:
-                filas_corregidas += 1
-            elif ya_procesado and es_reciente:
-                filas_actualizadas_recientes += 1
+            for pat in pat_filas:
+                # Cualquier bug no anticipado en clasificar_dia() para UN
+                # dni/fecha/turno puntual (ej. los dos apagones reales de
+                # 2026-08-25 y 2026-08-26, ambos "un solo dato mal tipeado
+                # tira abajo TODO el motor para las ~90 personas y bloquea
+                # los pasos 3-8 del pipeline") ya no debe frenar la corrida
+                # entera -- se salta ese día/persona/turno con un aviso
+                # visible en el log, y el resto del equipo se sigue
+                # clasificando normal. Los guards puntuales
+                # (_parse_hora_corregida, valor_efectivo) siguen siendo la
+                # primera línea de defensa porque dan un mensaje más
+                # específico y no pierden el día de esa persona -- esto es
+                # la red de seguridad para lo que todavía no se anticipó.
+                try:
+                    fila = clasificar_dia(dni, persona["Nombre completo"], fecha, weekday, pat,
+                                           col_ent, col_sal, col_canal_dia, v, registro_sup, idx_historial,
+                                           canales_programados_hoy=canales_hoy_todos)
+                except Exception as e:
+                    print(f"ADVERTENCIA: no se pudo clasificar DNI {dni} en {fecha.date()} -- {e!r} -- se omite, la corrida sigue con el resto.")
+                    continue
+                resultados_nuevos.append(fila)
+                if ya_procesado and tiene_correccion:
+                    filas_corregidas += 1
+                elif ya_procesado and es_reciente:
+                    filas_actualizadas_recientes += 1
 
     nuevos_df = pd.DataFrame(resultados_nuevos)
 
@@ -675,7 +736,11 @@ def main():
 
     res = res.sort_values(["Fecha", "DNI"]).reset_index(drop=True)
 
-    claves_recalculadas = set(zip(nuevos_df["DNI"], nuevos_df["Fecha"])) if len(nuevos_df) else set()
+    # (DNI, Fecha, Canal) -- ver _sincronizar_postgres(), ahora keyed
+    # también por canal para no pisar un turno con el otro de un Multicanal.
+    claves_recalculadas = (
+        set(zip(nuevos_df["DNI"], nuevos_df["Fecha"], nuevos_df["Canal esperado (Patrón)"])) if len(nuevos_df) else set()
+    )
     _sincronizar_postgres(res, claves_recalculadas)
     _escribir_snapshot_auditoria(res)
 
