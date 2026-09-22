@@ -55,18 +55,27 @@ def _horas_esperadas_dia(row, feriados_set):
     if fecha in feriados_set:
         return 0.0
     wd = fecha.weekday()
-    if wd <= 4:
+    # Multicanal con 2 turnos genuinos ese día (Davor, 2026-09-22) -- la
+    # constante plana HORAS_LV/HORAS_SABADO asume 1 sola jornada por día;
+    # sumarla una vez POR TURNO (ver _turnos_hoy, calculado antes de llamar
+    # esta función) infla "horas a trabajar" a más del doble de lo real
+    # (ej. 17h para un día real de 10h repartido en 2 turnos). En ese caso
+    # se cae a la MISMA fórmula que ya usa la rama de domingo de acá abajo
+    # -- el camino de 1 turno (99% de la gente, cualquier día) sigue con la
+    # constante de siempre, sin cambios.
+    es_dia_de_2_turnos = row.get("_turnos_hoy", 1) > 1
+    if wd <= 4 and not es_dia_de_2_turnos:
         return HORAS_LV
-    if wd == 5:
+    if wd == 5 and not es_dia_de_2_turnos:
         return HORAS_SABADO
     # Domingo (Davor, 2026-09-14: Autoservicio trabaja domingo, debe contar
-    # "si el analista lo sube en su patrón recurrente") -- a propósito SIN
-    # una constante fija tipo HORAS_LV/HORAS_SABADO: se deriva de la
-    # entrada/salida esperada YA CLASIFICADA para esa fila (que el motor
-    # sacó del propio Patrón Recurrente de esa persona), menos el
-    # refrigerio. Sin fila de domingo en su Patrón, el motor nunca generó
-    # esta fila -- no hay nada que sumar, mismo resultado 0.0 de siempre
-    # para cualquiera que no lo tenga cargado.
+    # "si el analista lo sube en su patrón recurrente"), o cualquier día con
+    # 2 turnos -- a propósito SIN una constante fija tipo HORAS_LV/
+    # HORAS_SABADO: se deriva de la entrada/salida esperada YA CLASIFICADA
+    # para esa fila/turno (que el motor sacó del propio Patrón Recurrente de
+    # esa persona), menos el refrigerio. Sin fila de domingo en su Patrón,
+    # el motor nunca generó esta fila -- no hay nada que sumar, mismo
+    # resultado 0.0 de siempre para cualquiera que no lo tenga cargado.
     entrada_td = pd.to_timedelta(str(row["entrada_esperada"]), errors="coerce")
     salida_td = pd.to_timedelta(str(row["salida_esperada"]), errors="coerce")
     if pd.isna(entrada_td) or pd.isna(salida_td):
@@ -172,6 +181,10 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         return REFRIGERIO_MIN.get(sin_acentos(valor_final), 0) if valor_final else 0
 
     r["_refrigerio_min"] = r.apply(_refrigerio_min_para, axis=1)
+    # Cuántas filas/turnos tiene esta persona ESTE día -- 1 para el 99% de
+    # la gente, 2 para un Multicanal con turno AM/PM real. Ver
+    # _horas_esperadas_dia() para el porqué.
+    r["_turnos_hoy"] = r.groupby(["dni", "fecha"])["dni"].transform("size")
     r["horas_a_trabajar"] = r.apply(lambda row: _horas_esperadas_dia(row, feriados_set), axis=1)
 
     r["_entrada_esp_td"] = pd.to_timedelta(r["entrada_esperada"].astype(str), errors="coerce")
@@ -226,21 +239,38 @@ def resumen_por_persona(detalle_semana):
     if detalle_semana is None or not len(detalle_semana):
         return pd.DataFrame()
 
+    # Días DISTINTOS, no filas (Davor, 2026-09-22, soporte de 2 turnos/día)
+    # -- un Multicanal con 2 turnos tardanza/falta el mismo día no debe
+    # contar como 2 días, solo como 1. Se colapsa a 1 fila por (dni,fecha)
+    # con "any"/"first" ANTES de contar, separado del agregado de horas de
+    # abajo (que sí debe SUMAR los 2 turnos, sin tocar). Para el 99% de la
+    # gente (1 sola fila por día) esto da exactamente 1 fila por (dni,fecha)
+    # igual que detalle_semana ya tenía -- cero cambio de resultado.
+    dias_flags = detalle_semana.groupby(["dni", "fecha"]).agg(
+        es_tardanza=("es_tardanza", "any"),
+        es_salida_temprana=("es_salida_temprana", "any"),
+        recupero_dia=("recupero_dia", "any"),
+        motivo_falta=("motivo_falta", "first"),
+    ).reset_index()
+
+    g_dias = dias_flags.groupby("dni").agg(
+        _dias_falta=("motivo_falta", lambda s: int((s == "Falta").sum())),
+        _dias_vacante=("motivo_falta", lambda s: int((s == "Vacante").sum())),
+        dias_tardanza=("es_tardanza", "sum"),
+        tardanzas_recuperadas=("es_tardanza", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
+        dias_salida_temprana=("es_salida_temprana", "sum"),
+        salidas_cumplieron=("es_salida_temprana", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
+    )
+
     g = detalle_semana.groupby("dni").agg(
         nombre=("nombre", "first"), supervisor=("supervisor", "first"),
         ciudad=("ciudad", "first"), region=("region", "first"),
-        _dias_falta=("motivo_falta", lambda s: int((s == "Falta").sum())),
-        _dias_vacante=("motivo_falta", lambda s: int((s == "Vacante").sum())),
         horas_trabajadas=("horas_trabajadas", "sum"),
         horas_a_trabajar=("horas_a_trabajar", "sum"),
         _horas_vacante=("_horas_vacante_dia", "sum"),
         _horas_sustento=("_horas_sustento_dia", "sum"),
         _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
-        dias_tardanza=("es_tardanza", "sum"),
-        tardanzas_recuperadas=("es_tardanza", lambda s: int((s & detalle_semana.loc[s.index, "recupero_dia"]).sum())),
-        dias_salida_temprana=("es_salida_temprana", "sum"),
-        salidas_cumplieron=("es_salida_temprana", lambda s: int((s & detalle_semana.loc[s.index, "recupero_dia"]).sum())),
-    ).reset_index()
+    ).join(g_dias).reset_index()
 
     g["dias_falta_vacante"] = (
         "Falta: " + g["_dias_falta"].astype(str) + " / Vacante: " + g["_dias_vacante"].astype(str)
