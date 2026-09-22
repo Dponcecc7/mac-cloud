@@ -419,11 +419,21 @@ def _ciudad_normalizada(ciudad):
 
 
 def resumen_por_mercaderista(planning, pendientes):
-    """Por (mercaderista, ciudad): cuántos PDVs tiene asignados en el
-    Planning del período, cuántos de esos le quedan pendientes de visitar,
-    y su DNI -- Davor, 2026-09-22: "agregar un resumen de mercaderista x
-    ciudad con la cantidad de PDVs que tiene para visitar" + "agregar dni
-    y opción para exportar".
+    """Por mercaderista: cuántos PDVs tiene asignados en el Planning del
+    período (sumando TODAS sus ciudades en una sola fila), cuántos de esos
+    le quedan pendientes de visitar, y su DNI -- Davor, 2026-09-22:
+    "agregar un resumen de mercaderista x ciudad con la cantidad de PDVs
+    que tiene para visitar" + "agregar dni y opción para exportar", y
+    2026-09-22 (mismo día, seguimiento): "quiero un total único por
+    persona, sin partir por ciudad" -- la primera versión agrupaba también
+    por ciudad, así que alguien con PDVs en 2 ciudades (ej. Eddie Macalopu:
+    3 en Piura + 32 en Talara) salía partido en 2 filas chicas en vez de
+    una con el total real (35). Si la vista ya viene filtrada a una sola
+    ciudad (ver `ciudad_f` en reportes.py::planning()), esto no cambia
+    nada -- solo importa cuando se ven todas las ciudades juntas. `ciudad`
+    ahora lista las ciudades distintas del grupo (ordenadas, separadas por
+    coma) en vez de una sola -- sigue siendo informativo sin volver a
+    esconder que la persona cubre más de una.
 
     Identifica a cada mercaderista con un Union-Find sobre NOMBRE
     normalizado Y dni_asignado -- dos filas del Excel son "la misma
@@ -442,11 +452,13 @@ def resumen_por_mercaderista(planning, pendientes):
     comparte nombre con B, y B comparte DNI con C, las 3 quedan en el
     mismo grupo aunque A y C no compartan nada directamente entre sí.
 
-    `ciudad` también agrupa por su forma normalizada (mismo criterio,
-    evita que un espacio/mayúscula de más la parta en 2 filas -- caso
-    real: "Gianella Tantalean" repetida 2 veces bajo "Chiclayo"). Un
-    Ciudad vacío o solo puntuación (ver _ciudad_normalizada()) cae en el
-    bucket "—", no compite como ciudad real.
+    `ciudad` ya NO agrupa (ver docstring de arriba) -- solo se normaliza
+    (mismo criterio de siempre, evita que un espacio/mayúscula de más la
+    liste 2 veces para la misma persona -- caso real: "Gianella Tantalean"
+    repetida bajo "Chiclayo" y "CHICLAYO ") y se junta en un set por grupo,
+    mostrado ordenado y separado por coma. Un Ciudad vacío o solo
+    puntuación (ver _ciudad_normalizada()) cae en el bucket "—", no compite
+    como ciudad real.
 
     `dni`/`mercaderista`: el más repetido del grupo (Counter.most_common)
     -- no es "adivinar cuál es el correcto", solo el más frecuente tal
@@ -476,12 +488,17 @@ def resumen_por_mercaderista(planning, pendientes):
     co_lis_pendientes = {p["co_li"] for p in pendientes}
     conteo = {}
     for p in planning:
-        ciudad_norm = _ciudad_normalizada(p.ciudad)
-        clave = (_grupo_persona(p), (ciudad_norm or "—").upper())
+        clave = _grupo_persona(p)
         fila = conteo.setdefault(clave, {
-            "ciudad": ciudad_norm or "—", "asignados": 0, "pendientes": 0,
+            "ciudades": {}, "asignados": 0, "pendientes": 0,
             "dnis": Counter(), "nombres": Counter(),
         })
+        ciudad_norm = _ciudad_normalizada(p.ciudad)
+        # dict en vez de set: dedupea case-insensitive (misma ciudad tipeada
+        # "CHICLAYO" en una fila y "Chiclayo" en otra no debe listarse 2
+        # veces) quedándose con la forma que apareció primero, mismo criterio
+        # que ya usaba la agrupación vieja por (persona, ciudad.upper()).
+        fila["ciudades"].setdefault((ciudad_norm or "—").upper(), ciudad_norm or "—")
         fila["asignados"] += 1
         if p.co_li in co_lis_pendientes:
             fila["pendientes"] += 1
@@ -497,12 +514,12 @@ def resumen_por_mercaderista(planning, pendientes):
         dni_variantes = [d for d, _n in dnis_ordenados[1:]]
         nombre_principal = v["nombres"].most_common(1)[0][0] if v["nombres"] else None
         filas.append({
-            "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": v["ciudad"],
+            "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": ", ".join(sorted(v["ciudades"].values())),
             "dni": dni_principal, "dni_variantes": dni_variantes,
             "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
             "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
         })
-    filas.sort(key=lambda f: (f["ciudad"], f["mercaderista"]))
+    filas.sort(key=lambda f: f["mercaderista"])
     return filas
 
 
