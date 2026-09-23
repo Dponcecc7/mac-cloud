@@ -164,13 +164,39 @@
       .selector-mes input[type=month] { flex:1 1 auto; min-width:0; }
 
       /* Mismo criterio que ya usa Personal (.table-wrap con scroll táctil
-         suave + celdas más angostas en mobile) -- las tablas más anchas de
-         esta ficha (Tardanzas, 11 columnas; Patrón recurrente) quedaban con
-         el scroll horizontal "seco" (sin inercia) propio de iOS Safari sin
-         -webkit-overflow-scrolling, y un poco más de aire ganado en cada
-         celda reduce cuánto hay que deslizar. */
+         suave + celdas más angostas en mobile) -- para las tablas que se
+         quedan en modo scroll horizontal acá (Patrón recurrente, Faltas,
+         Vacaciones, Descansos -- tienen rowspan o pocas columnas, no vale
+         la pena convertirlas a tarjeta) faltaba el scroll con inercia de
+         iOS Safari, y un poco más de aire ganado en cada celda reduce
+         cuánto hay que deslizar. Tardanzas/Historial NO usan esto -- ver
+         table.cards-mobile más abajo. */
       .table-wrap { -webkit-overflow-scrolling:touch; }
       th, td { padding:5px 6px; }
+
+      /* Tardanzas (11 columnas) e Historial de cambios (7 + acciones) eran
+         las 2 tablas realmente incómodas de leer con scroll horizontal en
+         un teléfono -- Davor, 2026-09-23: "seguir con responsive en Perfil
+         mercaderista". Se convierten a una tarjeta por fila (mismo truco
+         clásico de "responsive tables": la fila pasa a display:block, cada
+         celda muestra su encabezado como :: before via data-label). El
+         encabezado de columnas (.fila-encabezado) se oculta -- ya no hace
+         falta, cada valor lleva su propia etiqueta al lado. El ORDENAMIENTO
+         por columna sigue funcionando igual: _ordenarTabla() solo reordena
+         <tr> dentro del <table> con appendChild, nunca dependió de que la
+         tabla se vea como tabla. */
+      table.cards-mobile { display:block; }
+      table.cards-mobile tr.fila-encabezado { display:none; }
+      table.cards-mobile tr:not(.fila-encabezado) {
+        display:block; border:1px solid var(--line); border-radius:10px;
+        padding:8px 10px; margin-bottom:8px;
+      }
+      table.cards-mobile td { display:block; border:none; padding:3px 0; white-space:normal; text-align:left; }
+      table.cards-mobile td.num { text-align:left; }
+      table.cards-mobile td[data-label]::before {
+        content: attr(data-label) ": "; font-weight:700; color:var(--muted);
+        font-size:10px; text-transform:uppercase;
+      }
     }
 
     /* Registrar motivo directo en "Faltas del mes" (Davor, 2026-09-17:
@@ -398,8 +424,8 @@
       <p class="empty" style="margin:-6px 0 8px;">"Editar" corrige la hora programada de ESE día puntual (ej. si el horario cambió y recién avisaron después) -- completa el formulario de Historial de cambios más abajo.</p>
       {% endif %}
       <div class="table-wrap">
-        <table id="tabla-tardanzas">
-          <tr>
+        <table id="tabla-tardanzas" class="cards-mobile">
+          <tr class="fila-encabezado">
             <th class="th-ordenable" onclick="ordenarPor('fecha')">Fecha <span class="flecha-orden" id="flecha-fecha"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('estado')">Estado <span class="flecha-orden" id="flecha-estado"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('entrada_real')">Entrada real <span class="flecha-orden" id="flecha-entrada_real"></span></th>
@@ -416,18 +442,18 @@
           <tr data-orden-fecha="{{ t.fecha_iso }}" data-orden-estado="{{ ('TARDANZA' if t.tardanza else '') ~ (' SALIDA ANTICIPADA' if t.salida_temprana else '') }}"
               data-orden-entrada_real="{{ t.entrada_real or '' }}" data-orden-entrada_prog="{{ t.entrada_esperada or '' }}"
               data-orden-salida_real="{{ t.salida_real or '' }}" data-orden-salida_prog="{{ t.salida_esperada or '' }}">
-            <td>{{ t.fecha }}</td>
-            <td>
+            <td data-label="Fecha">{{ t.fecha }}</td>
+            <td data-label="Estado">
               {% if t.tardanza %}<span class="badge-pct warn">Tardanza</span>{% endif %}
               {% if t.salida_temprana %}<span class="badge-pct warn">Salida anticipada</span>{% endif %}
             </td>
-            <td>{{ t.entrada_real }}</td><td>{{ t.entrada_esperada }}</td>
-            <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora entrada programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
-            <td>{{ t.salida_real }}</td><td>{{ t.salida_esperada }}</td>
-            <td>{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora salida programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
-            <td class="num">{{ t.horas_trabajadas if t.horas_trabajadas is not none else '—' }}</td>
-            <td class="num">{{ t.horas_a_trabajar }}</td>
-            <td>
+            <td data-label="Entrada real">{{ t.entrada_real }}</td><td data-label="Entrada prog.">{{ t.entrada_esperada }}</td>
+            <td data-label="Editar entrada">{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora entrada programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
+            <td data-label="Salida real">{{ t.salida_real }}</td><td data-label="Salida prog.">{{ t.salida_esperada }}</td>
+            <td data-label="Editar salida">{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora salida programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
+            <td class="num" data-label="Hs. trabajadas">{{ t.horas_trabajadas if t.horas_trabajadas is not none else '—' }}</td>
+            <td class="num" data-label="Hs. a trabajar">{{ t.horas_a_trabajar }}</td>
+            <td data-label="¿Recuperó?">
               {% if t.recupero is none %}—
               {% elif t.recupero %}<span class="badge-pct ok">Sí</span>
               {% else %}<span class="badge-pct bad">No</span>
@@ -613,8 +639,8 @@
       {% if not historial_persona %}<p class="empty">Sin cambios registrados para esta persona.</p>
       {% else %}
       <div class="table-wrap">
-        <table id="tabla-historial-ficha">
-          <tr>
+        <table id="tabla-historial-ficha" class="cards-mobile">
+          <tr class="fila-encabezado">
             <th class="th-ordenable" onclick="ordenarPorHistorial('campo')">Campo <span class="flecha-orden" id="flecha-h-campo"></span></th>
             <th class="th-ordenable" onclick="ordenarPorHistorial('valor')">Valor nuevo <span class="flecha-orden" id="flecha-h-valor"></span></th>
             <th class="th-ordenable" onclick="ordenarPorHistorial('desde')">Desde <span class="flecha-orden" id="flecha-h-desde"></span></th>
@@ -628,14 +654,14 @@
           <tr data-orden-campo="{{ (c.campo or '')|upper }}" data-orden-valor="{{ (c.valor_nuevo or '')|upper }}"
               data-orden-desde="{{ c.fecha_desde.isoformat() }}" data-orden-hasta="{{ c.fecha_hasta.isoformat() if c.fecha_hasta else '' }}"
               data-orden-dia="{{ (c.dia_semana or '')|upper }}" data-orden-canal="{{ (c.canal or '')|upper }}" data-orden-comentario="{{ (c.comentario or '')|upper }}">
-            <td>{{ c.campo }}</td>
-            <td>{{ c.valor_nuevo }}</td>
-            <td>{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
-            <td>{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
-            <td>{{ c.dia_semana or "Todos" }}</td>
-            <td>{{ c.canal or "Todos" }}</td>
-            <td>{{ c.comentario or "—" }}</td>
-            <td>
+            <td data-label="Campo">{{ c.campo }}</td>
+            <td data-label="Valor nuevo">{{ c.valor_nuevo }}</td>
+            <td data-label="Desde">{{ c.fecha_desde.strftime("%d/%m/%Y") }}</td>
+            <td data-label="Hasta">{{ c.fecha_hasta.strftime("%d/%m/%Y") if c.fecha_hasta else "—" }}</td>
+            <td data-label="Día">{{ c.dia_semana or "Todos" }}</td>
+            <td data-label="Canal">{{ c.canal or "Todos" }}</td>
+            <td data-label="Comentario">{{ c.comentario or "—" }}</td>
+            <td data-label="Acciones">
               {% if usuario.rol in ("analista", "admin") %}
               <a class="chico" style="text-decoration:none; display:inline-block;" href="{{ url_for('historial.editar', cambio_id=c.id) }}">Editar</a>
               <form class="inline" method="post" action="{{ url_for('historial.eliminar', cambio_id=c.id) }}" onsubmit="return confirm('¿Borrar este cambio? No se puede deshacer.');">
