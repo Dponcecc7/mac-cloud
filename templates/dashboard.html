@@ -129,9 +129,9 @@
     .chart-line-path { fill:none; stroke:var(--brand); stroke-width:2; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
     .chart-line-dot {
       position:absolute; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%;
-      background:var(--card); border:1.6px solid var(--brand); cursor:default;
+      background:var(--card); border:1.6px solid var(--brand); cursor:pointer; display:block;
     }
-    .chart-line-dot:hover { background:var(--brand); }
+    .chart-line-dot:hover { background:var(--brand); width:9px; height:9px; margin:-4.5px 0 0 -4.5px; }
     .chart-days-line { display:flex; justify-content:space-between; margin-top:5px; }
     .chart-day { font-size:8px; color:var(--muted); white-space:nowrap; }
     .legend { display:flex; gap:16px; font-size:11px; color:var(--muted); margin-top:8px; font-weight:600; }
@@ -284,7 +284,11 @@
                 <polyline points="{{ data.tendencia_puntos }}" class="chart-line-path"></polyline>
               </svg>
               {% for d in data.tendencia %}
-              <div class="chart-line-dot" style="left:{{ d.x }}%; top:{{ d.y }}%;" title="{{ d.dia }} · {{ d.pct }}% efectividad"></div>
+              {% if tiene_acceso(usuario, 'asistencia') %}
+              <a class="chart-line-dot" href="{{ url_for('asistencia.reporte', fecha=d.fecha_iso) }}" style="left:{{ d.x }}%; top:{{ d.y }}%;" title="{{ d.dia }} · {{ d.pct }}% efectividad -- ver ese día"></a>
+              {% else %}
+              <div class="chart-line-dot" style="left:{{ d.x }}%; top:{{ d.y }}%; cursor:default;" title="{{ d.dia }} · {{ d.pct }}% efectividad"></div>
+              {% endif %}
               {% endfor %}
             </div>
             <div class="chart-days-line">

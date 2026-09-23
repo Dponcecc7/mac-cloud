@@ -483,7 +483,7 @@ def create_app():
             (tendencia["ASISTIÓ A TIEMPO"] + tendencia["TARDANZA"]) / tendencia["total_dia"] * 100
         ).round(1)
         serie_tendencia = [
-            {"dia": d.strftime("%d/%m"), "pct": float(fila["pct_dia"])}
+            {"dia": d.strftime("%d/%m"), "pct": float(fila["pct_dia"]), "fecha_iso": d.isoformat()}
             for d, fila in tendencia.iterrows()
         ]
 
