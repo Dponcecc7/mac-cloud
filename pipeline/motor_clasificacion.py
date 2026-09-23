@@ -12,9 +12,14 @@ runner de GitHub Actions (sin disco persistente entre corridas):
    es el mismo store al que este script escribe, asi que no hace falta el
    patron fragil de "descargar, parchear, resubir".
 2. Ya NO escribe el Excel append-only original -- en su lugar sube un
-   snapshot de auditoria a SharePoint (mismo patron que
-   mac_cloud/exportar_dimensiones.py), a una ruta APARTE de la de produccion
-   mientras dure la validacion en paralelo (ver RUTA_GRAPH_SALIDA abajo).
+   snapshot completo (regenerado entero cada corrida, mismo patron que
+   mac_cloud/exportar_dimensiones.py). Corrió 1 mes a una ruta de auditoria
+   APARTE de la de produccion mientras duró la validación en paralelo;
+   corte manual completado (Davor, 2026-09-23, ver NOMBRE_SALIDA abajo) --
+   ahora escribe directo a 7_Clasificacion_Diaria.xlsx, el archivo real
+   (se descubrió que un Power BI externo de Davor, ajeno a mac_cloud,
+   todavía lo leía por ruta local/OneDrive y llevaba desde el 21/08 sin
+   datos nuevos porque la tarea local que lo escribía se había desactivado).
 
 Visitas/*.xlsx se sigue leyendo del directorio de trabajo actual, igual que
 el original -- en la nube, un paso previo del pipeline (usa
@@ -38,10 +43,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
-# Mientras dure la validacion en paralelo (ver plan Fase 6), el snapshot de
-# auditoria va a una ruta DISTINTA de la de produccion -- nunca pisa
-# 7_Clasificacion_Diaria.xlsx hasta el corte manual.
-NOMBRE_SALIDA_AUDITORIA = "_nube_7_Clasificacion_Diaria.xlsx"
+# CORTE MANUAL completado (Davor, 2026-09-23) -- ya escribe directo al
+# archivo real, no a la ruta de auditoria aparte. La tarea local que
+# escribia 7_Clasificacion_Diaria.xlsx (ProyectoMAC_PipelineDiario) esta
+# desactivada desde el 2026-08-22 (Fase 6), asi que ese archivo llevaba
+# desde el 21/08 sin actualizarse -- un BI externo de Davor (Power BI,
+# ajeno a mac_cloud) todavia lo leia directo por ruta local/OneDrive y
+# dejo de recibir datos de setiembre por esto. El motor de la nube llevaba
+# 1 mes corriendo en paralelo con 100% de coincidencia (ver
+# comparar_clasificacion.py), asi que el corte ya estaba validado, solo
+# faltaba accionarlo. NOMBRE_SALIDA_AUDITORIA se deja documentado acá por
+# si hiciera falta revertir, pero ya no se usa.
+NOMBRE_SALIDA_AUDITORIA = "_nube_7_Clasificacion_Diaria.xlsx"  # ya sin uso, ver arriba
+NOMBRE_SALIDA = "7_Clasificacion_Diaria.xlsx"
 
 
 def fmt_hora(td):
@@ -535,9 +549,11 @@ def _sincronizar_postgres(res, claves_recalculadas):
 
 
 def _escribir_snapshot_auditoria(res):
-    """Snapshot completo (no append-only) a SharePoint, solo para que Davor
-    lo pueda revisar -- Postgres es la fuente de verdad, esto es un espejo
-    legible. No debe poder tumbar el pipeline."""
+    """Snapshot completo (no append-only, regenerado entero cada corrida) a
+    SharePoint -- Postgres es la fuente de verdad, esto es un espejo legible
+    para quien lo necesite leer como Excel (Davor, y desde el corte de
+    2026-09-23 también el Power BI externo que apunta a este archivo por
+    ruta/OneDrive). No debe poder tumbar el pipeline."""
     try:
         import openpyxl
 
@@ -550,8 +566,8 @@ def _escribir_snapshot_auditoria(res):
             # libre -- sin esto, un valor que arranca con "=" se ejecuta
             # como fórmula al abrir el Excel (hallazgo 2026-08-24).
             ws.append([texto_seguro_excel(None if pd.isna(v) else v) for v in row])
-        subir_creando_si_no_existe(RUTA_GRAPH_MAC + NOMBRE_SALIDA_AUDITORIA, wb)
-        print(f"Snapshot de auditoría subido: {NOMBRE_SALIDA_AUDITORIA}")
+        subir_creando_si_no_existe(RUTA_GRAPH_MAC + NOMBRE_SALIDA, wb)
+        print(f"Snapshot subido: {NOMBRE_SALIDA}")
     except Exception as e:
         print(f"AVISO: no se pudo subir el snapshot de auditoría -- {e}")
 
