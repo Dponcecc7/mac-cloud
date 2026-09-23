@@ -603,7 +603,14 @@ def create_app():
             & ~comentario_norm.str.startswith("falta - cese:")
         ]
         motivo_falta = faltas_sin_reemplazo["comentario"].apply(_motivo_limpio)
-        faltas_por_motivo = motivo_falta.value_counts().head(8)
+        # head(8) -> head(15) (Davor, 2026-09-23): con más de 8 motivos
+        # distintos en el periodo, esta tarjeta descartaba en silencio los
+        # menos frecuentes -- el total de sus barras nunca sumaba el total
+        # real de faltas, y no calzaba contra el Power BI externo (que sí
+        # lista todos). 15 da margen holgado sobre los 10 motivos reales
+        # que existen hoy sin dejar crecer la tarjeta sin límite si algún
+        # día aparece texto libre muy variado.
+        faltas_por_motivo = motivo_falta.value_counts().head(15)
 
         # Detalle por motivo -- Davor, 2026-09-05: "que me bote quienes son
         # las personas que tienen ese motivo con su fecha y todo el
