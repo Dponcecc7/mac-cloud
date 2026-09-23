@@ -433,7 +433,17 @@ def create_app():
         n_vacante = int((r["estado_base"] == "VACANTE").sum())
         n_vacaciones = int((r["estado_base"] == "VACACIONES").sum())
         n_descanso = int((r["estado_base"] == "DESCANSO").sum())
-        pct_efectividad = round((n_asistio + n_tardanza) / total * 100, 1) if total else 0.0
+        # Descanso no debe pesar en el % de efectividad (Davor, 2026-09-23:
+        # "los descansos no deberían afectar el ratio de asistencia") -- un
+        # día de descanso programado no es una falla de asistencia, así que
+        # no debe diluir el denominador. Caso real que lo hizo evidente: un
+        # domingo filtrado solo (66 evaluados, 62 de descanso) daba 4.5% de
+        # efectividad en vez del 100% real (3 de 3 asistieron a tiempo, 0
+        # faltas). `total` (usado más abajo para "Incidencias"/el dict que
+        # se le pasa a la plantilla) queda sin tocar a propósito -- solo el
+        # % de efectividad tiene este ajuste.
+        total_efectividad = total - n_descanso
+        pct_efectividad = round((n_asistio + n_tardanza) / total_efectividad * 100, 1) if total_efectividad else 0.0
         n_personas_evaluadas = r["dni"].nunique()
         n_incidencias = n_falta + n_vacante + n_vacaciones
 
@@ -464,7 +474,11 @@ def create_app():
             if col not in tendencia.columns:
                 tendencia[col] = 0
         tendencia = tendencia.sort_index()
-        tendencia["total_dia"] = tendencia.sum(axis=1)
+        # Descanso no cuenta en el denominador -- mismo ajuste y mismo
+        # motivo que pct_efectividad de arriba (Davor, 2026-09-23): un
+        # domingo con casi todo el equipo en descanso programado no debe
+        # verse como un pozo de efectividad en la tendencia diaria.
+        tendencia["total_dia"] = tendencia.drop(columns=["DESCANSO"], errors="ignore").sum(axis=1)
         tendencia["pct_dia"] = (
             (tendencia["ASISTIÓ A TIEMPO"] + tendencia["TARDANZA"]) / tendencia["total_dia"] * 100
         ).round(1)
@@ -517,7 +531,9 @@ def create_app():
                     pcts_dia.append(None)
                     continue
                 fila_dia = tendencia_canal_raw.loc[(d, canal)]
-                total_dia = int(fila_dia.sum())
+                # Descanso fuera del denominador, mismo criterio que la
+                # tendencia diaria general de arriba.
+                total_dia = int(fila_dia.sum()) - int(fila_dia.get("DESCANSO", 0))
                 asistio = int(fila_dia.get("ASISTIÓ A TIEMPO", 0)) + int(fila_dia.get("TARDANZA", 0))
                 pcts_dia.append(round(asistio / total_dia * 100, 1) if total_dia else None)
             if all(p is None for p in pcts_dia):
@@ -528,7 +544,7 @@ def create_app():
             # para ese canal, no el del último día (que es lo que mostraba
             # antes).
             filas_canal = r[r["canal"] == canal]
-            total_canal = len(filas_canal)
+            total_canal = (filas_canal["estado_base"] != "DESCANSO").sum()
             asistio_canal = (filas_canal["estado_base"].isin(["ASISTIÓ A TIEMPO", "TARDANZA"])).sum()
             pct_acumulado = round(asistio_canal / total_canal * 100, 1) if total_canal else None
             series_canal.append({
@@ -569,7 +585,8 @@ def create_app():
         # todo el periodo elegido (no día a día), ordenado de mejor a peor.
         def _ratio_por(columna):
             grp = r.groupby(columna)["estado_base"].value_counts().unstack(fill_value=0)
-            total = grp.sum(axis=1)
+            # Descanso fuera del denominador, mismo criterio que arriba.
+            total = grp.drop(columns=["DESCANSO"], errors="ignore").sum(axis=1)
             asistio = grp.get("ASISTIÓ A TIEMPO", 0) + grp.get("TARDANZA", 0)
             pct = (asistio / total * 100).round(1)
             filas_ratio = [
