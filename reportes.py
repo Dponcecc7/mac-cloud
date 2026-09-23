@@ -1063,8 +1063,15 @@ def ficha(dni):
         return redirect(url_for("reportes.horas"))
 
     hoy = dt.date.today()
-    mes_desde = hoy.replace(day=1)
-    mes_hasta = dt.date(hoy.year, hoy.month, calendar.monthrange(hoy.year, hoy.month)[1])
+    # "Indicador del mes"/"Tareo del mes" son seleccionables via ?mes=
+    # (mismo helper y mismo <input type="month"> que ya usa Reportes >
+    # Alertas) -- Davor, 2026-09-22: "colocar una opción para elegir otros
+    # meses y ver su perfil de esos periodos". El resto de la ficha (6
+    # semanas de cumplimiento, 41 días de cobertura, 180 días de vacaciones/
+    # historial) sigue anclado a HOY como siempre -- son ventanas móviles
+    # "hasta hoy", no un mes calendario, así que no tiene sentido
+    # re-ubicarlas a partir del mes elegido acá.
+    mes_desde, mes_hasta, mes_str = _mes_desde_query()
     ventana_desde = hoy - dt.timedelta(days=180)
 
     # Indicador de asistencia del mes -- misma regla de horas ya validada
@@ -1329,7 +1336,7 @@ def ficha(dni):
 
     return render_template(
         "reportes_ficha.html", usuario=current_user, activo="ficha",
-        persona=persona, nombre_supervisor=nombre_supervisor,
+        persona=persona, nombre_supervisor=nombre_supervisor, mes_str=mes_str,
         indicador_mes=indicador_mes, tareo_mes=tareo_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal, tendencia_cobertura=tendencia_cobertura,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,

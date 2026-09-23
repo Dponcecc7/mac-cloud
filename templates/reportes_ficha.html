@@ -37,6 +37,8 @@
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
     h1.title { font-size:22px; margin:0 0 2px; }
     .subtitulo { color:var(--muted); font-size:13px; margin:0 0 18px; }
+    .selector-mes { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); font-weight:600; margin:0 0 16px; }
+    .selector-mes input[type=month] { font:inherit; padding:6px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
 
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; margin-bottom:16px; }
     @media (max-width: 760px) { .grid2 { grid-template-columns:1fr; } }
@@ -212,6 +214,11 @@
     <h1 class="title">{{ persona.nombre_completo|title }}</h1>
     <p class="subtitulo">{{ (persona.rol or '—')|title }} · {{ (persona.ciudad or '—')|title }} · DNI {{ persona.dni }}</p>
 
+    <form method="get" action="{{ url_for('reportes.ficha', dni=persona.dni) }}" class="selector-mes">
+      Mes de "Indicador"/"Tareo" de abajo
+      <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+    </form>
+
     <div class="grid2">
       <div class="panel">
         <p class="panel-title">Datos generales</p>
@@ -235,7 +242,7 @@
       </div>
 
       <div class="panel">
-        <p class="panel-title">Indicador del mes actual</p>
+        <p class="panel-title">Indicador de {{ mes_str }}</p>
         {% if indicador_mes %}
         <div class="kpis">
           <div class="kpi"><div class="num">{{ indicador_mes.horas_trabajadas }}</div><div class="lbl">Horas trabajadas</div></div>
@@ -246,13 +253,13 @@
           </div>
           <div class="kpi"><div class="num">{{ indicador_mes.dias_falta_vacante }}</div><div class="lbl">Días Falta/Vacante</div></div>
         </div>
-        {% else %}<p class="empty">Sin datos de clasificación este mes.</p>{% endif %}
+        {% else %}<p class="empty">Sin datos de clasificación en {{ mes_str }}.</p>{% endif %}
       </div>
     </div>
 
     <div class="panel">
-      <p class="panel-title">Tareo del mes</p>
-      {% if not tareo_mes %}<p class="empty">Sin datos de clasificación este mes.</p>
+      <p class="panel-title">Tareo de {{ mes_str }}</p>
+      {% if not tareo_mes %}<p class="empty">Sin datos de clasificación en {{ mes_str }}.</p>
       {% else %}
       <div class="tareo-strip">
         {% for d in tareo_mes %}
@@ -296,8 +303,8 @@
       </div>
 
       <div class="panel">
-        <p class="panel-title">Alertas del mes ({{ alertas_mes|length }})</p>
-        {% if not alertas_mes %}<p class="empty">Sin alertas este mes.</p>
+        <p class="panel-title">Alertas de {{ mes_str }} ({{ alertas_mes|length }})</p>
+        {% if not alertas_mes %}<p class="empty">Sin alertas en {{ mes_str }}.</p>
         {% else %}
           {% set iconos = {'tardanza': '⚠️', 'falta': '🛑', 'otro_canal': '🔀', 'salida_temprana': '🚪', 'visita_larga': '⏱️', 'punto_censo': '📍', 'corregido_manual': '✍️', 'jornada_critica': '🚨'} %}
           {% for a in alertas_mes %}
@@ -369,7 +376,7 @@
     </div>
 
     <div class="panel">
-      <p class="panel-title">Tardanzas y salidas anticipadas del mes ({{ tardanzas_mes|length }})</p>
+      <p class="panel-title">Tardanzas y salidas anticipadas de {{ mes_str }} ({{ tardanzas_mes|length }})</p>
       {% if not tardanzas_mes %}<p class="empty">Sin tardanzas ni salidas anticipadas este mes.</p>
       {% else %}
       {% if usuario.rol in ("analista", "admin") %}
@@ -419,7 +426,7 @@
     </div>
 
     <div class="panel">
-      <p class="panel-title">Faltas del mes ({{ faltas_mes|length }})</p>
+      <p class="panel-title">Faltas de {{ mes_str }} ({{ faltas_mes|length }})</p>
       {% if not faltas_mes %}<p class="empty">Sin faltas este mes.</p>
       {% else %}
       <div class="table-wrap">
