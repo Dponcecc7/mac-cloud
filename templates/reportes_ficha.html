@@ -156,6 +156,21 @@
       dl.datos { grid-template-columns:auto 1fr; font-size:12.5px; }
       .semana-lbl { width:24px; font-size:11px; }
       .semana-pct { width:34px; font-size:11px; }
+
+      /* Selector de mes: la etiqueta larga + el <input type=month> no
+         entran en una sola línea en un teléfono angosto -- se apilan en
+         vez de desbordar horizontalmente. */
+      .selector-mes { flex-wrap:wrap; }
+      .selector-mes input[type=month] { flex:1 1 auto; min-width:0; }
+
+      /* Mismo criterio que ya usa Personal (.table-wrap con scroll táctil
+         suave + celdas más angostas en mobile) -- las tablas más anchas de
+         esta ficha (Tardanzas, 11 columnas; Patrón recurrente) quedaban con
+         el scroll horizontal "seco" (sin inercia) propio de iOS Safari sin
+         -webkit-overflow-scrolling, y un poco más de aire ganado en cada
+         celda reduce cuánto hay que deslizar. */
+      .table-wrap { -webkit-overflow-scrolling:touch; }
+      th, td { padding:5px 6px; }
     }
 
     /* Registrar motivo directo en "Faltas del mes" (Davor, 2026-09-17:
