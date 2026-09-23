@@ -802,14 +802,22 @@ def main():
 
     baja_map = m.set_index("DNI")["Fecha de baja"].to_dict()
 
+    # >= , no > (Davor, 2026-09-23: "faltas por motivo" del Excel/Power BI
+    # no coincidía con el Dashboard -- 2 casos reales, Jahirziño Solis
+    # Mamani y Elizabeth Fernandez Fujino, dados de baja el MISMO día de su
+    # falta (01/09). Con ">" estricto esa fila sobrevivía acá (fecha no es
+    # ESTRICTAMENTE posterior a fecha_baja) pero el Dashboard (app.py,
+    # condicion_no_baja) sí la excluye desde siempre -- misma regla que
+    # asistencia.py ya usa en otro lado ("dar de baja el mismo día no
+    # debería seguir apareciendo ese día"). Ahora coincide exacto.
     def excede_baja(dni, fecha):
         fb = baja_map.get(dni)
-        return pd.notna(fb) and pd.Timestamp(fecha) > pd.Timestamp(fb)
+        return pd.notna(fb) and pd.Timestamp(fecha) >= pd.Timestamp(fb)
 
     mask_excede = [excede_baja(dni, fecha) for dni, fecha in zip(res["DNI"], res["Fecha"])]
     n_excede = sum(mask_excede)
     if n_excede:
-        print(f"Filas removidas por baja registrada después de esa fecha: {n_excede}")
+        print(f"Filas removidas por baja registrada en o después de esa fecha: {n_excede}")
         res = res[[not x for x in mask_excede]].reset_index(drop=True)
 
     res = res.sort_values(["Fecha", "DNI"]).reset_index(drop=True)
