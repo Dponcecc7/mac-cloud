@@ -303,6 +303,7 @@
           <h2 class="section">Faltas por motivo</h2>
           <div class="panel">
             {% if data.faltas_por_motivo %}
+            <div class="ratio-scroll">
               {% set max_motivo = data.faltas_por_motivo[0][1] %}
               {% for motivo, n in data.faltas_por_motivo %}
               <div class="motivo-row" onclick="toggleMotivo({{ loop.index0 }})">
@@ -321,6 +322,7 @@
                 {% endfor %}
               </div>
               {% endfor %}
+            </div>
             {% else %}
               <p class="empty">Sin faltas en este periodo.</p>
             {% endif %}
