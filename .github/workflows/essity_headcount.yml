@@ -1,0 +1,33 @@
+name: Actualizar ESSITY_HEADCOUNT.xlsx (nube)
+
+on:
+  schedule:
+    # 6:00am hora Peru (UTC-5) = 11:00 UTC, Lun-Sab -- una vez al dia, antes
+    # de que arranque pipeline_completo.yml (7:30am Peru). A diferencia de
+    # pipeline_completo.yml/exportar_dimensiones.yml (que sacaron su
+    # schedule: nativo por poco confiable en cadencias de minutos), acá es
+    # 1 sola corrida diaria -- la ventana de tolerancia es mucho mayor, no
+    # aplica el mismo problema.
+    - cron: "0 11 * * 1-6"
+  workflow_dispatch: {}
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Actualizar MERCH desde Postgres
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+        run: python actualizar_essity_headcount.py
