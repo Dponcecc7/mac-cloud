@@ -30,7 +30,11 @@ for f in sorted(glob.glob("Visitas/*.xlsx")):
     _d = pd.read_excel(f)
     _dfs.append(_d)
 v = pd.concat(_dfs, ignore_index=True)
-v["nro_documento"] = v["nro_documento"].astype(str).str.strip()
+# .str.zfill(8) (Davor, 2026-09-24) -- pd.read_excel() de un Excel escrito
+# con to_excel() vuelve a comerse el cero inicial del DNI si toda la
+# columna se ve numerica (mismo round-trip que ya rompia Maestro/Patron/
+# Tabla 3), aunque athena_client.py ya lo deje zero-padded en memoria.
+v["nro_documento"] = v["nro_documento"].astype(str).str.strip().str.zfill(8)
 v = v.drop_duplicates(subset=["nro_documento", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin"], keep="first")
 v["fecha_inicio_dt"] = pd.to_datetime(v["fecha_inicio"], format="%d-%m-%Y", errors="coerce")
 v["geofence_ok"] = v["distancia_metros_inicio"] <= 200

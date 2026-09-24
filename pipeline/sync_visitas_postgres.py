@@ -50,6 +50,14 @@ def preparar_filas(df):
     nro_documento en vez de dni, fechas como texto "%d-%m-%Y"). Devuelve una
     lista de dicts lista para upsert_visitas()."""
     r = df.rename(columns={"nro_documento": "dni"})[COLUMNAS].copy()
+    # .str.zfill(8) (Davor, 2026-09-24) -- pd.read_excel() de un Excel
+    # escrito con to_excel() vuelve a comerse el cero inicial del DNI si
+    # toda la columna se ve numerica (mismo round-trip que ya rompia
+    # Maestro/Patron/Tabla 3), aunque athena_client.py ya lo deje
+    # zero-padded en memoria -- sin esto la tabla `visitas` (Cobertura)
+    # guardaba el DNI sin el cero para Bracamonte/Jimenez/Pitko/Vergara/
+    # Becerra/Edith Camacho.
+    r["dni"] = r["dni"].astype(str).str.zfill(8)
     r["fecha_inicio"] = pd.to_datetime(r["fecha_inicio"], format="%d-%m-%Y", errors="coerce").dt.date
     r["fecha_fin"] = pd.to_datetime(r["fecha_fin"], format="%d-%m-%Y", errors="coerce").dt.date
     r = r.dropna(subset=["fecha_inicio", "dni", "punto_venta_id"])

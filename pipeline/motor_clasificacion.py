@@ -579,7 +579,15 @@ def main():
         d["_archivo"] = f.split("\\")[-1].split("/")[-1]
         dfs.append(d)
     v = pd.concat(dfs, ignore_index=True)
-    v["nro_documento"] = v["nro_documento"].astype(str).str.strip()
+    # .str.zfill(8) (Davor, 2026-09-24) -- mismo gotcha de siempre, un
+    # tramo mas: athena_client.py ya deja "nro_documento" zero-padded a 8
+    # digitos en memoria, pero pd.read_excel() de un Excel escrito con
+    # to_excel() vuelve a inferir la columna como numero si TODOS los
+    # valores se ven numericos, comiendose el cero inicial de nuevo (mismo
+    # round-trip que ya rompia Maestro/Patron/Tabla 3). Sin esto, Bracamonte/
+    # Jimenez/Pitko/Vergara/Becerra/Edith Camacho seguian sin ninguna visita
+    # matcheada aunque el fix de athena_client.py ya estuviera desplegado.
+    v["nro_documento"] = v["nro_documento"].astype(str).str.strip().str.zfill(8)
 
     dedup_keys = ["nro_documento", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin"]
     before = len(v)
