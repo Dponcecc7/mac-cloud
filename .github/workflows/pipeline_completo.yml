@@ -17,6 +17,16 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
+    # 15 min (Davor, 2026-09-24) -- sin esto, una corrida que se cuelga (ej.
+    # cursor.execute() de pyathena en athena_client.py no tiene timeout
+    # propio, así que un Athena lento/con throttling la deja esperando sin
+    # límite) se queda "in_progress" hasta el timeout default de GitHub
+    # Actions (6 horas) en vez de los 25 min del candado (pipeline_lock) --
+    # mientras tanto, todas las corridas automáticas de cron-job.org (cada 5
+    # min) rebotan contra el candado tomado sin actualizar nada. Encontrado
+    # en producción: candado tomado desde hace 9+ min bloqueando 8 corridas
+    # seguidas, datos varias horas desactualizados.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

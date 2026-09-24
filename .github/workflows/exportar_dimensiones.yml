@@ -13,6 +13,7 @@ on:
 jobs:
   exportar:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # mismo motivo que pipeline_completo.yml -- red de seguridad ante una corrida colgada
     steps:
       - uses: actions/checkout@v4
 
