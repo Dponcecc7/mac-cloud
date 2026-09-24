@@ -482,6 +482,13 @@ def create_app():
         tendencia["pct_dia"] = (
             (tendencia["ASISTIÓ A TIEMPO"] + tendencia["TARDANZA"]) / tendencia["total_dia"] * 100
         ).round(1)
+        # Descartar días con total_dia=0 (todo el equipo visible en Descanso
+        # ese día, ej. domingo) -- 0/0 da NaN, y un solo punto "nan" en el
+        # polyline del SVG invalida el elemento COMPLETO para el navegador
+        # (deja de dibujarse la línea entera, aunque el resto de los puntos
+        # sean válidos) -- hallazgo real, Diego/Farmacia, 2026-09-24: la
+        # línea de Tendencia diaria no aparecía pese a que los puntos sí.
+        tendencia = tendencia[tendencia["total_dia"] > 0]
         serie_tendencia = [
             {"dia": d.strftime("%d/%m"), "pct": float(fila["pct_dia"]), "fecha_iso": d.isoformat()}
             for d, fila in tendencia.iterrows()
