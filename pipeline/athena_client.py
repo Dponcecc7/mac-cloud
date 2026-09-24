@@ -222,8 +222,21 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
         hora_inicio_str = df["hora_inicio_raw"].astype(str)
         hora_fin_str = df["hora_fin_raw"].astype(str)
 
+    # .str.zfill(8) (Davor, 2026-09-24) -- el fix de "DNI con cero a la
+    # izquierda" (commit 190c649, 2026-09-21) restauro el cero inicial en
+    # Maestro/Patron/Tabla 3 (m["DNI"]/p["DNI"]/sup["DNI"] en
+    # motor_clasificacion.py) pero se le olvido este quinto lugar -- Athena
+    # entrega dni_usuario con ceros de mas (ej. "004103206" para el DNI real
+    # "04103206"), lstrip() sin volver a rellenar dejaba "nro_documento" en
+    # "4103206", que YA NO matcheaba contra el "04103206" zero-padded del
+    # resto del pipeline. Real: Bracamonte/Jimenez/Pitko/Vergara/Becerra/
+    # Edith Camacho (6 personas activas con DNI que empieza en 0) quedaban
+    # SIN NINGUNA visita matcheada desde el 21/09 -- el motor las
+    # reclasificaba "FALTA (sin marcacion)" sin motivo cada dia dentro de la
+    # ventana movil de reproceso, pisando su "Asistio" real.
     dni_normalizado = df["dni_usuario"].astype(str).str.strip().str.lstrip("0")
     dni_normalizado = dni_normalizado.mask(dni_normalizado == "", "0")
+    dni_normalizado = dni_normalizado.str.zfill(8)
 
     out = pd.DataFrame({
         "nro_documento": dni_normalizado,
