@@ -170,18 +170,18 @@ def necesidad_contratacion(usuario_actual, rol_filtro=None, region_filtro=None, 
     return resultado
 
 
-def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
-    """% de Falta y % de Tardanza por día de la semana, desde INICIO_SISTEMA
-    -- para reforzar equipo o anticipar cobertura los días que históricamente
-    concentran más incidencias. Domingo entra igual que cualquier otro día
-    desde 2026-09-14 -- aparece solo si alguien del filtro elegido tiene
-    fila de domingo en su Patrón Recurrente (Autoservicio). Solo desglose
-    por día de semana -- día del mes/estacionalidad anual todavía no tiene
-    suficiente historia (ver docstring del módulo)."""
+def filas_dni_dia_semana_estado(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+    """Una sola consulta a clasificacion_diaria (dni, dia_semana, estado)
+    desde INICIO_SISTEMA, compartida por estacionalidad_faltas() y
+    _dias_persona_por_dia_semana() -- antes cada una consultaba la misma
+    tabla por separado con el mismo scope/filtro, duplicando una de las
+    consultas más pesadas del reporte Proyecciones (Davor, 2026-09-24: 500
+    en Render por timeout con el equipo completo sin filtro, ~18.7s total
+    -- ver reportes.py::proyecciones())."""
     session = get_session()
     try:
         query = (
-            session.query(ClasificacionDiaria.dia_semana, ClasificacionDiaria.estado)
+            session.query(ClasificacionDiaria.dni, ClasificacionDiaria.dia_semana, ClasificacionDiaria.estado)
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= INICIO_SISTEMA)
         )
@@ -189,13 +189,28 @@ def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, s
         if cond_scope is not None:
             query = query.filter(cond_scope)
         query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
-        filas = query.all()
+        return query.all()
     finally:
         session.close()
+
+
+def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, filas=None):
+    """% de Falta y % de Tardanza por día de la semana, desde INICIO_SISTEMA
+    -- para reforzar equipo o anticipar cobertura los días que históricamente
+    concentran más incidencias. Domingo entra igual que cualquier otro día
+    desde 2026-09-14 -- aparece solo si alguien del filtro elegido tiene
+    fila de domingo en su Patrón Recurrente (Autoservicio). Solo desglose
+    por día de semana -- día del mes/estacionalidad anual todavía no tiene
+    suficiente historia (ver docstring del módulo).
+
+    `filas`: si ya se trajeron afuera con filas_dni_dia_semana_estado() (ver
+    reportes.py::proyecciones()), se reusan en vez de volver a consultar."""
+    if filas is None:
+        filas = filas_dni_dia_semana_estado(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
     if not filas:
         return []
 
-    df = pd.DataFrame(filas, columns=["dia_semana", "estado"])
+    df = pd.DataFrame(filas, columns=["dni", "dia_semana", "estado"])
     df["estado_base"] = df["estado"].apply(lambda s: (s or "").split(" (")[0])
 
     # "Domingo" agregado 2026-09-14 (Autoservicio trabaja domingo) -- si
@@ -217,26 +232,17 @@ def estacionalidad_faltas(usuario_actual, rol_filtro=None, region_filtro=None, s
     return resultado
 
 
-def _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro):
+def _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro, filas=None):
     """{dni: {dia_semana: pct_falta}} -- estacionalidad a nivel INDIVIDUAL,
     para ranking_proxima_falta(). Si una persona tiene muy pocos días
     observados un día de semana puntual (< 3), ese día no entra al dict --
     ranking_proxima_falta() cae al promedio del equipo (estacionalidad_faltas())
-    en ese caso, para no sacar un % de 1 solo día como si fuera un patrón."""
-    session = get_session()
-    try:
-        query = (
-            session.query(ClasificacionDiaria.dni, ClasificacionDiaria.dia_semana, ClasificacionDiaria.estado)
-            .join(Persona, Persona.dni == ClasificacionDiaria.dni)
-            .filter(ClasificacionDiaria.fecha >= INICIO_SISTEMA)
-        )
-        cond_scope = condicion_scope(Persona, usuario_actual)
-        if cond_scope is not None:
-            query = query.filter(cond_scope)
-        query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
-        filas = query.all()
-    finally:
-        session.close()
+    en ese caso, para no sacar un % de 1 solo día como si fuera un patrón.
+
+    `filas`: mismo criterio que estacionalidad_faltas() -- reusa lo ya
+    traído por filas_dni_dia_semana_estado() en vez de volver a consultar."""
+    if filas is None:
+        filas = filas_dni_dia_semana_estado(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
     if not filas:
         return {}
 
@@ -315,7 +321,7 @@ DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Dom
 HORIZONTE_PROYECCION_DIAS = 7  # "en los próximos 7 días", ver docstring del módulo
 
 
-def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, estacionalidad_equipo=None):
+def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None, estacionalidad_equipo=None, filas_dia_semana=None):
     """Matriz mercaderista x día de la semana (Davor, 2026-09-01, rediseño
     del ranking anterior: "colocar al mercaderista en fila y de toda la
     semana activa o siguiente colocar su porcentaje de probabilidad que
@@ -336,7 +342,9 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
 
     `estacionalidad_equipo`: si ya se calculó afuera (ver
     reportes.py::proyecciones()), se reusa -- mismo motivo que en
-    score_riesgo_rotacion()."""
+    score_riesgo_rotacion(). `filas_dia_semana`: los datos crudos de
+    filas_dni_dia_semana_estado() si ya se trajeron afuera -- evita una
+    segunda consulta idéntica a la que ya hizo estacionalidad_faltas()."""
     personas = _personas_visibles(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro, solo_activos=True)
     if not personas:
         return []
@@ -357,9 +365,9 @@ def ranking_proxima_falta(usuario_actual, rol_filtro=None, region_filtro=None, s
     finally:
         session_dias.close()
 
-    estacionalidad_individual = _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
+    estacionalidad_individual = _dias_persona_por_dia_semana(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro, filas=filas_dia_semana)
     if estacionalidad_equipo is None:
-        estacionalidad_equipo = estacionalidad_faltas(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
+        estacionalidad_equipo = estacionalidad_faltas(usuario_actual, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro, filas=filas_dia_semana)
     pct_equipo_por_dia = {e["dia"]: e["pct_falta"] for e in estacionalidad_equipo}
 
     resultado = []

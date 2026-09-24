@@ -33,7 +33,7 @@ from planning import (
     pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning,
     resumen_por_mercaderista, valores_filtrables, visitas_tradicional,
 )
-from proyecciones import estacionalidad_faltas, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
+from proyecciones import estacionalidad_faltas, filas_dni_dia_semana_estado, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
 from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
@@ -453,13 +453,19 @@ def proyecciones():
     # versión de esta pantalla). tasas_sup alimenta necesidad_contratacion()
     # (por supervisor, a propósito); tasas_ciudad alimenta
     # score_riesgo_rotacion() (por ciudad, ajustado por Davor 2026-09-01).
-    estacionalidad = estacionalidad_faltas(current_user, **kwargs_filtro)
+    # filas_dia_semana traída UNA sola vez y compartida entre estacionalidad_faltas()
+    # y ranking_proxima_falta() -- antes cada una consultaba clasificacion_diaria
+    # por separado con el mismo scope/filtro, duplicando una de las consultas
+    # más pesadas del reporte (Davor, 2026-09-24: 500 en Render por timeout,
+    # ~18.7s con el equipo completo sin filtro).
+    filas_dia_semana = filas_dni_dia_semana_estado(current_user, **kwargs_filtro)
+    estacionalidad = estacionalidad_faltas(current_user, filas=filas_dia_semana, **kwargs_filtro)
     tasas_sup = tasa_rotacion_por_supervisor(current_user, **kwargs_filtro)
     tasas_ciudad = tasa_rotacion_por_ciudad(current_user, **kwargs_filtro)
     señales = insights_equipo(current_user, **kwargs_filtro)
     riesgo = score_riesgo_rotacion(current_user, tasas_ciudad=tasas_ciudad, señales=señales, **kwargs_filtro)
     contratacion = necesidad_contratacion(current_user, tasas_sup=tasas_sup, **kwargs_filtro)
-    proxima_falta = ranking_proxima_falta(current_user, estacionalidad_equipo=estacionalidad, **kwargs_filtro)
+    proxima_falta = ranking_proxima_falta(current_user, estacionalidad_equipo=estacionalidad, filas_dia_semana=filas_dia_semana, **kwargs_filtro)
     return render_template(
         "reportes_proyecciones.html", usuario=current_user, activo="proyecciones",
         estacionalidad=estacionalidad, riesgo=riesgo, contratacion=contratacion, proxima_falta=proxima_falta,
