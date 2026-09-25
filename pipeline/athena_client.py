@@ -14,6 +14,7 @@ import math
 import os
 
 import pandas as pd
+from botocore.config import Config as BotoConfig
 from dotenv import load_dotenv
 from pyathena import connect
 from pyathena.pandas.cursor import PandasCursor
@@ -22,6 +23,18 @@ load_dotenv()
 
 CLIENTE_ID = 295
 WORKGROUP = "workgroup295"
+
+# Davor, 2026-09-25 -- pyathena/boto3 no tienen ningun timeout por default en
+# las llamadas a AWS, asi que si Athena responde lento (throttling, un
+# problema transitorio del lado de AWS) cursor.execute() se queda esperando
+# SIN LIMITE. Real en produccion: una corrida quedo "in_progress" 9+ minutos
+# bloqueando el candado (pipeline_lock) mientras las corridas automaticas de
+# cron-job.org (cada 5 min) rebotaban sin actualizar nada -- el unico freno
+# que existia era el timeout default de GitHub Actions (6 horas). Con esto,
+# una llamada colgada falla rapido (excepcion de botocore) en vez de
+# bloquear el pipeline entero; retries=3 cubre fallas transitorias sueltas
+# sin reintentar para siempre.
+TIMEOUT_ATHENA = BotoConfig(connect_timeout=10, read_timeout=60, retries={"max_attempts": 3})
 
 CADENAS_AUTOSERVICIO = {
     "PLAZA VEA", "METRO", "METRO ALMACENES", "TOTTUS", "WONG", "MAKRO",
@@ -79,6 +92,7 @@ def conectar():
         region_name=os.environ["AWS_REGION"],
         work_group=WORKGROUP,
         cursor_class=PandasCursor,
+        config=TIMEOUT_ATHENA,
     )
 
 
