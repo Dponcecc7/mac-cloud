@@ -44,6 +44,15 @@
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
 
+    .filtros-busqueda { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .buscador { position:relative; flex:1; min-width:220px; max-width:320px; }
+    .buscador .lupa { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:13px; pointer-events:none; }
+    .buscador input[type=text] {
+      font:inherit; font-size:12px; padding:8px 10px 8px 32px; border-radius:8px; border:1px solid var(--line);
+      background:var(--card); color:var(--ink); width:100%;
+    }
+    .buscador input[type=text]:focus { border-color:var(--brand); outline:none; }
+
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:18px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 10px; }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
@@ -91,6 +100,9 @@
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .filtros-busqueda { flex-direction:column; }
+      .buscador { max-width:none; }
+      .buscador input[type=text] { min-height:44px; font-size:15px; }
       .panel { padding:12px !important; border-radius:12px; }
       .kpis { grid-template-columns:repeat(2, 1fr); }
       .carga-form { flex-direction:column; align-items:stretch; }
@@ -176,6 +188,17 @@
       </form>
     </div>
     {% endif %}
+
+    <div class="filtros-busqueda">
+      <div class="buscador">
+        <span class="lupa">🔍</span>
+        <input type="text" id="buscar-mercaderista" placeholder="Buscar mercaderista (nombre o DNI)..." autocomplete="off">
+      </div>
+      <div class="buscador">
+        <span class="lupa">🔍</span>
+        <input type="text" id="buscar-pdv" placeholder="Buscar PDV..." autocomplete="off">
+      </div>
+    </div>
 
     <div class="panel">
       <p class="panel-title">Cargar Planning del mes ({{ periodo_str }})</p>
@@ -264,7 +287,7 @@
             <th>Supervisor</th>
           </tr>
           {% for p in pendientes %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}">
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-dni="{{ p.dni_asignado or '' }}">
             <td>{{ p.nombre_pdv or '—' }}</td>
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
@@ -302,7 +325,7 @@
             <th>Última visita</th>
           </tr>
           {% for p in detalle %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}">
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}" data-orden-dni="{{ p.dni_asignado or '' }}">
             <td>{{ p.nombre_pdv or '—' }}</td>
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
@@ -418,6 +441,47 @@ function ordenarPor(tabla_id, campo) {
   tabla.querySelectorAll('.flecha-orden').forEach(function (f) { f.textContent = ''; });
   document.getElementById('flecha-' + clave).textContent = asc ? '▲' : '▼';
 }
+</script>
+
+<script>
+// Buscador de Mercaderista / PDV (Davor, 2026-09-30) -- filtra en vivo las
+// 4 tablas reusando los mismos data-orden-* que ya existen para ordenar,
+// sin ida y vuelta al servidor. Cada tabla mapea sus propios atributos a
+// "mercaderista"/"pdv" porque no todas usan el mismo nombre de atributo
+// para lo mismo (ej. tabla-fuera usa data-orden-nombre para el MERCADERISTA
+// y data-orden-punto para el PDV, al revés que tabla-pendientes/detalle).
+var CONFIG_BUSQUEDA = {
+  'tabla-mercaderista': { mercaderista: ['mercaderista', 'dni'] },
+  'tabla-pendientes':   { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
+  'tabla-detalle':      { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
+  'tabla-fuera':        { mercaderista: ['nombre'], pdv: ['punto'] },
+};
+
+function _coincide(fila, atributos, texto) {
+  if (!texto) return true;
+  return atributos.some(function (attr) {
+    return (fila.getAttribute('data-orden-' + attr) || '').toLowerCase().indexOf(texto) !== -1;
+  });
+}
+
+function aplicarFiltrosBusqueda() {
+  var textoMerc = document.getElementById('buscar-mercaderista').value.trim().toLowerCase();
+  var textoPdv = document.getElementById('buscar-pdv').value.trim().toLowerCase();
+  Object.keys(CONFIG_BUSQUEDA).forEach(function (tablaId) {
+    var tabla = document.getElementById(tablaId);
+    if (!tabla) return;
+    var cfg = CONFIG_BUSQUEDA[tablaId];
+    Array.prototype.forEach.call(tabla.rows, function (fila, i) {
+      if (i === 0) return; // fila de encabezado
+      var okMerc = _coincide(fila, cfg.mercaderista || [], textoMerc);
+      var okPdv = cfg.pdv ? _coincide(fila, cfg.pdv, textoPdv) : true; // sin concepto de PDV en esta tabla -- el filtro de PDV no le aplica
+      fila.style.display = (okMerc && okPdv) ? '' : 'none';
+    });
+  });
+}
+
+document.getElementById('buscar-mercaderista').addEventListener('input', aplicarFiltrosBusqueda);
+document.getElementById('buscar-pdv').addEventListener('input', aplicarFiltrosBusqueda);
 </script>
 </body>
 </html>
