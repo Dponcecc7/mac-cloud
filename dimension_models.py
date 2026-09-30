@@ -35,7 +35,13 @@ def get_engine():
         # secret de GitHub Actions) hace que el nombre de la base termine
         # siendo literalmente "mac_cloud_db\n" y Postgres la rechaza con
         # "database does not exist" -- pasó de verdad migrando a Render.
-        _engine = create_engine(os.environ["DATABASE_URL"].strip())
+        # connect_timeout=10 (Davor, 2026-09-30) -- sin esto, si Postgres
+        # tarda en aceptar la conexión (una demora breve, no necesariamente
+        # una caída), get_session() se queda esperando sin límite propio --
+        # mismo motivo que el fix de timeouts de Athena (athena_client.py,
+        # 2026-09-25), pero acá pega en CADA paso del pipeline, no solo el
+        # de Athena, porque todos abren su propia sesión de Postgres.
+        _engine = create_engine(os.environ["DATABASE_URL"].strip(), connect_args={"connect_timeout": 10})
     return _engine
 
 
