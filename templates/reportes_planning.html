@@ -52,6 +52,16 @@
       background:var(--card); color:var(--ink); width:100%;
     }
     .buscador input[type=text]:focus { border-color:var(--brand); outline:none; }
+    .sugerencias {
+      position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:20;
+      background:var(--card); border:1px solid var(--line); border-radius:8px;
+      box-shadow:0 6px 18px rgba(35,25,10,.15); max-height:220px; overflow-y:auto;
+      list-style:none; margin:0; padding:4px; display:none;
+    }
+    .sugerencias li { padding:7px 9px; border-radius:6px; cursor:pointer; font-size:12px; }
+    .sugerencias li:hover { background:var(--bg); }
+    .sugerencias li.sin-resultados { cursor:default; color:var(--muted); }
+    .sugerencias li.sin-resultados:hover { background:none; }
 
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:18px; }
     .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:0 0 10px; }
@@ -193,10 +203,12 @@
       <div class="buscador">
         <span class="lupa">🔍</span>
         <input type="text" id="buscar-mercaderista" placeholder="Buscar mercaderista (nombre o DNI)..." autocomplete="off">
+        <ul class="sugerencias" id="sugerencias-mercaderista"></ul>
       </div>
       <div class="buscador">
         <span class="lupa">🔍</span>
         <input type="text" id="buscar-pdv" placeholder="Buscar PDV..." autocomplete="off">
+        <ul class="sugerencias" id="sugerencias-pdv"></ul>
       </div>
     </div>
 
@@ -482,6 +494,81 @@ function aplicarFiltrosBusqueda() {
 
 document.getElementById('buscar-mercaderista').addEventListener('input', aplicarFiltrosBusqueda);
 document.getElementById('buscar-pdv').addEventListener('input', aplicarFiltrosBusqueda);
+
+// Sugerencias al escribir (Davor, 2026-09-30: "no me sale la sugerencia de
+// la persona para seleccionarla", mismo patrón que el buscador de "Perfil
+// mercaderista") -- lista de opciones conocidas (mercaderistas del período
+// vía por_mercaderista, PDVs vía detalle+pendientes, sin duplicados) que se
+// filtra al tipear; click en una sugerencia completa el input con el texto
+// exacto y dispara el mismo filtrado en vivo de las tablas.
+var MERCADERISTAS_SUGERIDOS = (function () {
+  var vistos = {};
+  var lista = [];
+  {% for m in por_mercaderista %}
+  (function () {
+    var nombre = {{ (m.mercaderista or '')|title|tojson }};
+    var dni = {{ (m.dni or '')|tojson }};
+    var clave = nombre + '|' + dni;
+    if (!vistos[clave]) { vistos[clave] = true; lista.push({ texto: nombre, dni: dni }); }
+  })();
+  {% endfor %}
+  return lista;
+})();
+
+var PDVS_SUGERIDOS = (function () {
+  var vistos = {};
+  var lista = [];
+  {% for p in detalle %}
+  (function () {
+    var nombre = {{ (p.nombre_pdv or '')|tojson }};
+    if (nombre && !vistos[nombre]) { vistos[nombre] = true; lista.push({ texto: nombre }); }
+  })();
+  {% endfor %}
+  {% for p in pendientes %}
+  (function () {
+    var nombre = {{ (p.nombre_pdv or '')|tojson }};
+    if (nombre && !vistos[nombre]) { vistos[nombre] = true; lista.push({ texto: nombre }); }
+  })();
+  {% endfor %}
+  return lista;
+})();
+
+function configurarBuscadorConSugerencias(inputId, listaId, opciones) {
+  var input = document.getElementById(inputId);
+  var lista = document.getElementById(listaId);
+
+  function render() {
+    var texto = input.value.trim().toLowerCase();
+    lista.innerHTML = '';
+    if (!texto) { lista.style.display = 'none'; return; }
+    var coincidencias = opciones.filter(function (o) {
+      return o.texto.toLowerCase().indexOf(texto) !== -1 || (o.dni || '').indexOf(texto) !== -1;
+    }).slice(0, 15);
+    if (!coincidencias.length) {
+      lista.innerHTML = '<li class="sin-resultados">Sin sugerencias para "' + input.value + '"</li>';
+      lista.style.display = 'block';
+      return;
+    }
+    coincidencias.forEach(function (o) {
+      var li = document.createElement('li');
+      li.textContent = o.dni ? (o.texto + ' (' + o.dni + ')') : o.texto;
+      li.addEventListener('click', function () {
+        input.value = o.texto;
+        lista.style.display = 'none';
+        aplicarFiltrosBusqueda();
+      });
+      lista.appendChild(li);
+    });
+    lista.style.display = 'block';
+  }
+
+  input.addEventListener('input', render);
+  input.addEventListener('focus', render);
+  input.addEventListener('blur', function () { setTimeout(function () { lista.style.display = 'none'; }, 150); });
+}
+
+configurarBuscadorConSugerencias('buscar-mercaderista', 'sugerencias-mercaderista', MERCADERISTAS_SUGERIDOS);
+configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS);
 </script>
 </body>
 </html>
