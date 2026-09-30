@@ -503,6 +503,12 @@ def _sincronizar_postgres(res, claves_recalculadas):
     aisla y se omite, el resto de la corrida se guarda igual."""
     crear_tablas()
     session = get_session()
+    # Con commits parciales dentro del bucle de abajo, expire_on_commit
+    # (default de SQLAlchemy) invalidaria los objetos ya cargados en
+    # existentes_por_clave en cada commit intermedio, forzando una consulta
+    # extra a la base la proxima vez que se toquen -- sin esto, los commits
+    # parciales agregarian mas idas y vueltas de las que ahorran.
+    session.expire_on_commit = False
     try:
         existentes = session.query(ClasificacionDiaria).all()
         # (dni, fecha, canal_turno), no solo (dni, fecha) -- Davor,
@@ -515,6 +521,18 @@ def _sincronizar_postgres(res, claves_recalculadas):
 
         n_escritas = 0
         dnis_huerfanos = set()
+        # commit cada CADA_N filas, no uno solo al final (Davor, 2026-09-30)
+        # -- con la ventana de reproceso normal MAS las (dni,fecha) que
+        # alguna vez tuvieron una corrección (esas nunca se sacan de
+        # dias_con_correccion, así que crecen sin límite con el tiempo:
+        # 1161 y subiendo), el bucle entero se volvió lento -- si la corrida
+        # se corta antes de llegar al commit único de más abajo (timeout de
+        # 15 min, candado, lo que sea), ANTES se perdía TODO el trabajo del
+        # bucle, no solo lo que faltaba, así que "Datos hasta las X" podía
+        # quedarse pegado indefinidamente pese a corridas que sí avanzaban.
+        # Con commits parciales, lo ya procesado en esta corrida queda
+        # guardado aunque la corrida se corte más adelante.
+        CADA_N = 200
         for clave in claves_recalculadas:
             fila = res_por_clave.get(clave)
             if fila is None:
@@ -527,6 +545,8 @@ def _sincronizar_postgres(res, claves_recalculadas):
                     _upsert_postgres(session, existentes_por_clave, fila)
                     session.flush()
                 n_escritas += 1
+                if n_escritas % CADA_N == 0:
+                    session.commit()
             except IntegrityError:
                 dnis_huerfanos.add(dni_clave)
 
