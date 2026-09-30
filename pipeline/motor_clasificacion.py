@@ -25,13 +25,12 @@ Visitas/*.xlsx se sigue leyendo del directorio de trabajo actual, igual que
 el original -- en la nube, un paso previo del pipeline (usa
 pipeline/athena_client.py) los deja ahi antes de correr este script.
 """
+import datetime as dt
 import glob
 import os
 import sys
 
 import pandas as pd
-from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
@@ -95,17 +94,24 @@ def _bool_si_no(valor):
     return str(valor).strip().upper() == "SÍ"
 
 
-def _upsert_postgres(session, existentes_por_clave, fila):
+def _fila_bd(fila, ahora):
+    """Dict con las columnas de ClasificacionDiaria para UNA fila de `res` --
+    sin tocar la sesión (a diferencia del `_upsert_postgres` viejo), para que
+    _sincronizar_postgres() pueda juntar todas en listas y escribirlas en
+    bloque (bulk_insert_mappings/bulk_update_mappings) en vez de una consulta
+    a la vez. `ahora` se pasa desde afuera (un solo datetime.utcnow() para
+    toda la corrida) en vez de func.now() -- bulk_insert_mappings/
+    bulk_update_mappings no evalúan expresiones SQL por fila, necesitan un
+    valor de Python ya resuelto."""
     def _limpio(v):
         return None if pd.isna(v) else v
 
-    dni, fecha = fila["DNI"], fila["Fecha"]
     # canal_turno = canal_esperado (Davor, 2026-09-22, soporte de 2 turnos):
     # 1 canal = 1 turno, así que reusar este valor como clave del turno es
     # exacto y no necesita una columna/cálculo aparte -- ver fact_models.py.
     canal_turno = fila["Canal esperado (Patrón)"]
-    fila_bd = dict(
-        dni=dni, fecha=fecha, dia_semana=fila["Día"], canal_esperado=fila["Canal esperado (Patrón)"],
+    return dict(
+        dni=fila["DNI"], fecha=fila["Fecha"], dia_semana=fila["Día"], canal_esperado=fila["Canal esperado (Patrón)"],
         canal_turno=canal_turno,
         canales_marcados=_limpio(fila["Canal(es) marcado(s)"]), entrada_esperada=fila["Entrada esperada"],
         entrada_real=_limpio(fila["Entrada real"]), salida_esperada=fila["Salida esperada"], salida_real=_limpio(fila["Salida real"]),
@@ -114,23 +120,14 @@ def _upsert_postgres(session, existentes_por_clave, fila):
         alerta_geofence=_bool_si_no(fila["Alerta geofence (solo Punto Censo/fuera de rango)"]),
         fuente_dato=fila["Fuente del dato"], comentario_supervisor=_limpio(fila["Comentario supervisor"]),
         alerta_analista=_bool_si_no(fila["Alerta para analista"]),
-        # server_default=func.now() de la columna solo dispara en el INSERT
-        # original -- sin esto, una fila ya existente (el caso normal en
-        # cada corrida despues de la primera del dia) nunca actualizaba
-        # procesado_en, aunque su entrada_real/estado si se refrescaban.
-        # Resultado: "Datos hasta las X" en el reporte quedaba pegado a la
-        # hora de la primera corrida del dia, mostrando una hora mas vieja
-        # que datos que en realidad ya estaban frescos.
-        procesado_en=func.now(),
+        # Sin esto, una fila ya existente (el caso normal en cada corrida
+        # despues de la primera del dia) nunca actualizaba procesado_en,
+        # aunque su entrada_real/estado si se refrescaban. Resultado: "Datos
+        # hasta las X" en el reporte quedaba pegado a la hora de la primera
+        # corrida del dia, mostrando una hora mas vieja que datos que en
+        # realidad ya estaban frescos.
+        procesado_en=ahora,
     )
-    existente = existentes_por_clave.get((dni, fecha, canal_turno))
-    if existente:
-        for k, val in fila_bd.items():
-            setattr(existente, k, val)
-    else:
-        nuevo = ClasificacionDiaria(**fila_bd)
-        session.add(nuevo)
-        existentes_por_clave[(dni, fecha, canal_turno)] = nuevo
 
 
 def _parse_hora_corregida(valor, dni, fecha, lado):
@@ -490,17 +487,25 @@ def _cargar_existente_desde_postgres():
 
 
 def _sincronizar_postgres(res, claves_recalculadas):
-    """Un DNI del Maestro (SharePoint) que no existe en personas (Postgres)
-    -- ej. alguien que quedó solo en el Excel y nunca se dio de alta por acá,
-    o un huérfano de una migración de base -- rompía la escritura entera con
-    un solo IntegrityError (FK a personas.dni): TODA la corrida perdía su
-    session.commit() de una sola vez, así que ni siquiera los DNI válidos
-    (altas/reemplazos nuevos incluidos) quedaban guardados (hallazgo real,
-    2026-09-21: DNI huérfano 9917175 post-migración a Render tumbó la
-    sincronización completa, dejando "Datos hasta las X" pegado y altas/
-    reemplazos del día sin aparecer en ningún reporte). Cada fila se escribe
-    ahora en su propio savepoint (begin_nested()) -- un DNI huérfano se
-    aisla y se omite, el resto de la corrida se guarda igual."""
+    """Escritura EN BLOQUE (Davor, 2026-09-30) -- antes escribía fila por
+    fila (una consulta a Postgres por cada día-persona, con su propio
+    savepoint); con la ventana de reproceso normal MAS las (dni,fecha) que
+    alguna vez tuvieron una corrección (esas nunca se sacan de
+    dias_con_correccion, así que crecen sin límite con el tiempo: 1161 y
+    subiendo), ese bucle se volvió tan lento que una corrida podía no
+    terminar antes de que algo la cortara (timeout de 15 min, candado),
+    dejando "Datos hasta las X" pegado por horas. Ahora arma listas de
+    inserts/updates y las manda en bloques de CADA_N filas
+    (bulk_insert_mappings/bulk_update_mappings) -- mismo resultado, muchas
+    menos idas y vueltas a la base.
+
+    Un DNI del Maestro (SharePoint) que no existe en personas (Postgres) --
+    ej. alguien que quedó solo en el Excel y nunca se dio de alta por acá --
+    se filtra ANTES de escribir (se consulta el set de DNI válidos una sola
+    vez), no con try/except IntegrityError como antes: un bulk insert no
+    aísla una fila mala del resto del bloque como sí lo hacía un savepoint
+    por fila (hallazgo real, 2026-09-21, DNI huérfano 9917175 post-migración
+    a Render, que motivó el savepoint-por-fila original)."""
     crear_tablas()
     session = get_session()
     # Con commits parciales dentro del bucle de abajo, expire_on_commit
@@ -515,49 +520,53 @@ def _sincronizar_postgres(res, claves_recalculadas):
         # 2026-09-22: un Multicanal de 2 turnos tiene 2 filas el mismo
         # (dni, fecha), y una clave sin canal pisaría una con la otra acá
         # (dict-comprehension se queda con la última iterada). canal_turno
-        # = "Canal esperado (Patrón)" de `res` -- ver _upsert_postgres().
+        # = "Canal esperado (Patrón)" de `res` -- ver _fila_bd().
         existentes_por_clave = {(row.dni, row.fecha, row.canal_turno): row for row in existentes}
         res_por_clave = {(r["DNI"], r["Fecha"], r["Canal esperado (Patrón)"]): r for r in res.to_dict("records")}
+        dnis_validos = {dni for (dni,) in session.query(Persona.dni).all()}
 
+        ahora = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)  # naive UTC, mismo formato que ya guarda func.now()
         n_escritas = 0
         dnis_huerfanos = set()
-        # commit cada CADA_N filas, no uno solo al final (Davor, 2026-09-30)
-        # -- con la ventana de reproceso normal MAS las (dni,fecha) que
-        # alguna vez tuvieron una corrección (esas nunca se sacan de
-        # dias_con_correccion, así que crecen sin límite con el tiempo:
-        # 1161 y subiendo), el bucle entero se volvió lento -- si la corrida
-        # se corta antes de llegar al commit único de más abajo (timeout de
-        # 15 min, candado, lo que sea), ANTES se perdía TODO el trabajo del
-        # bucle, no solo lo que faltaba, así que "Datos hasta las X" podía
-        # quedarse pegado indefinidamente pese a corridas que sí avanzaban.
-        # Con commits parciales, lo ya procesado en esta corrida queda
-        # guardado aunque la corrida se corte más adelante.
-        CADA_N = 200
+        nuevos, actualizados = [], []
+        CADA_N = 500
+
+        def _volcar():
+            if nuevos:
+                session.bulk_insert_mappings(ClasificacionDiaria, nuevos)
+                nuevos.clear()
+            if actualizados:
+                session.bulk_update_mappings(ClasificacionDiaria, actualizados)
+                actualizados.clear()
+            session.commit()
+
         for clave in claves_recalculadas:
             fila = res_por_clave.get(clave)
             if fila is None:
                 continue
             dni_clave = clave[0]
-            if dni_clave in dnis_huerfanos:
-                continue
-            try:
-                with session.begin_nested():
-                    _upsert_postgres(session, existentes_por_clave, fila)
-                    session.flush()
-                n_escritas += 1
-                if n_escritas % CADA_N == 0:
-                    session.commit()
-            except IntegrityError:
+            if dni_clave not in dnis_validos:
                 dnis_huerfanos.add(dni_clave)
+                continue
+            fila_bd = _fila_bd(fila, ahora)
+            existente = existentes_por_clave.get(clave)
+            if existente:
+                fila_bd["id"] = existente.id
+                actualizados.append(fila_bd)
+            else:
+                nuevos.append(fila_bd)
+            n_escritas += 1
+            if len(nuevos) + len(actualizados) >= CADA_N:
+                _volcar()
+        _volcar()
 
         claves_finales = set(res_por_clave.keys())
-        n_eliminadas = 0
-        for clave in list(existentes_por_clave.keys()):
-            if clave not in claves_finales:
-                session.delete(existentes_por_clave[clave])
-                n_eliminadas += 1
+        ids_a_borrar = [row.id for clave, row in existentes_por_clave.items() if clave not in claves_finales]
+        if ids_a_borrar:
+            session.query(ClasificacionDiaria).filter(ClasificacionDiaria.id.in_(ids_a_borrar)).delete(synchronize_session=False)
+            session.commit()
+        n_eliminadas = len(ids_a_borrar)
 
-        session.commit()
         print(f"Postgres (clasificacion_diaria) sincronizado: {n_escritas} filas escritas, {n_eliminadas} eliminadas.")
         if dnis_huerfanos:
             print(
