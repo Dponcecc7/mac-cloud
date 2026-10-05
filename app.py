@@ -63,7 +63,16 @@ def _motivo_limpio(comentario):
         if resto == texto:
             break
         texto = resto
-    texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+    # En loop, no una sola pasada (Davor, 2026-10-05) -- un comentario con
+    # paréntesis encadenados ("Problema de salud (sin sustento aún) (motivo
+    # de salud)") solo perdía el ÚLTIMO paréntesis con un solo re.sub(),
+    # dejando "Problema de salud (sin sustento aún)" como motivo aparte en
+    # vez de agruparse con el resto de "Problema de salud".
+    while True:
+        sin_parentesis = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+        if sin_parentesis == texto:
+            break
+        texto = sin_parentesis
     texto = (texto[0].upper() + texto[1:]) if texto else "Sin motivo"
     # Homologaciones -- mismo motivo real, tipeado distinto por cada
     # supervisor. Se agregan acá a medida que se detectan (ver "Tráfico /

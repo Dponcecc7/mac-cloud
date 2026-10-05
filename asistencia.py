@@ -178,8 +178,15 @@ def _homologar_motivo(texto):
         texto = resto
     # Recorta cualquier paréntesis final -- de paso, esto es lo que hace que
     # MARCADOR_BORRADO (que es 100% un paréntesis) se muestre vacío en el
-    # reporte sin necesitar un caso especial acá.
-    texto = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+    # reporte sin necesitar un caso especial acá. En loop, no una sola
+    # pasada (Davor, 2026-10-05) -- paréntesis encadenados ("...(sin
+    # sustento aún) (motivo de salud)") solo perdían el ÚLTIMO con un solo
+    # re.sub(), dejando el del medio pegado.
+    while True:
+        sin_parentesis = re.sub(r"\s*\([^)]*\)\s*$", "", texto).strip()
+        if sin_parentesis == texto:
+            break
+        texto = sin_parentesis
     if not texto:
         return None
     return texto[0].upper() + texto[1:]
