@@ -7,6 +7,10 @@
 - **Supervisor**: acotado a su equipo directo (Persona.supervisor_dni ==
   su propio DNI, via Usuario.dni_asociado). Sin esto, un supervisor veía
   todo el equipo del cliente, no solo el suyo.
+- **Cliente** (Davor, 2026-10-06): acotado al equipo de UNO O VARIOS
+  supervisores elegidos por un admin (UsuarioSupervisorVisible, ver
+  models.py) -- pensado para alguien externo (ej. del lado de Essity/
+  Sancela) que solo debe ver ciertos equipos puntuales, no todo el cliente.
 
 - **Analista de canal**: acotado a su canal_asignado (Diego=Farmacia,
   Yeny=Autoservicio, Kevin=Tradicional -- 2026-08-27). Antes todos los
@@ -24,7 +28,7 @@ asignale un cliente_id_athena/dni_asociado en Usuarios para acotarlo."""
 from sqlalchemy import func, select
 
 from dimension_models import PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal
-from models import Usuario
+from models import Usuario, UsuarioSupervisorVisible
 
 
 def condicion_scope(persona_model, usuario_actual):
@@ -47,6 +51,23 @@ def condicion_scope(persona_model, usuario_actual):
         # sí mismos en su propia lista de mercaderistas (Davor, 2026-08-24:
         # "no tendria sentido").
         return (persona_model.supervisor_dni == dni_normalizado) & (persona_model.dni != dni_normalizado)
+    if usuario_actual.rol == "cliente":
+        # A diferencia de "supervisor" (un solo dni_asociado, el propio),
+        # un cliente puede tener VARIOS supervisores asignados (Davor,
+        # 2026-10-06) -- ve el equipo de CADA UNO, supervisor incluido (acá
+        # sí tiene sentido mostrarlo: a diferencia de un supervisor mirando
+        # su propia pantalla, un cliente externo viendo "el equipo del
+        # supervisor X" espera ver también a X). Sin ningún supervisor
+        # asignado todavía: no ve a NADIE -- a propósito, distinto del
+        # fallback "sin nada asignado ve todo" de más abajo (ese existe
+        # para no romper usuarios YA EXISTENTES de otros roles; un cliente
+        # nuevo sin configurar es justamente el caso donde hay que pecar de
+        # restrictivo, no de expuesto).
+        dnis = [
+            s.supervisor_dni.lstrip("0") or "0"
+            for s in UsuarioSupervisorVisible.query.filter_by(usuario_id=usuario_actual.id).all()
+        ]
+        return (persona_model.supervisor_dni.in_(dnis)) | (persona_model.dni.in_(dnis))
     if getattr(usuario_actual, "canal_asignado", None):
         return condicion_canal(persona_model, usuario_actual.canal_asignado)
     if usuario_actual.cliente_id_athena is not None:

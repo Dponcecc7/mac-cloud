@@ -7,10 +7,32 @@ from flask_login import current_user, login_required
 from werkzeug.security import generate_password_hash
 
 from extensions import db
-from models import Usuario
+from models import Usuario, UsuarioSupervisorVisible
 from permisos import PAGINAS_REPORTES, PAGINAS_TOP, TODAS_LAS_CLAVES, paginas_de
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+def _supervisores_disponibles():
+    """[(dni, nombre), ...] -- todo DNI que aparece como supervisor_dni de
+    alguien en Persona, con su nombre (mismo criterio que app.py::q_sup
+    para el dashboard: "supervisor real" es quien alguien más tiene cargado
+    como tal, no un Rol de texto libre que puede estar mal tipeado)."""
+    from dimension_models import Persona, get_session
+    from sqlalchemy.orm import aliased
+
+    session = get_session()
+    try:
+        Supervisor = aliased(Persona)
+        filas = (
+            session.query(Supervisor.dni, Supervisor.nombre_completo)
+            .join(Persona, Persona.supervisor_dni == Supervisor.dni)
+            .distinct()
+            .all()
+        )
+        return sorted(filas, key=lambda t: (t[1] or "").title())
+    finally:
+        session.close()
 
 
 def admin_required(f):
@@ -42,6 +64,11 @@ def usuarios():
         if dni_asociado:
             dni_asociado = dni_asociado.lstrip("0") or "0"
         cliente_id_athena = request.form.get("cliente_id_athena", "").strip() or None
+        # Normalizados igual que dni_asociado -- mismo motivo (Persona.dni
+        # nunca tiene cero a la izquierda).
+        supervisores_visibles = [
+            d.strip().lstrip("0") or "0" for d in request.form.getlist("supervisores_visibles") if d.strip()
+        ]
 
         if not email or not password:
             flash("Correo y contraseña son obligatorios.", "error")
@@ -60,15 +87,31 @@ def usuarios():
                 cliente_id_athena=int(cliente_id_athena) if cliente_id_athena else None,
             )
             db.session.add(nuevo)
+            db.session.flush()  # nuevo.id ya disponible antes del commit, para las filas de abajo
+            if rol == "cliente":
+                for dni in supervisores_visibles:
+                    db.session.add(UsuarioSupervisorVisible(usuario_id=nuevo.id, supervisor_dni=dni))
             db.session.commit()
             flash(f"Usuario {email} creado.", "ok")
         return redirect(url_for("admin.usuarios"))
 
     todos = Usuario.query.order_by(Usuario.created_at.desc()).all()
+    supervisores_visibles_de = {
+        usuario_id: {s.supervisor_dni for s in filas}
+        for usuario_id, filas in _agrupar_por_usuario(UsuarioSupervisorVisible.query.all()).items()
+    }
     return render_template(
         "admin_usuarios.html", usuario=current_user, usuarios=todos,
         paginas_top=PAGINAS_TOP, paginas_reportes=PAGINAS_REPORTES, permisos_de=paginas_de,
+        supervisores_disponibles=_supervisores_disponibles(), supervisores_visibles_de=supervisores_visibles_de,
     )
+
+
+def _agrupar_por_usuario(filas):
+    agrupado = {}
+    for f in filas:
+        agrupado.setdefault(f.usuario_id, []).append(f)
+    return agrupado
 
 
 @bp.route("/usuarios/<int:usuario_id>/toggle", methods=["POST"])
@@ -115,6 +158,29 @@ def set_acceso_usuario(usuario_id):
         usuario.dni_asociado = dni_asociado
         db.session.commit()
         flash(f"Acceso de {usuario.email} actualizado.", "ok")
+    return redirect(url_for("admin.usuarios"))
+
+
+@bp.route("/usuarios/<int:usuario_id>/supervisores-visibles", methods=["POST"])
+@admin_required
+def set_supervisores_visibles(usuario_id):
+    """Qué supervisores puede ver un usuario rol="cliente" -- ver
+    scoping.py::condicion_scope() y models.py::UsuarioSupervisorVisible.
+    Reemplaza la lista entera (borra y vuelve a crear), igual que
+    guardar_permisos() con paginas_permitidas."""
+    usuario = Usuario.query.get_or_404(usuario_id)
+    if usuario.rol != "cliente":
+        flash("Solo aplica a usuarios con rol Cliente.", "error")
+        return redirect(url_for("admin.usuarios"))
+
+    dnis = [
+        d.strip().lstrip("0") or "0" for d in request.form.getlist("supervisores_visibles") if d.strip()
+    ]
+    UsuarioSupervisorVisible.query.filter_by(usuario_id=usuario.id).delete()
+    for dni in dnis:
+        db.session.add(UsuarioSupervisorVisible(usuario_id=usuario.id, supervisor_dni=dni))
+    db.session.commit()
+    flash(f"Supervisores visibles de {usuario.email} actualizados ({len(dnis)}).", "ok")
     return redirect(url_for("admin.usuarios"))
 
 

@@ -69,6 +69,12 @@
     .btn-guardar-permisos { margin-top:16px; font-size:12.5px; padding:9px 18px; }
     #permisos-vacio { color:var(--muted); font-size:12.5px; }
 
+    /* Supervisores visibles (rol Cliente) -- mismo .permiso-chk que Permisos,
+       en una lista con scroll propio porque puede haber muchos supervisores. */
+    .lista-supervisores { max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:12px; background:var(--bg); }
+    .empty-supervisores { color:var(--muted); font-size:12.5px; margin:4px 0; }
+    .supervisores-panel { display:none; }
+
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
       header.top { padding:14px 16px; }
@@ -131,7 +137,7 @@
           <th class="th-ordenable" onclick="ordenarPor('cliente_id')">Cliente ID (Athena) <span class="flecha-orden" id="flecha-cliente_id"></span></th>
           <th class="th-ordenable" onclick="ordenarPor('canal')">Canal asignado <span class="flecha-orden" id="flecha-canal"></span></th>
           <th class="th-ordenable" onclick="ordenarPor('dni')">DNI asociado (supervisor) <span class="flecha-orden" id="flecha-dni"></span></th>
-          <th></th><th>Permisos</th>
+          <th></th><th>Permisos</th><th>Supervisores</th>
           <th class="th-ordenable" onclick="ordenarPor('activo')">Activo <span class="flecha-orden" id="flecha-activo"></span></th>
           <th class="th-ordenable" onclick="ordenarPor('ultimo_login')">Último login <span class="flecha-orden" id="flecha-ultimo_login"></span></th>
           <th></th>
@@ -168,6 +174,15 @@
             <button type="button" class="ghost btn-permisos" onclick="togglePermisos({{ u.id }})">
               {{ "Personalizado" if u.paginas_permitidas is not none else "Por rol" }}
             </button>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.rol == "cliente" %}
+            <button type="button" class="ghost btn-permisos" onclick="toggleSupervisores({{ u.id }})">
+              {{ supervisores_visibles_de.get(u.id, [])|length }} elegido(s)
+            </button>
+            {% else %}
+            <span title="Solo aplica a usuarios con rol Cliente">—</span>
             {% endif %}
           </td>
           <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
@@ -218,6 +233,32 @@
       {% endfor %}
     </div>
 
+    <div class="panel">
+      <p class="panel-title">Supervisores visibles (rol Cliente)</p>
+      <p id="supervisores-vacio">Elegí "N elegido(s)" en la tabla de arriba para editar los supervisores que puede ver un usuario Cliente.</p>
+      {% for u in usuarios %}
+      {% if u.rol == "cliente" %}
+      {% set elegidos = supervisores_visibles_de.get(u.id, []) %}
+      <div class="supervisores-panel" id="supervisores-panel-{{ u.id }}">
+        <div class="permisos-header">
+          <span class="correo-editando">Editando supervisores visibles de: {{ u.email }}</span>
+          <button type="button" class="ghost" onclick="cerrarSupervisores()">Cerrar</button>
+        </div>
+        <form id="supervisores-{{ u.id }}" method="post" action="{{ url_for('admin.set_supervisores_visibles', usuario_id=u.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="lista-supervisores">
+            {% for dni, nombre in supervisores_disponibles %}
+            <label class="permiso-chk"><input type="checkbox" name="supervisores_visibles" value="{{ dni }}" {{ 'checked' if dni in elegidos else '' }}> {{ (nombre or dni)|title }}</label>
+            {% endfor %}
+            {% if not supervisores_disponibles %}<p class="empty-supervisores">No hay supervisores cargados todavía.</p>{% endif %}
+          </div>
+          <button type="submit" class="btn-guardar-permisos">Guardar supervisores</button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
     <div class="panel" style="max-width:420px;">
       <p class="panel-title">Crear usuario nuevo</p>
       <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -226,15 +267,25 @@
         <label>Contraseña</label>
         <input type="password" name="password" required>
         <label>Rol</label>
-        <select name="rol">
+        <select name="rol" id="rol-nuevo-usuario" onchange="toggleSupervisoresNuevo()">
           <option value="analista">Analista</option>
           <option value="supervisor">Supervisor</option>
+          <option value="cliente">Cliente</option>
           <option value="admin">Admin</option>
         </select>
         <label>Cliente ID de Athena (para analistas -- ej. 295, 285)</label>
         <input type="text" name="cliente_id_athena" placeholder="295">
         <label>DNI asociado (opcional)</label>
         <input type="text" name="dni_asociado">
+        <div id="supervisores-nuevo-usuario" style="display:none;">
+          <label>Supervisores visibles (rol Cliente -- verá el equipo de cada uno elegido)</label>
+          <div class="lista-supervisores">
+            {% for dni, nombre in supervisores_disponibles %}
+            <label class="permiso-chk"><input type="checkbox" name="supervisores_visibles" value="{{ dni }}"> {{ (nombre or dni)|title }}</label>
+            {% endfor %}
+            {% if not supervisores_disponibles %}<p class="empty-supervisores">No hay supervisores cargados todavía.</p>{% endif %}
+          </div>
+        </div>
         <button type="submit" class="btn-crear">Crear</button>
       </form>
     </div>
@@ -261,6 +312,36 @@
       document.querySelectorAll(".permisos-panel").forEach(function (p) { p.style.display = "none"; });
       document.getElementById("permisos-vacio").style.display = "block";
       permisoAbiertoId = null;
+    }
+
+    var supervisoresAbiertoId = null;
+
+    function toggleSupervisores(id) {
+      document.querySelectorAll(".supervisores-panel").forEach(function (p) { p.style.display = "none"; });
+      if (supervisoresAbiertoId === id) {
+        supervisoresAbiertoId = null;
+        document.getElementById("supervisores-vacio").style.display = "block";
+        return;
+      }
+      document.getElementById("supervisores-vacio").style.display = "none";
+      var panel = document.getElementById("supervisores-panel-" + id);
+      panel.style.display = "block";
+      supervisoresAbiertoId = id;
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function cerrarSupervisores() {
+      document.querySelectorAll(".supervisores-panel").forEach(function (p) { p.style.display = "none"; });
+      document.getElementById("supervisores-vacio").style.display = "block";
+      supervisoresAbiertoId = null;
+    }
+
+    // Rol "Cliente" en "Crear usuario nuevo" -- muestra la lista de
+    // supervisores a elegir solo cuando aplica, igual que el resto de
+    // campos de acceso ya son condicionales por rol en la práctica.
+    function toggleSupervisoresNuevo() {
+      var rol = document.getElementById("rol-nuevo-usuario").value;
+      document.getElementById("supervisores-nuevo-usuario").style.display = (rol === "cliente") ? "block" : "none";
     }
 
     // Ordenar por encabezado (mismo patron que Personal) -- reordena en el
