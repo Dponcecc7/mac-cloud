@@ -40,6 +40,7 @@ from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
+from patron_recurrente import sin_acentos  # noqa: E402
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 # CORTE MANUAL completado (Davor, 2026-09-23) -- ya escribe directo al
@@ -327,6 +328,28 @@ def clasificar_dia(dni, nombre, fecha, weekday, pat, col_ent, col_sal, col_canal
             # Davor, 2026-09-14: "amanecida también es como un descanso", no
             # debería contar como falta. Mismo estado que la rama DESCANSO
             # de más abajo (no cuenta negativo en el Indicador).
+            estado_base = "DESCANSO (comentario supervisor)"
+            fuente = "Aplicativo (con comentario de supervisor)"
+            salida_anticipada = None
+        elif comentario_sup_norm.startswith("FALTA") and "DESCANSO" in sin_acentos(comentario_sup_norm).upper() and "MEDIC" in sin_acentos(comentario_sup_norm).upper():
+            # Mismo caso que "Falta - Amanecida" de arriba, pero para
+            # "Descanso médico" -- hallazgo real, Davor 2026-10-06 ("validemos
+            # que no estemos haciendo mal el registro"): "Descanso médico"
+            # está catalogado bajo categoría "Salud" (catalogo_motivos), NO
+            # "Descanso" -- asistencia.py arma el desplegable de motivos de
+            # FALTA con todo lo que NO sea categoría "Descanso" (ver
+            # asistencia.py, "descanso = [... categoria == 'Descanso']"), así
+            # que "Descanso médico" aparece en el desplegable de FALTA, no en
+            # el de Descanso. El flujo normal/previsto de carga (botón
+            # "Falta" + motivo "Descanso médico") termina mandando
+            # "Falta - Descanso médico" acá, que SIN este chequeo caía en el
+            # catch-all de más abajo como FALTA genérica -- un mercaderista
+            # con licencia médica real quedaba contando como ausencia
+            # injustificada en el Indicador de Asistencia y en "Horas a
+            # trabajar", exactamente lo que estado DESCANSO existe para
+            # evitar. sin_acentos() en vez de comparar literal -- "MEDIC" sin
+            # tilde nunca aparece en "MÉDICO" con tilde (mismo gotcha de
+            # siempre, ver alertas.py::MOTIVOS_CON_SUSTENTO).
             estado_base = "DESCANSO (comentario supervisor)"
             fuente = "Aplicativo (con comentario de supervisor)"
             salida_anticipada = None
