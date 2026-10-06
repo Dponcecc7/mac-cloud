@@ -215,7 +215,12 @@
             {% for f in filas %}{% set _ = conteo_dni.update({f.dni: conteo_dni.get(f.dni, 0) + 1}) %}{% endfor %}
             {% for f in filas %}
             {% set eb = f.estado_efectivo %}
-            {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'ASISTIÓ':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, eb|title) %}
+            {# Descanso médico se distingue del "Descanso" genérico en la
+               etiqueta de Estado (Davor, 2026-10-06) -- antes ambos se veían
+               igual ("Descanso"), aunque el comentario sí decía "Descanso
+               médico" en la columna de al lado. #}
+            {% set es_descanso_medico = eb == 'DESCANSO' and f.comentario_entrada and 'médico' in f.comentario_entrada|lower %}
+            {% set eb_corto = {'ASISTIÓ A TIEMPO':'Asistió', 'ASISTIÓ':'Asistió', 'TARDANZA':'Tardanza', 'FALTA':'Falta'}.get(eb, 'Descanso médico' if es_descanso_medico else eb|title) %}
             {% set pendiente = f.entrada_pendiente or f.salida_pendiente %}
             {% set estado_tags = eb_corto + (',Pendiente confirmar hora' if pendiente else '') %}
             <tr data-supervisor="{{ (f.supervisor or '')|title }}" data-region="{{ (f.region or '')|title }}" data-ciudad="{{ (f.ciudad or '')|title }}"
