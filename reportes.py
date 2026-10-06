@@ -17,7 +17,7 @@ from flask_login import current_user, login_required
 from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
 
-from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN
+from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN, UMBRAL_CUMPLIMIENTO_BAJO
 from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_descanso, _motivos_falta, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
@@ -50,6 +50,18 @@ DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Dom
 # badge de estado -- Davor pidió que la Ficha del trabajador "jale el mismo
 # formato" en vez de mostrar el estado crudo ("ASISTIÓ A TIEMPO", 2026-08-24).
 ESTADO_CORTO = {"ASISTIÓ A TIEMPO": "Asistió", "TARDANZA": "Tardanza", "FALTA": "Falta", "VACANTE": "Vacante", "VACACIONES": "Vacaciones"}
+
+
+def _estado_corto(estado_base, comentario):
+    """Igual que ESTADO_CORTO.get(...), pero distingue "Descanso médico" de
+    un "Descanso" genérico (Davor, 2026-10-06) -- mismo criterio que
+    _codigo_tareo() ya usa para DM vs D más abajo, y el mismo fix que ya se
+    aplicó en Reporte diario (asistencia.html) -- acá faltaba replicarlo
+    para "Detalle día a día" de la Ficha. sin_acentos(): "médico" con tilde
+    nunca contiene la subcadena "medic" sin tilde."""
+    if estado_base == "DESCANSO" and comentario and "medic" in sin_acentos(str(comentario)):
+        return "Descanso médico"
+    return ESTADO_CORTO.get(estado_base, estado_base.title())
 
 # Mismo vocabulario que ya usa la vista "Tareo" de One Page (F/PC/T/V/DM/A/—)
 # -- Davor, 2026-08-26: "cuando entro a ver el personal... me deberia salir
@@ -1180,7 +1192,7 @@ def ficha(dni):
             .all()
         )
         descansos = [
-            (fecha, comentario) for fecha, comentario in candidatos_descanso
+            (fecha, _homologar_motivo(comentario)) for fecha, comentario in candidatos_descanso
             if "descanso médico" in comentario.lower() or "descanso medico" in comentario.lower()
         ]
 
@@ -1288,7 +1300,7 @@ def ficha(dni):
                 "dia_semana": DIAS_ES[row["fecha"].weekday()],
                 "estado": row["estado"],
                 "estado_base": estado_base,
-                "estado_corto": ESTADO_CORTO.get(estado_base, estado_base.title()),
+                "estado_corto": _estado_corto(estado_base, row["comentario"]),
                 "motivo": _homologar_motivo(row["comentario"]) if estado_base == "FALTA" else None,
                 "entrada_real": row["entrada_real"] or "—",
                 "entrada_esperada": row["entrada_esperada"] or "—",
@@ -1364,6 +1376,7 @@ def ficha(dni):
         persona=persona, nombre_supervisor=nombre_supervisor, mes_str=mes_str,
         indicador_mes=indicador_mes, tareo_mes=tareo_mes, viajes_vacaciones=viajes_vacaciones,
         descansos=descansos, cumplimiento_semanal=cumplimiento_semanal, tendencia_cobertura=tendencia_cobertura,
+        umbral_cumplimiento_bajo=UMBRAL_CUMPLIMIENTO_BAJO,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
         alertas_mes=alertas_mes, insights=insights,

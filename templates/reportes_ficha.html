@@ -11,6 +11,11 @@
     :root {
       --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef;
       --brand:#2f6fb0; --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+      /* Davor, 2026-10-06 -- 4to nivel para "Cumplimiento semanal" (antes
+         solo 3: ok/warn/bad), para que una semana críticamente baja (ej.
+         28%) se distinga de una simplemente "mala" (ej. 60%), no las 2
+         con el mismo rojo. */
+      --critico:#7f1d1d;
     }
     * { box-sizing:border-box; }
     body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
@@ -72,9 +77,21 @@
     .semana-row:hover { background:var(--bg); }
     .semana-row.semana-activa { background:var(--bg); box-shadow:inset 0 0 0 1.5px var(--brand); }
     .semana-lbl { width:78px; flex-shrink:0; font-weight:600; color:var(--muted); white-space:nowrap; }
-    .semana-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:10px; overflow:hidden; }
-    .semana-barra { height:100%; border-radius:6px; }
+    /* position:relative + overflow visible (Davor, 2026-10-06, "dale mejor
+       visual a los rangos") -- la marca del "mínimo esperado" (línea
+       .semana-umbral) necesita poder dibujarse POR ENCIMA de la barra en
+       un punto fijo del ancho total, no recortada por el overflow:hidden
+       que antes tenía este wrap (esa propiedad ahora vive en .semana-barra
+       mismo, solo para que sus puntas sigan redondeadas). */
+    .semana-barra-wrap { flex:1; background:var(--line); border-radius:6px; height:12px; position:relative; }
+    .semana-barra { height:100%; border-radius:6px; overflow:hidden; transition:width .25s ease; }
+    /* Línea fina en el % "mínimo esperado" (mismo umbral que ya usa la
+       alerta "Cumplimiento de horas bajo", ver alertas.py::
+       UMBRAL_CUMPLIMIENTO_BAJO) -- referencia visual para comparar cada
+       semana contra el piso real, no solo contra las demás barras. */
+    .semana-umbral { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ink); opacity:.35; border-radius:1px; }
     .semana-pct { width:38px; text-align:right; flex-shrink:0; font-weight:700; font-size:11.5px; }
+    .semana-pct.semana-critica { color:var(--bad); }
 
     .tareo-strip { display:flex; gap:4px; overflow-x:auto; padding-bottom:6px; }
     .tareo-dia { flex:0 0 auto; width:34px; text-align:center; border-radius:8px; padding:4px 2px; background:var(--bg); }
@@ -327,17 +344,24 @@
     <div class="grid2">
       <div class="panel">
         <p class="panel-title">Cumplimiento semanal (últimas 6 semanas)</p>
-        <p class="empty" style="margin:-6px 0 8px;">Click en una semana para ver su detalle día a día abajo.</p>
+        <p class="empty" style="margin:-6px 0 8px;">Click en una semana para ver su detalle día a día abajo. La línea marca el {{ umbral_cumplimiento_bajo }}% mínimo esperado.</p>
         <div>
           {% for s in cumplimiento_semanal %}
           {% set pct = s.pct %}
-          {% set color = 'var(--ok)' if pct is not none and pct >= 95 else ('var(--warn)' if pct is not none and pct >= 80 else 'var(--bad)') %}
+          {# 4 niveles (antes 3: ok/warn/bad) -- una semana críticamente
+             baja (debajo del "mínimo esperado" que ya usa la alerta de
+             Cumplimiento de horas, ver alertas.py::UMBRAL_CUMPLIMIENTO_BAJO)
+             se distingue de una simplemente regular, no el mismo rojo para
+             28% y 60%. #}
+          {% set color = 'var(--ok)' if pct is not none and pct >= 95 else ('var(--warn)' if pct is not none and pct >= 80 else ('var(--bad)' if pct is not none and pct >= umbral_cumplimiento_bajo else 'var(--critico)')) %}
+          {% set critica = pct is not none and pct < umbral_cumplimiento_bajo %}
           <a class="semana-row {{ 'semana-activa' if s.semana_str == semana_vista_str else '' }}" href="{{ url_for('reportes.ficha', dni=persona.dni, semana=s.semana_str) }}">
             <span class="semana-lbl">{{ s.semana }}</span>
-            <div class="semana-barra-wrap">
+            <div class="semana-barra-wrap" title="Mínimo esperado: {{ umbral_cumplimiento_bajo }}%">
               <div class="semana-barra" style="width:{{ (pct if pct is not none and pct <= 100 else 100) }}%; background:{{ color if pct is not none else 'var(--line)' }};"></div>
+              <div class="semana-umbral" style="left:{{ umbral_cumplimiento_bajo }}%;"></div>
             </div>
-            <span class="semana-pct">{{ (pct|round(0)|int ~ '%') if pct is not none else '—' }}</span>
+            <span class="semana-pct {{ 'semana-critica' if critica else '' }}">{{ (pct|round(0)|int ~ '%') if pct is not none else '—' }}</span>
           </a>
           {% endfor %}
         </div>
