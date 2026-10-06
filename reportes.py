@@ -1154,19 +1154,35 @@ def ficha(dni):
             r_periodo["estado_base"] = r_periodo["estado"].apply(lambda s: s.split(" (")[0])
         viajes_vacaciones = calcular_viajes_vacaciones(session, r_periodo, hoy) if len(r_periodo) else []
 
-        # Descansos médicos (últimos 180 días) -- subconjunto de Falta cuyo
-        # comentario del supervisor menciona "descanso médico".
-        descansos = (
+        # Descansos médicos (últimos 180 días) -- cualquier día cuyo
+        # comentario del supervisor menciona "descanso médico". Filtro EN
+        # PYTHON, no ILIKE en SQL (Davor, 2026-10-06, dos bugs reales que
+        # dejaban este panel SIEMPRE vacío aunque hubiera descansos médicos
+        # de verdad, visibles en el Tareo de abajo como "DM"):
+        # 1) estado.ilike("FALTA%") es de antes de que "DESCANSO" existiera
+        #    como estado_base propio (2026-09-14) -- un descanso médico ya
+        #    clasificado como DESCANSO (no FALTA) nunca entraba acá.
+        # 2) comentario_supervisor.ilike("%descanso%medic%") compara sin
+        #    tilde contra texto real CON tilde ("médico") -- ILIKE de
+        #    Postgres es insensible a mayúsculas pero NO a tildes, así que
+        #    "medic" nunca matchea "médico". Mismo criterio ya usado y
+        #    probado en alertas.py::MOTIVOS_CON_SUSTENTO (ambas variantes,
+        #    con y sin tilde, por las dudas de cómo lo haya tipeado cada
+        #    supervisor).
+        candidatos_descanso = (
             session.query(ClasificacionDiaria.fecha, ClasificacionDiaria.comentario_supervisor)
             .filter(
                 ClasificacionDiaria.dni == dni,
                 ClasificacionDiaria.fecha >= ventana_desde, ClasificacionDiaria.fecha <= hoy,
-                ClasificacionDiaria.estado.ilike("FALTA%"),
-                ClasificacionDiaria.comentario_supervisor.ilike("%descanso%medic%"),
+                ClasificacionDiaria.comentario_supervisor.isnot(None),
             )
             .order_by(ClasificacionDiaria.fecha.desc())
             .all()
         )
+        descansos = [
+            (fecha, comentario) for fecha, comentario in candidatos_descanso
+            if "descanso médico" in comentario.lower() or "descanso medico" in comentario.lower()
+        ]
 
         # Historial de cambios (overrides de horario/canal/supervisor/zona/
         # refrigerio) vigentes para esta persona -- ya se validó el scope de
