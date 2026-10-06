@@ -227,6 +227,14 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     # semanal" contaba 8.5h "debidas" por cada día de descanso médico, caso
     # real: 28% en una semana con 5 días de licencia médica).
     es_descanso = r["estado_base"] == "DESCANSO"
+    # DM, no solo D (Davor, 2026-10-06, "esa casilla que diga Falta: 2, DM:
+    # 4, Tardanzas: 4") -- mismo criterio que ya usa reportes.py::
+    # _estado_corto()/_codigo_tareo() para distinguir Descanso médico de un
+    # Descanso regular: sin_acentos(), "médico" con tilde nunca contiene
+    # "medic" sin tilde.
+    r["es_descanso_medico"] = es_descanso & r["comentario"].apply(
+        lambda c: pd.notna(c) and "medic" in sin_acentos(str(c))
+    )
     r["_horas_vacante_dia"] = r["horas_a_trabajar"].where(r["motivo_falta"] == "Vacante", 0.0)
     r["_horas_sustento_dia"] = r["horas_a_trabajar"].where(es_con_sustento, 0.0)
     r["_horas_descanso_dia"] = r["horas_a_trabajar"].where(es_descanso, 0.0)
@@ -264,6 +272,7 @@ def resumen_por_persona(detalle_semana):
     dias_flags = detalle_semana.groupby(["dni", "fecha"]).agg(
         es_tardanza=("es_tardanza", "any"),
         es_salida_temprana=("es_salida_temprana", "any"),
+        es_descanso_medico=("es_descanso_medico", "any"),
         recupero_dia=("recupero_dia", "any"),
         motivo_falta=("motivo_falta", "first"),
     ).reset_index()
@@ -271,6 +280,7 @@ def resumen_por_persona(detalle_semana):
     g_dias = dias_flags.groupby("dni").agg(
         _dias_falta=("motivo_falta", lambda s: int((s == "Falta").sum())),
         _dias_vacante=("motivo_falta", lambda s: int((s == "Vacante").sum())),
+        dias_descanso_medico=("es_descanso_medico", "sum"),
         dias_tardanza=("es_tardanza", "sum"),
         tardanzas_recuperadas=("es_tardanza", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
         dias_salida_temprana=("es_salida_temprana", "sum"),
@@ -288,8 +298,14 @@ def resumen_por_persona(detalle_semana):
         _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
     ).join(g_dias).reset_index()
 
+    # DM y Tardanzas sumados al texto (Davor, 2026-10-06: "esa casilla que
+    # diga Falta: 2, DM: 4, Tardanzas: 4") -- Vacante se mantiene al final,
+    # no se saca nada que ya hubiera, solo se agrega lo pedido.
     g["dias_falta_vacante"] = (
-        "Falta: " + g["_dias_falta"].astype(str) + " / Vacante: " + g["_dias_vacante"].astype(str)
+        "Falta: " + g["_dias_falta"].astype(str)
+        + " / DM: " + g["dias_descanso_medico"].astype(str)
+        + " / Tardanzas: " + g["dias_tardanza"].astype(str)
+        + " / Vacante: " + g["_dias_vacante"].astype(str)
     )
     g["horas_trabajadas"] = g["horas_trabajadas"].round(1)
     # Vacante, faltas CON sustento (descanso médico/licencia/feriado
