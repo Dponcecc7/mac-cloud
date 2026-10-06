@@ -4,8 +4,9 @@
 Puerto de MAC/reporte_semanal.py::calcular_detalle_diario() +
 agregar_detalle_mercaderista() -- MISMA regla de negocio ya validada (horas
 fijas L-V 8.5h / Sábado 5.5h / feriados 0h, descuenta refrigerio según el
-PATRÓN no el real marcado, "Horas a trabajar" descuenta Vacante, "Horas a
-trabajar sin faltas" además descuenta Falta y Vacaciones), pero leyendo todo
+PATRÓN no el real marcado, "Horas a trabajar" descuenta Vacante y Descanso
+(2026-10-06), "Horas a trabajar sin faltas" además descuenta Falta y
+Vacaciones), pero leyendo todo
 de Postgres en vez de Excel/Graph -- no es importable tal cual desde acá
 porque esas dependencias (Maestro, Patrón, Historial) solo existen como
 archivo local en el original. Ver plan de esta sesión para el detalle de
@@ -216,8 +217,19 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     # esas horas a nadie, tiene justificación real -- se descuentan de la
     # base "Horas a trabajar", no solo de la variante "sin faltas".
     es_con_sustento = (r["motivo_falta"] == "Falta") & r["comentario"].apply(_tiene_sustento)
+    # estado_base == "DESCANSO" (Davor, 2026-10-06: "los descansos médicos
+    # deben restar las horas a trabajar de la semana") -- mismo criterio que
+    # "con sustento" de arriba, pero para el estado DEDICADO "DESCANSO" que
+    # el motor empezó a usar desde el 2026-09-14 (antes un descanso médico
+    # SIEMPRE llegaba como FALTA con comentario, que es lo único que
+    # es_con_sustento ya cubría; DESCANSO es un estado_base aparte, nunca
+    # "Falta", así que es_con_sustento nunca lo agarraba -- "Cumplimiento
+    # semanal" contaba 8.5h "debidas" por cada día de descanso médico, caso
+    # real: 28% en una semana con 5 días de licencia médica).
+    es_descanso = r["estado_base"] == "DESCANSO"
     r["_horas_vacante_dia"] = r["horas_a_trabajar"].where(r["motivo_falta"] == "Vacante", 0.0)
     r["_horas_sustento_dia"] = r["horas_a_trabajar"].where(es_con_sustento, 0.0)
+    r["_horas_descanso_dia"] = r["horas_a_trabajar"].where(es_descanso, 0.0)
 
     # "Horas a trabajar sin faltas" (Davor, 2026-08-23): SOLO cuenta los días
     # que la persona realmente vino -- con marcación real (entrada Y salida),
@@ -230,7 +242,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     # completa como si hubiese trabajado, sin ninguna marcación real detrás.
     # Los días ya excluidos de la base (Vacante/con sustento) no se
     # descuentan de nuevo acá -- ya salieron antes.
-    ya_excluido_de_base = (r["motivo_falta"] == "Vacante") | es_con_sustento
+    ya_excluido_de_base = (r["motivo_falta"] == "Vacante") | es_con_sustento | es_descanso
     r["_horas_sin_marcacion_dia"] = r["horas_a_trabajar"].where(~ya_excluido_de_base & ~con_marcacion, 0.0)
 
     return r
@@ -272,6 +284,7 @@ def resumen_por_persona(detalle_semana):
         horas_a_trabajar=("horas_a_trabajar", "sum"),
         _horas_vacante=("_horas_vacante_dia", "sum"),
         _horas_sustento=("_horas_sustento_dia", "sum"),
+        _horas_descanso=("_horas_descanso_dia", "sum"),
         _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
     ).join(g_dias).reset_index()
 
@@ -279,10 +292,11 @@ def resumen_por_persona(detalle_semana):
         "Falta: " + g["_dias_falta"].astype(str) + " / Vacante: " + g["_dias_vacante"].astype(str)
     )
     g["horas_trabajadas"] = g["horas_trabajadas"].round(1)
-    # Vacante y faltas CON sustento (descanso médico/licencia/feriado
-    # regional) se descuentan de la base -- a nadie se le puede "deber"
-    # horas que tienen justificación real o que nadie estaba para trabajar.
-    g["horas_a_trabajar"] = (g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"]).round(1)
+    # Vacante, faltas CON sustento (descanso médico/licencia/feriado
+    # regional) y días en estado DESCANSO se descuentan de la base -- a
+    # nadie se le puede "deber" horas que tienen justificación real, que
+    # nadie estaba para trabajar, o que directamente eran de descanso.
+    g["horas_a_trabajar"] = (g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"] - g["_horas_descanso"]).round(1)
     # "sin faltas" descuenta además cualquier día sin marcación real
     # (Falta/Vacaciones normales, o un "Asistió" todavía sin hora cargada) --
     # compara solo contra los días que sí tienen una jornada real registrada.
