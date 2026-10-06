@@ -91,6 +91,14 @@ DEFAULT_POR_ROL = {
     "admin": TODAS_LAS_CLAVES,
     "analista": _ABIERTAS_A_TODOS + _SOLO_ANALISTA_ADMIN + _REPORTES_ABIERTOS_A_TODOS + list(_SOLO_ANALISTA_ADMIN_REPORTES),
     "supervisor": _ABIERTAS_A_TODOS + _REPORTES_ABIERTOS_A_TODOS,
+    # "coordinador" (Davor, 2026-10-06) -- mismo alcance de páginas que
+    # Supervisor por default (ve/marca asistencia de su equipo, reportes
+    # abiertos), pero el EQUIPO que ve sale de scoping.py (varios
+    # supervisores elegidos, no uno solo) -- ver UsuarioSupervisorVisible.
+    # "cliente" (el rol externo que comparte ese mismo mecanismo de
+    # scoping) NO tiene entrada acá a propósito: sin nada configurado debe
+    # quedar sin NINGUNA página habilitada, no con el set de Supervisor.
+    "coordinador": _ABIERTAS_A_TODOS + _REPORTES_ABIERTOS_A_TODOS,
 }
 
 

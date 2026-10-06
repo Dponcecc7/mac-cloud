@@ -177,12 +177,12 @@
             {% endif %}
           </td>
           <td>
-            {% if u.rol == "cliente" %}
+            {% if u.rol in ("cliente", "coordinador") %}
             <button type="button" class="ghost btn-permisos" onclick="toggleSupervisores({{ u.id }})">
               {{ supervisores_visibles_de.get(u.id, [])|length }} elegido(s)
             </button>
             {% else %}
-            <span title="Solo aplica a usuarios con rol Cliente">—</span>
+            <span title="Solo aplica a usuarios con rol Cliente o Coordinador">—</span>
             {% endif %}
           </td>
           <td><span class="estado-pill {{ 'si' if u.activo else 'no' }}">{{ "Sí" if u.activo else "No" }}</span></td>
@@ -234,10 +234,10 @@
     </div>
 
     <div class="panel">
-      <p class="panel-title">Supervisores visibles (rol Cliente)</p>
-      <p id="supervisores-vacio">Elegí "N elegido(s)" en la tabla de arriba para editar los supervisores que puede ver un usuario Cliente.</p>
+      <p class="panel-title">Supervisores visibles (rol Cliente/Coordinador)</p>
+      <p id="supervisores-vacio">Elegí "N elegido(s)" en la tabla de arriba para editar los supervisores que puede ver un usuario Cliente o Coordinador.</p>
       {% for u in usuarios %}
-      {% if u.rol == "cliente" %}
+      {% if u.rol in ("cliente", "coordinador") %}
       {% set elegidos = supervisores_visibles_de.get(u.id, []) %}
       <div class="supervisores-panel" id="supervisores-panel-{{ u.id }}">
         <div class="permisos-header">
@@ -271,6 +271,7 @@
           <option value="analista">Analista</option>
           <option value="supervisor">Supervisor</option>
           <option value="cliente">Cliente</option>
+          <option value="coordinador">Coordinador</option>
           <option value="admin">Admin</option>
         </select>
         <label>Cliente ID de Athena (para analistas -- ej. 295, 285)</label>
@@ -278,7 +279,7 @@
         <label>DNI asociado (opcional)</label>
         <input type="text" name="dni_asociado">
         <div id="supervisores-nuevo-usuario" style="display:none;">
-          <label>Supervisores visibles (rol Cliente -- verá el equipo de cada uno elegido)</label>
+          <label>Supervisores visibles (rol Cliente/Coordinador -- verá el equipo de cada uno elegido)</label>
           <div class="lista-supervisores">
             {% for dni, nombre in supervisores_disponibles %}
             <label class="permiso-chk"><input type="checkbox" name="supervisores_visibles" value="{{ dni }}"> {{ (nombre or dni)|title }}</label>
@@ -336,12 +337,12 @@
       supervisoresAbiertoId = null;
     }
 
-    // Rol "Cliente" en "Crear usuario nuevo" -- muestra la lista de
-    // supervisores a elegir solo cuando aplica, igual que el resto de
-    // campos de acceso ya son condicionales por rol en la práctica.
+    // Rol "Cliente"/"Coordinador" en "Crear usuario nuevo" -- muestra la
+    // lista de supervisores a elegir solo cuando aplica, igual que el
+    // resto de campos de acceso ya son condicionales por rol en la práctica.
     function toggleSupervisoresNuevo() {
       var rol = document.getElementById("rol-nuevo-usuario").value;
-      document.getElementById("supervisores-nuevo-usuario").style.display = (rol === "cliente") ? "block" : "none";
+      document.getElementById("supervisores-nuevo-usuario").style.display = (rol === "cliente" || rol === "coordinador") ? "block" : "none";
     }
 
     // Ordenar por encabezado (mismo patron que Personal) -- reordena en el

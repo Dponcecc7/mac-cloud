@@ -97,6 +97,27 @@ def test_todas_las_claves_son_unicas():
     assert len(TODAS_LAS_CLAVES) == len(set(TODAS_LAS_CLAVES))
 
 
+def test_coordinador_tiene_mismas_paginas_por_default_que_supervisor():
+    # Davor, 2026-10-06: "coordinador" es la version interna del mecanismo
+    # de "cliente" (varios supervisores elegidos, ver scoping.py), pero con
+    # mas paginas habilitadas por default -- mismo set que Supervisor.
+    assert DEFAULT_POR_ROL["coordinador"] == DEFAULT_POR_ROL["supervisor"]
+    coordinador = UsuarioFalso("coordinador")
+    assert tiene_acceso(coordinador, "asistencia")
+    assert tiene_acceso(coordinador, "reportes")
+    assert not tiene_acceso(coordinador, "cargar_headcount")
+
+
+def test_cliente_no_tiene_ninguna_pagina_por_default():
+    # A diferencia de "coordinador", "cliente" (rol externo) no tiene
+    # entrada en DEFAULT_POR_ROL a proposito -- sin nada configurado, no ve
+    # NINGUNA pestaña hasta que un admin se la habilite a mano.
+    assert "cliente" not in DEFAULT_POR_ROL
+    cliente = UsuarioFalso("cliente")
+    assert paginas_de(cliente) == []
+    assert not tiene_acceso(cliente, "asistencia")
+
+
 def test_usuarios_ni_dashboard_son_paginas_configurables():
     # Decision explicita de Davor: Usuarios siempre admin, Dashboard
     # siempre visible para todos -- ninguno de los dos debe aparecer como

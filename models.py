@@ -12,7 +12,7 @@ class Usuario(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    rol = db.Column(db.Enum("admin", "analista", "supervisor", "cliente", name="rol_usuario"), nullable=False)
+    rol = db.Column(db.Enum("admin", "analista", "supervisor", "cliente", "coordinador", name="rol_usuario"), nullable=False)
     dni_asociado = db.Column(db.String(8), nullable=True)  # FK a personas.dni cuando esa tabla exista (Fase 2)
     # cliente_id de Athena (livetradebi.dim_lf_general_visitas.cliente_id) que
     # este analista gestiona -- un analista = un cliente fijo. El pipeline lo
@@ -46,11 +46,14 @@ class Usuario(db.Model, UserMixin):
 
 
 class UsuarioSupervisorVisible(db.Model):
-    """Qué supervisores puede ver un usuario rol="cliente" (Davor,
-    2026-10-06: "agregar también seleccionar los supervisores, que podrá
-    ver toda información de sus equipos") -- un cliente puede tener VARIOS
-    supervisores asignados (a diferencia de dni_asociado de Usuario, que es
-    uno solo, pensado para cuando el propio usuario ES ese supervisor).
+    """Qué supervisores puede ver un usuario rol="cliente" o rol="coordinador"
+    (Davor, 2026-10-06: "agregar también seleccionar los supervisores, que
+    podrá ver toda información de sus equipos"; coordinador agregado el
+    mismo día, mismo mecanismo -- la diferencia entre ambos roles es
+    páginas/permisos por default, no el alcance de datos) -- uno de estos
+    usuarios puede tener VARIOS supervisores asignados (a diferencia de
+    dni_asociado de Usuario, que es uno solo, pensado para cuando el propio
+    usuario ES ese supervisor).
     supervisor_dni es texto libre (igual que Usuario.dni_asociado) en vez
     de FK real -- Persona vive en el Base standalone de dimension_models.py,
     no en el de Flask-SQLAlchemy (db.Model) de este archivo, mismo motivo

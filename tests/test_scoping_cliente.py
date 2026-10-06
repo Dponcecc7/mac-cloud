@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-"""condicion_scope() para rol="cliente" SÍ toca la base (a diferencia del
-resto de ramas en test_scoping.py, que arman la expresión sin consultar
-nada) -- necesita leer UsuarioSupervisorVisible para saber qué supervisores
-eligió el admin. DB de prueba: SQLite en memoria vía Flask-SQLAlchemy
-(extensions.db), nunca la Postgres real."""
+"""condicion_scope() para rol="cliente"/"coordinador" SÍ toca la base (a
+diferencia del resto de ramas en test_scoping.py, que arman la expresión
+sin consultar nada) -- necesita leer UsuarioSupervisorVisible para saber
+qué supervisores eligió el admin. Mismo alcance de datos para ambos roles
+(ver scoping.py) -- la diferencia entre ellos es qué páginas tienen por
+default (permisos.py), no se prueba acá. DB de prueba: SQLite en memoria
+vía Flask-SQLAlchemy (extensions.db), nunca la Postgres real."""
 import os
 import sys
 
@@ -29,14 +31,18 @@ def app_ctx():
         db.session.remove()
 
 
-def _crear_cliente(dnis_supervisores):
-    u = Usuario(email="cliente_test@example.com", password_hash="x", rol="cliente", activo=True)
+def _crear_usuario(dnis_supervisores, rol="cliente"):
+    u = Usuario(email=f"{rol}_test@example.com", password_hash="x", rol=rol, activo=True)
     db.session.add(u)
     db.session.flush()
     for dni in dnis_supervisores:
         db.session.add(UsuarioSupervisorVisible(usuario_id=u.id, supervisor_dni=dni))
     db.session.commit()
     return u
+
+
+def _crear_cliente(dnis_supervisores):
+    return _crear_usuario(dnis_supervisores, rol="cliente")
 
 
 def test_cliente_sin_supervisores_asignados_no_ve_a_nadie(app_ctx):
@@ -74,3 +80,21 @@ def test_cliente_con_varios_supervisores_ve_ambos_equipos(app_ctx):
     cliente = _crear_cliente(["74887804", "9919446"])
     filas = UsuarioSupervisorVisible.query.filter_by(usuario_id=cliente.id).all()
     assert {f.supervisor_dni for f in filas} == {"74887804", "9919446"}
+
+
+def test_coordinador_mismo_alcance_de_datos_que_cliente(app_ctx):
+    # "coordinador" (Davor, 2026-10-06) es la versión interna del mismo
+    # mecanismo -- mismo alcance de datos, solo cambian las páginas por
+    # default (eso lo prueba test_permisos.py, no acá).
+    coordinador = _crear_usuario(["74887804"], rol="coordinador")
+    cond = condicion_scope(Persona, coordinador)
+    sql = str(cond)
+    assert "supervisor_dni" in sql
+    assert "personas.dni" in sql
+
+
+def test_coordinador_sin_supervisores_tampoco_ve_a_nadie(app_ctx):
+    coordinador = _crear_usuario([], rol="coordinador")
+    cond = condicion_scope(Persona, coordinador)
+    compilado = str(cond.compile(compile_kwargs={"literal_binds": True}))
+    assert "IN (NULL)" in compilado or "IN ()" in compilado or "1 != 1" in compilado

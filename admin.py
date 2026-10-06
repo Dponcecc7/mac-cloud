@@ -88,7 +88,7 @@ def usuarios():
             )
             db.session.add(nuevo)
             db.session.flush()  # nuevo.id ya disponible antes del commit, para las filas de abajo
-            if rol == "cliente":
+            if rol in ("cliente", "coordinador"):
                 for dni in supervisores_visibles:
                     db.session.add(UsuarioSupervisorVisible(usuario_id=nuevo.id, supervisor_dni=dni))
             db.session.commit()
@@ -164,13 +164,13 @@ def set_acceso_usuario(usuario_id):
 @bp.route("/usuarios/<int:usuario_id>/supervisores-visibles", methods=["POST"])
 @admin_required
 def set_supervisores_visibles(usuario_id):
-    """Qué supervisores puede ver un usuario rol="cliente" -- ver
-    scoping.py::condicion_scope() y models.py::UsuarioSupervisorVisible.
+    """Qué supervisores puede ver un usuario rol="cliente" o "coordinador"
+    -- ver scoping.py::condicion_scope() y models.py::UsuarioSupervisorVisible.
     Reemplaza la lista entera (borra y vuelve a crear), igual que
     guardar_permisos() con paginas_permitidas."""
     usuario = Usuario.query.get_or_404(usuario_id)
-    if usuario.rol != "cliente":
-        flash("Solo aplica a usuarios con rol Cliente.", "error")
+    if usuario.rol not in ("cliente", "coordinador"):
+        flash("Solo aplica a usuarios con rol Cliente o Coordinador.", "error")
         return redirect(url_for("admin.usuarios"))
 
     dnis = [
