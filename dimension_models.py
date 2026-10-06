@@ -41,7 +41,16 @@ def get_engine():
         # mismo motivo que el fix de timeouts de Athena (athena_client.py,
         # 2026-09-25), pero acá pega en CADA paso del pipeline, no solo el
         # de Athena, porque todos abren su propia sesión de Postgres.
-        _engine = create_engine(os.environ["DATABASE_URL"].strip(), connect_args={"connect_timeout": 10})
+        # pool_pre_ping=True (Davor, 2026-10-06) -- distinto problema: una
+        # conexión que YA estaba abierta en el pool, pero que Postgres cerró
+        # del lado del servidor mientras tanto (idle timeout, blip de red),
+        # se reusaba igual y reventaba con "SSL error: unexpected eof while
+        # reading" en el primer query del siguiente request -- esto hace que
+        # el pool la pruebe (SELECT 1 liviano) antes de entregarla, y
+        # reconecta sola si ya no sirve.
+        _engine = create_engine(
+            os.environ["DATABASE_URL"].strip(), connect_args={"connect_timeout": 10}, pool_pre_ping=True,
+        )
     return _engine
 
 

@@ -102,6 +102,13 @@ def create_app():
     # .strip() (Davor, 2026-09-21) -- ver mismo fix en dimension_models.py::get_engine().
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dev.db").strip()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # pool_pre_ping (Davor, 2026-10-06) -- sin esto, una conexión del pool
+    # que Postgres cerró del lado del servidor (idle timeout, blip de red)
+    # se reusa igual en el próximo request y revienta con "SSL error:
+    # unexpected eof while reading" en vez de reconectar sola -- mismo
+    # motivo que connect_timeout en dimension_models.py::get_engine(), pero
+    # para conexiones que YA estaban abiertas, no solo las nuevas.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
     # Cookie de sesion solo por HTTPS -- Render sirve todo por HTTPS, asi
     # que esto no rompe produccion. SESSION_COOKIE_SECURE=false permite
     # override para correr local por http (python app.py en localhost).
