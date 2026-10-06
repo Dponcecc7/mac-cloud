@@ -1194,7 +1194,10 @@ def ficha(dni):
         resumen_s = resumen_por_persona(detalle_s)
         pct = resumen_s.iloc[0]["pct_cumplimiento_sin_faltas"] if len(resumen_s) else None
         cumplimiento_semanal.append({
-            "semana": f"S{num_s}", "semana_str": f"{anio_s}-W{num_s:02d}",
+            # Rango de fechas en vez de "S41" (Davor, 2026-10-06) -- "qué
+            # semana es la 41" no se lee de un vistazo, el rango sí.
+            "semana": f"{desde_s.strftime('%d.%m')} al {hasta_s.strftime('%d.%m')}",
+            "semana_str": f"{anio_s}-W{num_s:02d}",
             "desde": desde_s, "pct": None if pct is None or pd.isna(pct) else pct,
         })
 
