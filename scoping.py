@@ -19,14 +19,11 @@
   Yeny=Autoservicio, Kevin=Tradicional -- 2026-08-27). Antes todos los
   analistas del mismo cliente_id_athena veían TODO ese grupo sin importar
   canal (por eso Diego veía headcount Tradicional). Ve una Persona si su
-  canal principal coincide, O si tiene algún día de PatronRecurrente en ese
-  canal, O si tiene un override de PersonaZonaCanal para ese canal (Davor,
-  2026-10-07) -- esto es lo que deja que un mercaderista compartido entre
-  canales (ej. canal="MULTICANAL", unos días Farmacia otros Autoservicio,
-  o solo con la zona/supervisor de Farmacia asignada sin un día puntual
-  todavía en el patrón) aparezca para CADA analista de canal en el suyo,
-  sin duplicar la fila (Persona sigue siendo una sola fila por DNI -- admin
-  la ve una sola vez).
+  canal principal coincide O si tiene algún día de PatronRecurrente en ese
+  canal -- esto último es lo que deja que un mercaderista compartido entre
+  canales (ej. canal="MULTICANAL", unos días Farmacia otros Autoservicio)
+  aparezca para CADA analista de canal en el suyo, sin duplicar la fila
+  (Persona sigue siendo una sola fila por DNI -- admin la ve una sola vez).
 
 Admin ve todo (supervisión cruzada). Un usuario sin nada de esto asignado
 todavía también ve todo -- para no romper accesos existentes en silencio;
@@ -136,13 +133,19 @@ def condicion_canal(persona_model, canal):
     """Misma condición que el branch de canal_asignado en condicion_scope(),
     factorizada para reusar en el filtro de canal de admin (aplicar_filtros_extra) --
     ve una Persona si su canal principal coincide (tolerando variantes de
-    CANAL_VARIANTES), o si tiene algún día de PatronRecurrente en ese canal
-    (mercaderistas compartidos entre canales), o si tiene un override de
-    PersonaZonaCanal para ese canal (Davor, 2026-10-07: "Deberia aparecer
-    tambien si en zona aparece como Farma" -- caso real, Lia Oro tenía el
-    override de zona/supervisor de Farmacia pero su PatronRecurrente nunca
-    tenía un día marcado como Farmacia, así que no aparecía para el
-    analista de ese canal aunque organizacionalmente sí le correspondía).
+    CANAL_VARIANTES) O si tiene algún día de PatronRecurrente en ese canal
+    (mercaderistas compartidos entre canales).
+
+    NO se usa PersonaZonaCanal acá (Davor, 2026-10-07: se probó y se
+    revirtió el mismo día) -- el campo "Farmacia/AU" de la pantalla
+    Personal es una sola caja combinada que app.py escribe en los canales
+    FARMACIA y AUTOSERVICIO a la vez (ver personal_editar_masivo()), así
+    que casi cualquier Multicanal con algo ahí termina con una fila
+    PersonaZonaCanal(canal="FARMACIA") aunque nunca trabaje farmacia --
+    usarla como criterio de visibilidad exponía mercaderistas 100%
+    Autoservicio al analista de Farmacia. La señal confiable de "esta
+    persona trabaja este canal" sigue siendo el canal principal o un día
+    real en PatronRecurrente, no el override de zona/supervisor.
 
     `canal` acepta un solo canal (string) o varios (lista/tupla) -- con
     varios, es "cualquiera de ellos" (unión de variantes de todos)."""
@@ -151,12 +154,7 @@ def condicion_canal(persona_model, canal):
         canal_norm = canonizar_canal(c)
         variantes.update(CANAL_VARIANTES.get(canal_norm, (canal_norm,)))
     dnis_con_ese_canal = select(PatronRecurrente.dni).where(func.upper(PatronRecurrente.canal_dia).in_(variantes))
-    dnis_con_zona_canal = select(PersonaZonaCanal.dni).where(func.upper(PersonaZonaCanal.canal).in_(variantes))
-    return (
-        func.upper(persona_model.canal).in_(variantes)
-        | persona_model.dni.in_(dnis_con_ese_canal)
-        | persona_model.dni.in_(dnis_con_zona_canal)
-    )
+    return (func.upper(persona_model.canal).in_(variantes)) | persona_model.dni.in_(dnis_con_ese_canal)
 
 
 def overrides_supervisor_canal(session, dnis, usuario_actual):
