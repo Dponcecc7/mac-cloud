@@ -9,7 +9,7 @@ via agregar_reemplazo.py.
 """
 import datetime as dt
 
-from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, get_session
+from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, PersonaZonaCanal, get_session
 from patron_recurrente import canonizar_canal_dia, sin_acentos
 
 # "analista_propietario" agregado 2026-08-27 -- sin esto, un reemplazo
@@ -91,6 +91,29 @@ def procesar_reemplazo(dni_vacante, dni_nuevo, nombre_nuevo, fecha_ingreso, dry_
                     hora_entrada_prog=fila.hora_entrada_prog, hora_salida_prog=fila.hora_salida_prog,
                     canal_dia=canonizar_canal_dia(fila.canal_dia), refrigerio=fila.refrigerio,
                 ))
+
+        # Overrides de zona/supervisor POR CANAL de la vacante (Multicanal
+        # con Farmacia/AU distinto a Tradicional, ver PersonaZonaCanal /
+        # PersonaSupervisorCanal en dimension_models.py) -- CAMPOS_HEREDADOS
+        # de arriba solo copia Persona.zona/supervisor_dni (el valor
+        # "principal"/Tradicional), así que sin este bloque el reemplazo de
+        # un Multicanal perdía el override de Farmacia/AU (Davor,
+        # 2026-10-07: caso real, Lia Oro reemplazó a Chaupi Cuba y quedó con
+        # Farmacia/AU vacío a pesar de que Chaupi sí tenía zona "AUTOSERVICIOS/
+        # FARMA" y supervisor "Jesus Marquez" ahí).
+        filas_zona_canal_vacante = session.query(PersonaZonaCanal).filter_by(dni=dni_vacante).all()
+        filas_supervisor_canal_vacante = session.query(PersonaSupervisorCanal).filter_by(dni=dni_vacante).all()
+        log.append(f"Overrides de zona por canal a copiar: {len(filas_zona_canal_vacante)}")
+        log.append(f"Overrides de supervisor por canal a copiar: {len(filas_supervisor_canal_vacante)}")
+
+        if not dry_run:
+            session.query(PersonaZonaCanal).filter_by(dni=dni_nuevo).delete()
+            session.query(PersonaSupervisorCanal).filter_by(dni=dni_nuevo).delete()
+            session.flush()
+            for fila in filas_zona_canal_vacante:
+                session.add(PersonaZonaCanal(dni=dni_nuevo, canal=fila.canal, zona=fila.zona))
+            for fila in filas_supervisor_canal_vacante:
+                session.add(PersonaSupervisorCanal(dni=dni_nuevo, canal=fila.canal, supervisor_dni=fila.supervisor_dni))
 
         # Si dni_vacante era supervisor de otras personas, esas personas
         # deben pasar a reportarle al reemplazo, no seguir apuntando a
