@@ -2228,18 +2228,40 @@ def reunion_form():
     reunión como comentario, para que quede trazable por qué no hay
     marcación real ese día."""
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_marcar()
-    # Región con opción múltiple (Davor, 2026-09-17) -- una reunión puede
-    # juntar gente de varias regiones a la vez. aplicar_filtros_extra() ya
-    # acepta una lista para cualquier filtro (_como_lista(), ver Personal);
-    # solo hacía falta pasarle getlist() acá en vez del single-value que
-    # devuelve _filtros_marcar() (compartida con Marcar asistencia, que sí
-    # sigue siendo de a una región por vez).
-    # filtrar valores vacíos (Davor, 2026-09-17: quedó una URL vieja con
-    # "region=" sin valor, de cuando esto era un <select> simple -- sin este
-    # filtro, ese "" se cuela como si fuera una región elegida y no matchea
-    # a nadie).
-    regiones_elegidas = [r for r in request.args.getlist("region") if r] if roles_disp else []
-    filtro_args["region"] = regiones_elegidas
+    # Opción múltiple para TODOS los filtros de esta pantalla (Davor,
+    # 2026-10-09: "agrega esa opción multiple en reunión trabajo") -- una
+    # reunión puede juntar gente de varios roles/regiones/ciudades/canales
+    # a la vez, no solo de varias regiones (eso ya lo tenía desde
+    # 2026-09-17). aplicar_filtros_extra() ya acepta una lista para
+    # cualquier filtro (_como_lista(), ver Personal); solo hacía falta
+    # pasarle getlist() acá en vez del single-value que devuelve
+    # _filtros_marcar() (compartida con Marcar asistencia, que sí sigue
+    # siendo de a uno por vez). filtrar valores vacíos -- un "rol=" suelto
+    # en la URL (de un <select> viejo, o un checkbox sin tildar) no debe
+    # colarse como si fuera un valor elegido.
+    if roles_disp:
+        filtro_args["rol"] = [v for v in request.args.getlist("rol") if v]
+        filtro_args["region"] = [v for v in request.args.getlist("region") if v]
+        filtro_args["supervisor"] = [v for v in request.args.getlist("supervisor") if v]
+        filtro_args["ciudad"] = [v for v in request.args.getlist("ciudad") if v]
+        filtro_args["canal"] = [v for v in request.args.getlist("canal") if v]
+    else:
+        filtro_args["rol"] = filtro_args["region"] = filtro_args["supervisor"] = filtro_args["ciudad"] = filtro_args["canal"] = []
+
+    # Fecha elegida para la reunión (Davor, 2026-10-09: "Cuando selecciono
+    # el día me puede salir un detalle para saber si faltó ese día, porque
+    # a ellos no deberia crearle la gestión de reunión") -- se mueve acá
+    # como filtro GET (antes solo vivía en el form de registro) para poder
+    # consultar quién ya tiene FALTA ese día puntual y marcarlo en el
+    # checklist ANTES de que alguien lo tilde por error. Registrar una
+    # reunión marca "Asistió" (ver reunion_registrar()) -- sobre alguien
+    # que realmente faltó, eso tapa una falta real en vez de corregirla.
+    fecha_str = request.args.get("fecha", "").strip()
+    try:
+        fecha_elegida = dt.date.fromisoformat(fecha_str) if fecha_str else dt.date.today()
+    except ValueError:
+        fecha_elegida = dt.date.today()
+
     session = get_session()
     try:
         cond_scope = condicion_scope(Persona, current_user)
@@ -2249,10 +2271,20 @@ def reunion_form():
         if cond_scope is not None:
             query = query.filter(cond_scope)
         query = aplicar_filtros_extra(
-            query, Persona, rol_filtro=filtro_args["rol"], region_filtro=regiones_elegidas,
+            query, Persona, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
             supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
         )
         activos = sorted(query.all(), key=lambda t: (t[1] or "").title())
+
+        dnis_falta_fecha = set()
+        if activos:
+            dnis_falta_fecha = {
+                dni for (dni,) in session.query(ClasificacionDiaria.dni).filter(
+                    ClasificacionDiaria.dni.in_([a[0] for a in activos]),
+                    ClasificacionDiaria.fecha == fecha_elegida,
+                    ClasificacionDiaria.estado.like("FALTA%"),
+                ).all()
+            }
 
         # Para "editar personas" de una reunión ya registrada (Davor,
         # 2026-09-17) -- el checklist de edición no debe quedar acotado a
@@ -2282,6 +2314,7 @@ def reunion_form():
         hoy=dt.date.today().isoformat(), activos=activos, todos_activos=todos_activos, historico=historico,
         filtro_args=filtro_args, roles_disponibles=roles_disp, regiones_disponibles=regiones_disp,
         supervisores_disponibles=supervisores_disp, ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
+        fecha_elegida=fecha_elegida.isoformat(), dnis_falta_fecha=dnis_falta_fecha,
     )
 
 

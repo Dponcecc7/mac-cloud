@@ -76,6 +76,8 @@
     .reu-editar > summary::-webkit-details-marker { display:none; }
     .reu-editar .personas-widget { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
     .persona-check.inactivo .sub { color:var(--bad); }
+    .persona-check.falto { opacity:.65; }
+    .badge-falto { color:var(--bad); background:var(--bad-bg); font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; margin-left:4px; }
 
     @media (max-width: 760px) {
       .wrap { padding:0 12px 40px; }
@@ -132,10 +134,17 @@
 
     {% if roles_disponibles %}
     <form method="get" class="filtros-bar">
-      <select class="ipt-filtro" name="supervisor" onchange="this.form.submit()">
-        <option value="">Supervisor: todos</option>
-        {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
-      </select>
+      <label class="field" style="gap:2px;">Fecha
+        <input class="ipt-filtro" type="date" name="fecha" value="{{ fecha_elegida }}" onchange="this.form.submit()">
+      </label>
+      <div class="ms">
+        <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
+          {% if not filtro_args.supervisor %}Supervisor: todos{% elif filtro_args.supervisor|length == 1 %}{{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}{{ filtro_args.supervisor|length }} supervisores{% endif %}
+        </button>
+        <div class="ms-panel" id="panel-supervisor">
+          {% for dni, nombre in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ dni }}" {{ 'checked' if dni in filtro_args.supervisor else '' }}> {{ nombre|title }}</label>{% endfor %}
+        </div>
+      </div>
       <div class="ms">
         <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
           {% if not filtro_args.region %}Región: todas{% elif filtro_args.region|length == 1 %}{{ filtro_args.region[0]|title }}{% else %}{{ filtro_args.region|length }} regiones{% endif %}
@@ -144,21 +153,33 @@
           {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
         </div>
       </div>
-      <button type="submit" class="btn sm">Filtrar</button>
-      <select class="ipt-filtro" name="rol" onchange="this.form.submit()">
-        <option value="">Rol: todos</option>
-        {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
-      </select>
-      <select class="ipt-filtro" name="ciudad" onchange="this.form.submit()">
-        <option value="">Ciudad: todas</option>
-        {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
-      </select>
+      <div class="ms">
+        <button type="button" class="ms-toggle" id="btn-rol" onclick="togglePanel('rol')">
+          {% if not filtro_args.rol %}Rol: todos{% elif filtro_args.rol|length == 1 %}{{ filtro_args.rol[0]|title }}{% else %}{{ filtro_args.rol|length }} roles{% endif %}
+        </button>
+        <div class="ms-panel" id="panel-rol">
+          {% for r in roles_disponibles %}<label class="ms-opt"><input type="checkbox" name="rol" value="{{ r }}" {{ 'checked' if r in filtro_args.rol else '' }}> {{ r|title }}</label>{% endfor %}
+        </div>
+      </div>
+      <div class="ms">
+        <button type="button" class="ms-toggle" id="btn-ciudad" onclick="togglePanel('ciudad')">
+          {% if not filtro_args.ciudad %}Ciudad: todas{% elif filtro_args.ciudad|length == 1 %}{{ filtro_args.ciudad[0]|title }}{% else %}{{ filtro_args.ciudad|length }} ciudades{% endif %}
+        </button>
+        <div class="ms-panel" id="panel-ciudad">
+          {% for c in ciudades_disponibles %}<label class="ms-opt"><input type="checkbox" name="ciudad" value="{{ c }}" {{ 'checked' if c in filtro_args.ciudad else '' }}> {{ c|title }}</label>{% endfor %}
+        </div>
+      </div>
       {% if canales_disponibles %}
-      <select class="ipt-filtro" name="canal" onchange="this.form.submit()">
-        <option value="">Canal: todos</option>
-        {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
-      </select>
+      <div class="ms">
+        <button type="button" class="ms-toggle" id="btn-canal" onclick="togglePanel('canal')">
+          {% if not filtro_args.canal %}Canal: todos{% elif filtro_args.canal|length == 1 %}{{ filtro_args.canal[0]|title }}{% else %}{{ filtro_args.canal|length }} canales{% endif %}
+        </button>
+        <div class="ms-panel" id="panel-canal">
+          {% for c in canales_disponibles %}<label class="ms-opt"><input type="checkbox" name="canal" value="{{ c }}" {{ 'checked' if c in filtro_args.canal else '' }}> {{ c|title }}</label>{% endfor %}
+        </div>
+      </div>
       {% endif %}
+      <button type="submit" class="btn sm">Filtrar</button>
     </form>
     {% endif %}
 
@@ -170,7 +191,7 @@
           <p class="note" style="margin:0;">No hay nadie activo en tu alcance con estos filtros.</p>
         {% else %}
         <div class="form-row">
-          <label class="field">Fecha<input class="ipt" type="date" name="fecha" value="{{ hoy }}" required></label>
+          <label class="field">Fecha<input class="ipt" type="date" name="fecha" value="{{ fecha_elegida }}" required></label>
           <label class="field">Hora de inicio<input class="ipt" type="time" name="hora_inicio" required></label>
           <label class="field">Hora de fin<input class="ipt" type="time" name="hora_fin" required></label>
         </div>
@@ -187,9 +208,9 @@
           </div>
           <div class="personas-lista">
             {% for dni, nombre, rol, ciudad, canal in activos %}
-            <label class="persona-check" data-nombre="{{ (nombre or dni)|lower }}">
-              <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona">
-              <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span></span>
+            <label class="persona-check {{ 'falto' if dni in dnis_falta_fecha else '' }}" data-nombre="{{ (nombre or dni)|lower }}">
+              <input type="checkbox" name="dnis" value="{{ dni }}" class="chk-persona" {{ 'disabled' if dni in dnis_falta_fecha else '' }}>
+              <span>{{ (nombre or dni)|title }} <span class="sub">· {{ (ciudad or '')|title }}{{ ' · ' + (canal or '')|title if canal else '' }}</span>{% if dni in dnis_falta_fecha %}<span class="badge-falto" title="Marcado como Falta el {{ fecha_elegida }} -- no se le debe registrar la reunión (taparía la falta real)">Faltó ese día</span>{% endif %}</span>
             </label>
             {% endfor %}
           </div>
@@ -277,7 +298,13 @@
       var checks = lista ? Array.prototype.slice.call(lista.querySelectorAll('.chk-persona')) : [];
 
       function actualizarContador() {
-        var n = checks.filter(function (c) { return c.checked; }).length;
+        // !c.disabled (Davor, 2026-10-09) -- alguien marcado "Faltó ese
+        // día" queda con el checkbox disabled (no se le debe registrar la
+        // reunión); si quedara checked igual (ej. por "Marcar todos" antes
+        // de aplicar el filtro de fecha), un disabled no se envía con el
+        // form -- el contador no debe prometer más gente de la que
+        // realmente se va a registrar.
+        var n = checks.filter(function (c) { return c.checked && !c.disabled; }).length;
         contador.textContent = n ? '(' + n + ' elegido' + (n !== 1 ? 's' : '') + ')' : '';
       }
       actualizarContador();
@@ -296,7 +323,8 @@
       if (btnTodos) {
         btnTodos.addEventListener('click', function () {
           lista.querySelectorAll('.persona-check').forEach(function (fila) {
-            if (fila.style.display !== 'none') { fila.querySelector('.chk-persona').checked = true; }
+            var c = fila.querySelector('.chk-persona');
+            if (fila.style.display !== 'none' && !c.disabled) { c.checked = true; }
           });
           actualizarContador();
         });
