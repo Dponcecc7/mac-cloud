@@ -64,6 +64,18 @@
     .periodo-form select { font:inherit; font-size:12px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:160px; }
     .periodo-form button.aplicar { font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; border:none; background:var(--brand); color:#fff; cursor:pointer; }
     .preset { font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); text-decoration:none; }
+    /* Filtros múltiple (Davor, 2026-10-09: "que los filtros puedan tener
+       opción multiple") -- mismo componente ya usado en Personal/Reporte
+       diario (checkboxes con el mismo name en vez de un <select> de un
+       solo valor). */
+    .ms { position:relative; display:inline-block; }
+    .ms-toggle { font:inherit; font-size:12px; padding:5px 8px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ms-toggle:hover { border-color:var(--brand); }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.18); padding:6px; min-width:200px; max-height:260px; overflow-y:auto; }
+    .ms-panel.abierto { display:block; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt:hover { background:var(--bg); }
+    .ms-opt input { width:auto; margin:0; }
     .preset.activo { background:var(--brand); color:#fff; border-color:var(--brand); }
 
     .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
@@ -225,23 +237,45 @@
         <input type="date" name="desde" value="{{ periodo_args.desde }}">
         <span style="color:var(--muted);">→</span>
         <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
-        <select name="rol">
-          <option value="">Rol: todos</option>
-          {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
-        </select>
-        <select name="region">
-          <option value="">Región: todas</option>
-          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
-        </select>
-        <select name="supervisor">
-          <option value="">Supervisor: todos</option>
-          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
-        </select>
+        {% if roles_disponibles %}
+        <div class="ms">
+          <button type="button" class="ms-toggle" onclick="togglePanel('rol')">
+            {% if not filtro_args.rol %}Rol: todos{% elif filtro_args.rol|length == 1 %}Rol: {{ filtro_args.rol[0]|title }}{% else %}Rol: {{ filtro_args.rol|length }} seleccionados{% endif %}
+          </button>
+          <div class="ms-panel" id="panel-rol">
+            {% for r in roles_disponibles %}<label class="ms-opt"><input type="checkbox" name="rol" value="{{ r }}" {{ 'checked' if r in filtro_args.rol else '' }}> {{ r|title }}</label>{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% if regiones_disponibles %}
+        <div class="ms">
+          <button type="button" class="ms-toggle" onclick="togglePanel('region')">
+            {% if not filtro_args.region %}Región: todas{% elif filtro_args.region|length == 1 %}Región: {{ filtro_args.region[0]|title }}{% else %}Región: {{ filtro_args.region|length }} seleccionadas{% endif %}
+          </button>
+          <div class="ms-panel" id="panel-region">
+            {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in filtro_args.region else '' }}> {{ r|title }}</label>{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% if supervisores_disponibles %}
+        <div class="ms">
+          <button type="button" class="ms-toggle" onclick="togglePanel('supervisor')">
+            {% if not filtro_args.supervisor %}Supervisor: todos{% elif filtro_args.supervisor|length == 1 %}Supervisor: {{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}Supervisor: {{ filtro_args.supervisor|length }} seleccionados{% endif %}
+          </button>
+          <div class="ms-panel" id="panel-supervisor">
+            {% for dni, nombre in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ dni }}" {{ 'checked' if dni in filtro_args.supervisor else '' }}> {{ nombre|title }}</label>{% endfor %}
+          </div>
+        </div>
+        {% endif %}
         {% if canales_disponibles %}
-        <select name="canal" title="Ver Tradicional, Farmacia o Autoservicio">
-          <option value="">Canal: todos</option>
-          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
-        </select>
+        <div class="ms">
+          <button type="button" class="ms-toggle" onclick="togglePanel('canal')" title="Ver Tradicional, Farmacia o Autoservicio">
+            {% if not filtro_args.canal %}Canal: todos{% elif filtro_args.canal|length == 1 %}Canal: {{ filtro_args.canal[0]|title }}{% else %}Canal: {{ filtro_args.canal|length }} seleccionados{% endif %}
+          </button>
+          <div class="ms-panel" id="panel-canal">
+            {% for c in canales_disponibles %}<label class="ms-opt"><input type="checkbox" name="canal" value="{{ c }}" {{ 'checked' if c in filtro_args.canal else '' }}> {{ c|title }}</label>{% endfor %}
+          </div>
+        </div>
         {% endif %}
         {% if mostrar_filtro_canal_dia %}
         <label class="field chk" title="Sin esto, el Canal (de arriba, o el tuyo propio si ya estás acotado a un canal) incluye TODOS los días de cualquiera que alguna vez trabaje ese canal -- con esto marcado, solo cuentan los días que esa persona trabajó realmente ese canal puntual (un Multicanal de Tradicional que un día cubrió Autoservicio no suma ese día a Tradicional)">
@@ -473,6 +507,13 @@ function toggleMotivo(i) {
   var el = document.getElementById('motivo-detalle-' + i);
   if (el) el.hidden = !el.hidden;
 }
+function togglePanel(campo) {
+  document.querySelectorAll('.ms-panel').forEach(function (p) { if (p.id !== 'panel-' + campo) p.classList.remove('abierto'); });
+  document.getElementById('panel-' + campo).classList.toggle('abierto');
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
+});
 </script>
 </body>
 </html>

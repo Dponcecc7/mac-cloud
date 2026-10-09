@@ -84,9 +84,10 @@ def _motivo_limpio(comentario):
     return HOMOLOGACIONES.get(texto.lower(), texto)
 
 
-def _canal_del_dia_coincide(canal_esperado, canales_marcados, canal_objetivo):
+def _canal_del_dia_coincide(canal_esperado, canales_marcados, canales_objetivo):
     """¿Esta fila de ClasificacionDiaria corresponde a un día realmente
-    trabajado en `canal_objetivo` (ya canonizado)? -- Dashboard, filtro
+    trabajado en ALGUNO de `canales_objetivo` (set, ya canonizados -- el
+    filtro de Canal admite selección múltiple)? -- Dashboard, filtro
     "Canal: solo días trabajados en ese canal" (Davor, 2026-10-09): el
     Canal de arriba ya filtra PERSONAS (condicion_canal() -- alguien que
     ALGUNA vez trabaja ese canal), pero un Multicanal de Tradicional que
@@ -101,8 +102,8 @@ def _canal_del_dia_coincide(canal_esperado, canales_marcados, canal_objetivo):
             if p.strip() and p.strip() != "Otro"
         }
         if marcados:
-            return canal_objetivo in marcados
-    return canonizar_canal(canal_esperado) == canal_objetivo
+            return bool(marcados & canales_objetivo)
+    return canonizar_canal(canal_esperado) in canales_objetivo
 
 
 def create_app():
@@ -333,11 +334,14 @@ def create_app():
         cond_scope = condicion_scope(Persona, current_user)  # None = sin restriccion
 
         # Filtros adicionales (2026-08-22, pedido explicito) -- Rol/Región/
-        # Supervisor, encima del scope de acceso (cond_scope). "" en el query
-        # string se trata como "sin filtro" (opción "Todos" del <select>).
-        rol_filtro = request.args.get("rol") or None
-        region_filtro = request.args.get("region") or None
-        supervisor_filtro = request.args.get("supervisor") or None
+        # Supervisor, encima del scope de acceso (cond_scope). getlist()
+        # (Davor, 2026-10-09: "que los filtros puedan tener opción
+        # multiple", mismo patrón ya usado en Personal -- checkboxes con el
+        # mismo name en vez de un <select> de un solo valor) -- lista vacía
+        # se trata como "sin filtro" (opción "Todos").
+        rol_filtro = request.args.getlist("rol")
+        region_filtro = request.args.getlist("region")
+        supervisor_filtro = request.args.getlist("supervisor")
         # Canal (Davor, 2026-08-29, ampliado 2026-10-09 "no solo a Diego
         # sino a todos") -- mismo criterio que rol/región/supervisor de
         # arriba: cualquier rol puede filtrar por canal DENTRO de lo que ya
@@ -350,8 +354,8 @@ def create_app():
         # otro canal daría siempre 0 resultados), pero el checkbox de abajo
         # le aplica igual con su canal fijo.
         canal_asignado_usuario = getattr(current_user, "canal_asignado", None) if not es_admin else None
-        canal_filtro = (request.args.get("canal") or None) if not canal_asignado_usuario else None
-        canal_efectivo = canal_filtro or canal_asignado_usuario
+        canal_filtro = request.args.getlist("canal") if not canal_asignado_usuario else []
+        canal_efectivo = canal_filtro or ([canal_asignado_usuario] if canal_asignado_usuario else [])
         # "Otro filtro adicional" (Davor, 2026-10-09; caso real Diego no
         # veía el checkbox): el Canal de arriba (o el canal_asignado del
         # propio analista) es a nivel PERSONA (condicion_canal() -- incluye
@@ -370,11 +374,11 @@ def create_app():
                 if cond_scope is not None:
                     q = q.filter(cond_scope)
                 if rol_filtro:
-                    q = q.filter(Persona.rol == rol_filtro)
+                    q = q.filter(Persona.rol.in_(rol_filtro))
                 if region_filtro:
-                    q = q.filter(Persona.region == region_filtro)
+                    q = q.filter(Persona.region.in_(region_filtro))
                 if supervisor_filtro:
-                    q = q.filter(Persona.supervisor_dni == supervisor_filtro)
+                    q = q.filter(Persona.supervisor_dni.in_(supervisor_filtro))
                 if canal_filtro:
                     q = q.filter(condicion_canal(Persona, canal_filtro))
                 return q
@@ -445,8 +449,8 @@ def create_app():
 
         periodo_args = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
         filtro_args = {
-            "rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or "",
-            "canal": canal_filtro or "", "canal_dia": "1" if canal_dia_estricto else "",
+            "rol": rol_filtro, "region": region_filtro, "supervisor": supervisor_filtro,
+            "canal": canal_filtro, "canal_dia": "1" if canal_dia_estricto else "",
         }
         # El <select> de Canal se muestra para cualquiera MENOS un analista
         # de canal (ya tiene el suyo fijo, elegir otro daría 0 resultados);
@@ -455,9 +459,9 @@ def create_app():
         mostrar_filtro_canal_dia = bool(canales_disponibles) or bool(canal_asignado_usuario)
 
         if canal_dia_estricto:
-            canal_objetivo = canonizar_canal(canal_efectivo)
-            filas = [f for f in filas if _canal_del_dia_coincide(f[10], f[11], canal_objetivo)]
-            filas_hoy = [f for f in filas_hoy if _canal_del_dia_coincide(f[1], f[2], canal_objetivo)]
+            canales_objetivo = {canonizar_canal(c) for c in canal_efectivo}
+            filas = [f for f in filas if _canal_del_dia_coincide(f[10], f[11], canales_objetivo)]
+            filas_hoy = [f for f in filas_hoy if _canal_del_dia_coincide(f[1], f[2], canales_objetivo)]
 
         if not filas:
             return render_template(
