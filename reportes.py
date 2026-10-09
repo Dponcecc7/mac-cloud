@@ -287,10 +287,31 @@ def _semana_desde_query():
     return desde, hasta, f"{anio}-W{num:02d}"
 
 
+def _periodo_horas_desde_query():
+    """Semana o mes para "Horas programadas vs trabajadas" (Davor,
+    2026-10-09: "coloquemos una opción de seleccionar todo el mes
+    también, no solo semana") -- ?modo=mes usa _mes_desde_query() (ya
+    existente, reusado tal cual -- mismos 7 lugares del archivo que ya la
+    usan para "mes calendario completo", sin inventar un criterio nuevo
+    de hasta/tope). calcular_detalle_semana()/resumen_por_persona() no
+    necesitan cambios -- ya reciben un desde/hasta genérico, da igual si
+    el rango es de 7 o 30 días.
+
+    Devuelve siempre AMBOS strings (semana_str Y mes_str, sin importar el
+    modo activo) -- así cada <input> conserva su propio último valor
+    elegido al alternar entre modos, en vez de resetearse al actual."""
+    modo = "mes" if request.args.get("modo") == "mes" else "semana"
+    desde_sem, hasta_sem, semana_str = _semana_desde_query()
+    desde_mes, hasta_mes, mes_str = _mes_desde_query()
+    if modo == "mes":
+        return modo, desde_mes, hasta_mes, semana_str, mes_str
+    return modo, desde_sem, hasta_sem, semana_str, mes_str
+
+
 @bp.get("/horas")
 @requiere_pagina("reportes_horas")
 def horas():
-    desde, hasta, semana_str = _semana_desde_query()
+    modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
@@ -299,9 +320,18 @@ def horas():
     )
     resumen = resumen_por_persona(detalle)
     filas = resumen.to_dict("records") if len(resumen) else []
+    # Semana de contexto para el link "Ver detalle día a día" de cada fila
+    # (reportes.ficha espera una semana puntual, no un mes) -- la que
+    # contiene `hasta`: en modo semana es exactamente la elegida: en modo
+    # mes, la última semana del mes (o la actual, si el mes elegido es el
+    # actual) -- mejor default que "la semana de hoy" sin relación con el
+    # mes que se está mirando.
+    anio_ctx, num_ctx, _ = hasta.isocalendar()
+    semana_contexto = f"{anio_ctx}-W{num_ctx:02d}"
     return render_template(
         "reportes_horas.html", usuario=current_user, activo="horas",
-        semana_str=semana_str, desde=desde, hasta=hasta, filas=filas,
+        modo=modo, semana_str=semana_str, mes_str=mes_str, semana_contexto=semana_contexto,
+        desde=desde, hasta=hasta, filas=filas,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
@@ -311,7 +341,8 @@ def horas():
 @bp.get("/horas/exportar")
 @requiere_pagina("reportes_horas")
 def horas_exportar():
-    desde, hasta, semana_str = _semana_desde_query()
+    modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
+    periodo_str = mes_str if modo == "mes" else semana_str
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
@@ -322,7 +353,7 @@ def horas_exportar():
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Horas semanales"
+    ws.title = "Horas"
     ws.append([titulo for _clave, titulo in COLUMNAS_HORAS])
     for celda in ws[1]:
         celda.font = Font(bold=True)
@@ -334,8 +365,9 @@ def horas_exportar():
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
+    prefijo = "Horas_Mes" if modo == "mes" else "Horas_Semanales"
     return send_file(
-        buf, as_attachment=True, download_name=f"Horas_Semanales_{semana_str}.xlsx",
+        buf, as_attachment=True, download_name=f"{prefijo}_{periodo_str}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 

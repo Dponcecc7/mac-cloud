@@ -36,7 +36,14 @@
     nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
 
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=week] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .top-actions input[type=week], .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    /* Semana/Mes (Davor, 2026-10-09: "coloquemos una opción de
+       seleccionar todo el mes también, no solo semana"). */
+    .modo-toggle { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .modo-btn { font-size:12.5px; font-weight:700; padding:8px 14px; color:var(--muted); background:var(--card); text-decoration:none; }
+    .modo-btn + .modo-btn { border-left:1px solid var(--line); }
+    .modo-btn.activo { background:var(--brand); color:#fff; }
+    .modo-btn:not(.activo):hover { background:var(--bg); color:var(--ink); }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
     .btn.primary { background:var(--brand); color:#fff; }
     .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
@@ -126,9 +133,11 @@
       nav.tabs a { padding:8px 12px; white-space:nowrap; }
 
       .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions form, .top-actions input[type=week] { width:100%; }
-      .top-actions input[type=week] { min-height:44px; font-size:15px; }
+      .top-actions form, .top-actions input[type=week], .top-actions input[type=month] { width:100%; }
+      .top-actions input[type=week], .top-actions input[type=month] { min-height:44px; font-size:15px; }
       .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
+      .modo-toggle { width:100%; }
+      .modo-btn { flex:1; text-align:center; min-height:44px; line-height:28px; }
 
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
@@ -185,23 +194,43 @@
       {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Ruta mercaderista</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
-      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas', semana=semana_str) }}" class="active">Horas programadas vs trabajadas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas', modo=modo, semana=semana_str, mes=mes_str) }}" class="active">Horas programadas vs trabajadas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
     </nav>
 
     <div class="top-actions">
+      <div class="modo-toggle">
+        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">Semana</a>
+        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">Mes</a>
+      </div>
       <form method="get">
+        <input type="hidden" name="modo" value="{{ modo }}">
+        <input type="hidden" name="supervisor" value="{{ filtro_args.supervisor }}">
+        <input type="hidden" name="region" value="{{ filtro_args.region }}">
+        <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
+        <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
+        <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+        {% if modo == 'mes' %}
+        <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
+        <input type="hidden" name="semana" value="{{ semana_str }}">
+        {% else %}
         <input type="week" name="semana" value="{{ semana_str }}" onchange="this.form.submit()">
+        <input type="hidden" name="mes" value="{{ mes_str }}">
+        {% endif %}
       </form>
-      <span style="color:var(--muted); font-size:12.5px;">{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado)</span>
-      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', semana=semana_str) }}">↓ Exportar Excel</a>
+      <span style="color:var(--muted); font-size:12.5px;">
+        {% if modo == 'mes' %}{{ desde.strftime('%d/%m/%Y') }} — {{ hasta.strftime('%d/%m/%Y') }} (mes completo){% else %}{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado){% endif %}
+      </span>
+      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
       <form method="get" style="display:contents;">
+        <input type="hidden" name="modo" value="{{ modo }}">
         <input type="hidden" name="semana" value="{{ semana_str }}">
+        <input type="hidden" name="mes" value="{{ mes_str }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
@@ -272,7 +301,7 @@
             {% set pct_full = f.pct_cumplimiento %}
             {% set clase_pct_full = 'ok' if pct_full is not none and pct_full >= 95 else ('warn' if pct_full is not none and pct_full >= 80 else 'bad') %}
             <tr>
-              <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni, semana=semana_str) }}" title="Ver detalle día a día de esta semana">{{ f.nombre|title }}</a></td>
+              <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni, semana=semana_contexto) }}" title="Ver detalle día a día de esta semana">{{ f.nombre|title }}</a></td>
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
