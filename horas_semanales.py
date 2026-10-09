@@ -280,8 +280,8 @@ def resumen_por_persona(detalle_semana):
     ).reset_index()
 
     g_dias = dias_flags.groupby("dni").agg(
-        _dias_falta=("motivo_falta", lambda s: int((s == "Falta").sum())),
-        _dias_vacante=("motivo_falta", lambda s: int((s == "Vacante").sum())),
+        dias_falta=("motivo_falta", lambda s: int((s == "Falta").sum())),
+        dias_vacante=("motivo_falta", lambda s: int((s == "Vacante").sum())),
         dias_descanso_medico=("es_descanso_medico", "sum"),
         dias_tardanza=("es_tardanza", "sum"),
         tardanzas_recuperadas=("es_tardanza", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
@@ -304,10 +304,10 @@ def resumen_por_persona(detalle_semana):
     # diga Falta: 2, DM: 4, Tardanzas: 4") -- Vacante se mantiene al final,
     # no se saca nada que ya hubiera, solo se agrega lo pedido.
     g["dias_falta_vacante"] = (
-        "Falta: " + g["_dias_falta"].astype(str)
+        "Falta: " + g["dias_falta"].astype(str)
         + " / DM: " + g["dias_descanso_medico"].astype(str)
         + " / Tardanzas: " + g["dias_tardanza"].astype(str)
-        + " / Vacante: " + g["_dias_vacante"].astype(str)
+        + " / Vacante: " + g["dias_vacante"].astype(str)
     )
     g["horas_trabajadas"] = g["horas_trabajadas"].round(1)
     # Vacante, faltas CON sustento (descanso médico/licencia/feriado
@@ -328,9 +328,15 @@ def resumen_por_persona(detalle_semana):
         g["horas_trabajadas"] / g["horas_a_trabajar_sin_faltas"].replace(0, np.nan) * 100
     ).round(1)
 
-    g = g.drop(columns=["_dias_falta", "_dias_vacante", "_horas_vacante", "_horas_sustento", "_horas_sin_marcacion"])
+    g = g.drop(columns=["_horas_vacante", "_horas_sustento", "_horas_sin_marcacion"])
     g = g[[
         "dni", "nombre", "supervisor", "ciudad", "region", "dias_falta_vacante",
+        # dias_falta/dias_descanso_medico/dias_vacante (Davor, 2026-10-09:
+        # "dale mayor visibilidad la tabla") -- mismos 3 números que ya
+        # estaban adentro del texto de dias_falta_vacante, expuestos acá
+        # también sueltos para poder pintarlos como badges de color en vez
+        # de un solo string plano en Horas programadas vs trabajadas.
+        "dias_falta", "dias_descanso_medico", "dias_vacante",
         "dias_tardanza", "tardanzas_recuperadas", "dias_salida_temprana", "salidas_cumplieron",
         "horas_trabajadas", "horas_a_trabajar", "horas_a_trabajar_sin_faltas",
         "diferencia_h", "pct_cumplimiento", "pct_cumplimiento_sin_faltas",

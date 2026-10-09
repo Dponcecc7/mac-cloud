@@ -51,19 +51,36 @@
        página -- ahora scrollea ella sola (vertical Y horizontal, Davor
        2026-09-18) dentro de una altura fija, con el header pegado arriba
        para no perder de vista los nombres de columna al bajar. */
-    .table-wrap { overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px; }
+    .table-wrap { overflow:auto; max-height:76vh; border:1px solid var(--line); border-radius:10px; }
     /* border-collapse:separate + border-spacing:0 (Davor, 2026-09-22) --
        position:sticky en th/td no aplica con border-collapse:collapse en
        la mayoría de navegadores; separate se ve igual (sin bordes
        verticales declarados) pero sticky sí funciona. */
-    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
-    thead th { position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--line); }
-    th { text-align:left; padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
-    th:hover { color:var(--ink); }
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:11.5px; }
+    thead th { position:sticky; top:0; z-index:3; background:var(--card); box-shadow:0 1px 0 var(--line); }
+    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
+    th:hover { color:var(--brand); }
     th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
     th.num, td.num { text-align:right; }
-    td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    td { padding:5px 9px; border-bottom:1px solid var(--line); white-space:nowrap; }
     tr:last-child td { border-bottom:none; }
+    /* Densidad ("achicala", Davor 2026-10-09) + cebrado + hover -- con 15
+       columnas y scroll horizontal, es fácil perder de vista a quién
+       pertenece una fila cuando te movés a la derecha; el cebrado +
+       resaltado de fila entera ayuda a seguirla sin tener que volver la
+       vista a la izquierda. */
+    tbody tr:nth-child(even) { background:var(--bg); }
+    tbody tr:hover { background:#dbe9f7; }
+    /* Nombre pegado a la izquierda (Davor, 2026-10-09) -- con scroll
+       horizontal de 15 columnas, sin esto no hay forma de saber de quién
+       es la fila que estás mirando más a la derecha. Mismo fondo que la
+       fila (cebrado incluido vía currentColor no sirve acá, así que se
+       repite la regla par/hover con la misma prioridad) para que no se
+       note la costura al scrollear. */
+    td:first-child, th:first-child { position:sticky; left:0; z-index:1; background:var(--card); box-shadow:1px 0 0 var(--line); }
+    thead th:first-child { z-index:4; }
+    tbody tr:nth-child(even) td:first-child { background:var(--bg); }
+    tbody tr:hover td:first-child { background:#dbe9f7; }
     a.nombre-link { color:var(--ink); text-decoration:none; font-weight:600; }
     a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
 
@@ -72,6 +89,25 @@
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
     .badge-pct.bad { background:var(--bad-bg); color:var(--bad); }
     .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+
+    /* Días Falta/Vacante como mini-badges de color (Davor, 2026-10-09:
+       "esta vista esta muy seca... dale mayor visibilidad") en vez de un
+       solo texto plano "Falta: 3 / DM: 0 / Tardanzas: 0 / Vacante: 1" --
+       cada número solo se muestra si es > 0, así una fila sin incidencias
+       queda visualmente tranquila (un simple "—") y las que sí tienen algo
+       saltan a la vista de inmediato sin tener que leer el texto entero. */
+    .incidencias { display:flex; gap:4px; flex-wrap:wrap; }
+    .badge-inc { display:inline-flex; align-items:center; gap:2px; padding:2px 7px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .badge-inc.bad { background:var(--bad-bg); color:var(--bad); }
+    .badge-inc.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge-inc.info { background:#dbeafe; color:var(--brand); }
+    .badge-inc.muted { background:var(--bg); color:var(--muted); border:1px solid var(--line); }
+    .sin-incidencias { color:var(--muted); }
+
+    /* Diferencia (h): positiva/negativa a simple vista, sin tener que leer
+       el número con cuidado. */
+    .dif-pos { color:var(--ok); font-weight:700; }
+    .dif-neg { color:var(--bad); font-weight:700; }
 
     /* Celular: la tabla de 11 columnas no entra en ningun telefono ni con
        scroll horizontal comodo -- cada fila pasa a ser una tarjeta apilada
@@ -240,7 +276,18 @@
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
-              <td data-label="Días Falta/Vacante">{{ f.dias_falta_vacante }}</td>
+              <td data-label="Días Falta/Vacante">
+                {% if f.dias_falta or f.dias_descanso_medico or f.dias_tardanza or f.dias_vacante %}
+                <div class="incidencias">
+                  {% if f.dias_falta %}<span class="badge-inc bad" title="Días Falta">F {{ f.dias_falta }}</span>{% endif %}
+                  {% if f.dias_descanso_medico %}<span class="badge-inc info" title="Días Descanso médico">DM {{ f.dias_descanso_medico }}</span>{% endif %}
+                  {% if f.dias_tardanza %}<span class="badge-inc warn" title="Días Tardanza">T {{ f.dias_tardanza }}</span>{% endif %}
+                  {% if f.dias_vacante %}<span class="badge-inc muted" title="Días Vacante">V {{ f.dias_vacante }}</span>{% endif %}
+                </div>
+                {% else %}
+                <span class="sin-incidencias">—</span>
+                {% endif %}
+              </td>
               <td class="num" data-label="Días tardanza">{{ f.dias_tardanza }}</td>
               <td class="num" data-label="Tardanzas recuperadas">{{ f.tardanzas_recuperadas }}</td>
               <td class="num" data-label="Días salida anticipada">{{ f.dias_salida_temprana }}</td>
@@ -248,7 +295,9 @@
               <td class="num" data-label="Horas trabajadas">{{ f.horas_trabajadas }}</td>
               <td class="num" data-label="Horas a trabajar">{{ f.horas_a_trabajar }}</td>
               <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
-              <td class="num" data-label="Diferencia (h)">{{ f.diferencia_h }}</td>
+              <td class="num" data-label="Diferencia (h)">
+                {% if f.diferencia_h is not none %}<span class="{{ 'dif-neg' if f.diferencia_h < 0 else ('dif-pos' if f.diferencia_h > 0 else '') }}">{{ f.diferencia_h }}</span>{% else %}—{% endif %}
+              </td>
               <td class="num" data-label="% Cumplimiento">{% if pct_full is not none %}<span class="badge-pct {{ clase_pct_full }}">{{ pct_full }}%</span>{% else %}—{% endif %}</td>
               <td class="num" data-label="% Cumpl. sin faltas">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
             </tr>
