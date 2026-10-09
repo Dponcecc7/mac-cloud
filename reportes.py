@@ -35,7 +35,7 @@ from planning import (
 )
 from proyecciones import estacionalidad_faltas, filas_dni_dia_semana_estado, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
-from scoping import CANALES_FILTRABLES, condicion_scope, overrides_supervisor_canal
+from scoping import CANALES_FILTRABLES, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -62,6 +62,31 @@ def _estado_corto(estado_base, comentario):
     if estado_base == "DESCANSO" and comentario and "medic" in sin_acentos(str(comentario)):
         return "Descanso médico"
     return ESTADO_CORTO.get(estado_base, estado_base.title())
+
+
+def _canal_del_dia(canal_esperado, canales_marcados):
+    """Qué canal(es) trabajó la persona ESE día puntual -- mismo criterio
+    que asistencia.py::_canal_para_mostrar() (prioriza canales_marcados,
+    el canal REAL de la visita GPS, con "Otro" descartado; cae a
+    canal_esperado -- lo programado -- cuando no hay marcación real, ej.
+    Falta/Vacante/Descanso/Vacaciones), pero unido con "/" en vez de ", "
+    (Davor, 2026-10-09: "si vió 2 canales pon los canales correspondientes
+    como por ejemplo: Tradicional/Autoservicio") para la tabla de
+    Tardanzas y salidas anticipadas de la Ficha."""
+    if canales_marcados:
+        partes = []
+        for p in str(canales_marcados).split(","):
+            p = p.strip()
+            if not p or p == "Otro":
+                continue
+            canon = (canonizar_canal(p) or p).title()
+            if canon not in partes:
+                partes.append(canon)
+        if partes:
+            return "/".join(partes)
+    if canal_esperado:
+        return (canonizar_canal(canal_esperado) or canal_esperado).title()
+    return "—"
 
 # Mismo vocabulario que ya usa la vista "Tareo" de One Page (F/PC/T/V/DM/A/—)
 # -- Davor, 2026-08-26: "cuando entro a ver el personal... me deberia salir
@@ -1337,6 +1362,7 @@ def ficha(dni):
                 "fecha": row["fecha"].strftime("%d/%m"),
                 "estado": row["estado"],
                 "estado_corto": ESTADO_CORTO.get(estado_base, estado_base.title()),
+                "canal": _canal_del_dia(row["canal_esperado"], row["canales_marcados"]),
                 "tardanza": es_tardanza, "salida_temprana": es_salida_temprana,
                 "entrada_real": row["entrada_real"] or "—", "entrada_esperada": row["entrada_esperada"] or "—",
                 "salida_real": row["salida_real"] or "—", "salida_esperada": row["salida_esperada"] or "—",

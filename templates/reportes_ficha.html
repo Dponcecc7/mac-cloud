@@ -456,6 +456,7 @@
           <tr class="fila-encabezado">
             <th class="th-ordenable" onclick="ordenarPor('fecha')">Fecha <span class="flecha-orden" id="flecha-fecha"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('estado')">Estado <span class="flecha-orden" id="flecha-estado"></span></th>
+            <th>Canal</th>
             <th class="th-ordenable" onclick="ordenarPor('entrada_real')">Entrada real <span class="flecha-orden" id="flecha-entrada_real"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('entrada_prog')">Entrada prog. <span class="flecha-orden" id="flecha-entrada_prog"></span></th>
             <th></th>
@@ -475,6 +476,7 @@
               {% if t.tardanza %}<span class="badge-pct warn">Tardanza</span>{% endif %}
               {% if t.salida_temprana %}<span class="badge-pct warn">Salida anticipada</span>{% endif %}
             </td>
+            <td data-label="Canal">{{ t.canal }}</td>
             <td data-label="Entrada real">{{ t.entrada_real }}</td><td data-label="Entrada prog.">{{ t.entrada_esperada }}</td>
             <td data-label="Editar entrada">{% if usuario.rol in ("analista", "admin") %}<a href="#historial-form" class="chico" style="text-decoration:none; display:inline-block;" onclick="prefillHistorial('Hora entrada programada', '{{ t.fecha_iso }}')">Editar</a>{% endif %}</td>
             <td data-label="Salida real">{{ t.salida_real }}</td><td data-label="Salida prog.">{{ t.salida_esperada }}</td>

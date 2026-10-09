@@ -122,6 +122,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
                 ClasificacionDiaria.salida_esperada, ClasificacionDiaria.salida_real,
                 Persona.region, Persona.ciudad, Persona.supervisor_dni,
                 ClasificacionDiaria.salida_anticipada_min, ClasificacionDiaria.canal_esperado,
+                ClasificacionDiaria.canales_marcados,
             )
             .join(Persona, Persona.dni == ClasificacionDiaria.dni)
             .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
@@ -162,6 +163,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         "dni", "nombre", "fecha", "estado", "comentario",
         "entrada_esperada", "entrada_real", "salida_esperada", "salida_real",
         "region", "ciudad", "supervisor_dni", "salida_anticipada_min", "canal_esperado",
+        "canales_marcados",
     ])
     r["fecha"] = pd.to_datetime(r["fecha"])
     r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
