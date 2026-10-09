@@ -313,10 +313,17 @@ def _periodo_horas_desde_query():
 def horas():
     modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
+    # "Solo activos" (Davor, 2026-10-09: "filtro, para mostrar solo a los
+    # activos") -- alguien que este mes/semana estuvo Activo y después se
+    # dio de baja sigue teniendo filas reales de ClasificacionDiaria de
+    # cuando sí trabajaba, así que seguía apareciendo en la tabla aunque
+    # ya no esté activo hoy.
+    solo_activos = request.args.get("solo_activos") == "1"
+    estado_filtro = "Activo" if solo_activos else None
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"], estado_filtro=estado_filtro,
     )
     resumen = resumen_por_persona(detalle)
     filas = resumen.to_dict("records") if len(resumen) else []
@@ -331,7 +338,7 @@ def horas():
     return render_template(
         "reportes_horas.html", usuario=current_user, activo="horas",
         modo=modo, semana_str=semana_str, mes_str=mes_str, semana_contexto=semana_contexto,
-        desde=desde, hasta=hasta, filas=filas,
+        desde=desde, hasta=hasta, filas=filas, solo_activos=solo_activos,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
@@ -344,10 +351,11 @@ def horas_exportar():
     modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
     periodo_str = mes_str if modo == "mes" else semana_str
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
+    estado_filtro = "Activo" if request.args.get("solo_activos") == "1" else None
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
-        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"],
+        ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"], estado_filtro=estado_filtro,
     )
     resumen = resumen_por_persona(detalle)
 

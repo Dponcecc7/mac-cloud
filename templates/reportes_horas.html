@@ -50,6 +50,8 @@
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .chk-activos { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--ink); white-space:nowrap; cursor:pointer; }
+    .chk-activos input { width:auto; margin:0; }
 
     .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-top:12px; }
@@ -152,6 +154,7 @@
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .chk-activos { font-size:15px; min-height:44px; }
 
       .panel { padding:14px !important; border-radius:12px; }
 
@@ -204,15 +207,15 @@
       {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Ruta mercaderista</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
-      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas', modo=modo, semana=semana_str, mes=mes_str) }}" class="active">Horas programadas vs trabajadas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas', modo=modo, semana=semana_str, mes=mes_str, solo_activos=('1' if solo_activos else '')) }}" class="active">Horas programadas vs trabajadas</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
     </nav>
 
     <div class="top-actions">
       <div class="modo-toggle">
-        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">Semana</a>
-        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">Mes</a>
+        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">Semana</a>
+        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">Mes</a>
       </div>
       <form method="get">
         <input type="hidden" name="modo" value="{{ modo }}">
@@ -221,6 +224,7 @@
         <input type="hidden" name="rol" value="{{ filtro_args.rol }}">
         <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
         <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
+        <input type="hidden" name="solo_activos" value="{{ '1' if solo_activos else '' }}">
         {% if modo == 'mes' %}
         <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
         <input type="hidden" name="semana" value="{{ semana_str }}">
@@ -232,7 +236,7 @@
       <span style="color:var(--muted); font-size:12.5px;">
         {% if modo == 'mes' %}{{ desde.strftime('%d/%m/%Y') }} — {{ hasta.strftime('%d/%m/%Y') }} (mes completo){% else %}{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado){% endif %}
       </span>
-      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal) }}">↓ Exportar Excel</a>
+      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
@@ -263,6 +267,9 @@
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
         {% endif %}
+        <label class="chk-activos" title="Alguien que estuvo Activo durante este periodo y después se dio de baja sigue teniendo filas reales de ese momento -- tildá esto para no verlo en la tabla.">
+          <input type="checkbox" name="solo_activos" value="1" {{ 'checked' if solo_activos else '' }}> Solo activos
+        </label>
         <button class="btn primary" type="submit">Aplicar filtros</button>
       </form>
     </div>

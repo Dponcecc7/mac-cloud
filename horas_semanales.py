@@ -104,14 +104,22 @@ def _motivo_falta(estado_base, estado, comentario):
 
 
 def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
-                             rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None, canal_filtro=None):
+                             rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None,
+                             canal_filtro=None, estado_filtro=None):
     """Detalle día-persona entre [desde, hasta] (inclusive), acotado al
     scope de acceso de `usuario_actual` -- o a un solo `dni_filtro` si se
     pasa (para la ficha individual, donde el acceso ya se validó aparte).
-    `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`: filtros
-    extra de Reportes (solo tienen efecto para admin/analista, ver
-    scoping.aplicar_filtros_extra). Devuelve un DataFrame vacío (sin
-    columnas) si no hay filas."""
+    `rol_filtro`/`region_filtro`/`supervisor_filtro`/`ciudad_filtro`/
+    `estado_filtro`: filtros extra de Reportes (solo tienen efecto para
+    admin/analista, ver scoping.aplicar_filtros_extra). `estado_filtro`
+    (Davor, 2026-10-09, Horas programadas vs trabajadas: "filtro, para
+    mostrar solo a los activos") es Persona.estado (Activo/Inactivo/
+    Vacante), NO el estado de la clasificación del día (Falta/Tardanza/
+    etc.) -- alguien que este mes estuvo Activo y ahora ya no, sigue
+    teniendo filas reales de ClasificacionDiaria de cuando sí trabajaba;
+    sin filtrar por Persona.estado, ese historial real sigue apareciendo
+    en el reporte aunque la persona ya no esté activa hoy. Devuelve un
+    DataFrame vacío (sin columnas) si no hay filas."""
     session = get_session()
     try:
         query = (
@@ -133,7 +141,10 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
             cond_scope = condicion_scope(Persona, usuario_actual)
             if cond_scope is not None:
                 query = query.filter(cond_scope)
-            query = aplicar_filtros_extra(query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro)
+            query = aplicar_filtros_extra(
+                query, Persona, rol_filtro, region_filtro, supervisor_filtro, ciudad_filtro, canal_filtro,
+                estado_filtro=estado_filtro,
+            )
         filas = query.all()
         if not filas:
             return pd.DataFrame()
