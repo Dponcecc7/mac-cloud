@@ -338,17 +338,19 @@ def create_app():
         rol_filtro = request.args.get("rol") or None
         region_filtro = request.args.get("region") or None
         supervisor_filtro = request.args.get("supervisor") or None
-        # Canal (Davor, 2026-08-29) -- SOLO admin: "debo tener un filtro
-        # para ver Tradicional, Farmacia y AU" -- un analista de canal ya
-        # está acotado por condicion_scope(), no lo necesita.
+        # Canal (Davor, 2026-08-29, ampliado 2026-10-09 "no solo a Diego
+        # sino a todos") -- mismo criterio que rol/región/supervisor de
+        # arriba: cualquier rol puede filtrar por canal DENTRO de lo que ya
+        # ve por su scope (un supervisor con equipo Multicanal también
+        # quiere poder acotar a un canal, no solo admin).
         es_admin = current_user.rol == "admin"
-        canal_filtro = (request.args.get("canal") or None) if es_admin else None
         # Un analista de canal (Diego=Farmacia, Yeny=Autoservicio, Kevin=
-        # Tradicional) no tiene el <select> de Canal (ya está acotado por
-        # condicion_scope() via canal_asignado), pero el mismo problema de
-        # abajo le aplica igual -- su canal "elegido" es simplemente el
-        # suyo fijo, no uno que seleccione.
+        # Tradicional) ya está acotado por condicion_scope() via
+        # canal_asignado -- para él no tiene sentido el <select> (elegir
+        # otro canal daría siempre 0 resultados), pero el checkbox de abajo
+        # le aplica igual con su canal fijo.
         canal_asignado_usuario = getattr(current_user, "canal_asignado", None) if not es_admin else None
+        canal_filtro = (request.args.get("canal") or None) if not canal_asignado_usuario else None
         canal_efectivo = canal_filtro or canal_asignado_usuario
         # "Otro filtro adicional" (Davor, 2026-10-09; caso real Diego no
         # veía el checkbox): el Canal de arriba (o el canal_asignado del
@@ -446,10 +448,10 @@ def create_app():
             "rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or "",
             "canal": canal_filtro or "", "canal_dia": "1" if canal_dia_estricto else "",
         }
-        canales_disponibles = CANALES_FILTRABLES if es_admin else []
-        # El <select> de Canal es solo admin, pero el checkbox de abajo
-        # tiene que verse también para un analista de canal (su canal ya
-        # está fijo via canal_asignado, no necesita elegirlo).
+        # El <select> de Canal se muestra para cualquiera MENOS un analista
+        # de canal (ya tiene el suyo fijo, elegir otro daría 0 resultados);
+        # el checkbox de abajo se muestra para todos, uno u otro caso.
+        canales_disponibles = [] if canal_asignado_usuario else CANALES_FILTRABLES
         mostrar_filtro_canal_dia = bool(canales_disponibles) or bool(canal_asignado_usuario)
 
         if canal_dia_estricto:

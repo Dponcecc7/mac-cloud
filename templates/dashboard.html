@@ -238,7 +238,7 @@
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
         </select>
         {% if canales_disponibles %}
-        <select name="canal" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+        <select name="canal" title="Ver Tradicional, Farmacia o Autoservicio">
           <option value="">Canal: todos</option>
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
