@@ -33,7 +33,7 @@ from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
 from scoping import (
-    CANALES_FILTRABLES, aplicar_filtros_extra, condicion_canal, condicion_scope,
+    CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_canal, condicion_scope,
     todos_overrides_supervisor_canal, todos_overrides_zona_canal,
 )
 from vacaciones import calcular_viajes_vacaciones
@@ -82,6 +82,27 @@ def _motivo_limpio(comentario):
         "feriado regional": "Feriado",
     }
     return HOMOLOGACIONES.get(texto.lower(), texto)
+
+
+def _canal_del_dia_coincide(canal_esperado, canales_marcados, canal_objetivo):
+    """¿Esta fila de ClasificacionDiaria corresponde a un día realmente
+    trabajado en `canal_objetivo` (ya canonizado)? -- Dashboard, filtro
+    "Canal: solo días trabajados en ese canal" (Davor, 2026-10-09): el
+    Canal de arriba ya filtra PERSONAS (condicion_canal() -- alguien que
+    ALGUNA vez trabaja ese canal), pero un Multicanal de Tradicional que
+    cubrió Autoservicio un día puntual seguía sumando ESE día a las stats
+    de Tradicional. Prioriza canales_marcados (canal REAL de la visita
+    GPS, mismo criterio que asistencia.py::_canal_para_mostrar(), con
+    "Otro" descartado) y cae a canal_esperado (lo programado) cuando no
+    hay marcación real (Falta/Vacante/Descanso/Vacaciones)."""
+    if canales_marcados:
+        marcados = {
+            canonizar_canal(p.strip()) for p in canales_marcados.split(",")
+            if p.strip() and p.strip() != "Otro"
+        }
+        if marcados:
+            return canal_objetivo in marcados
+    return canonizar_canal(canal_esperado) == canal_objetivo
 
 
 def create_app():
@@ -322,6 +343,16 @@ def create_app():
         # está acotado por condicion_scope(), no lo necesita.
         es_admin = current_user.rol == "admin"
         canal_filtro = (request.args.get("canal") or None) if es_admin else None
+        # "Otro filtro adicional" (Davor, 2026-10-09): el Canal de arriba es
+        # a nivel PERSONA (condicion_canal() -- incluye a alguien si ALGUNA
+        # vez trabaja ese canal), así que un Multicanal de Tradicional que
+        # un día cubrió Autoservicio igual sumaba ESE día a las stats de
+        # Tradicional. Este checkbox, solo si hay canal_filtro, filtra
+        # además a nivel DÍA (canales_marcados/canal_esperado de esa fecha
+        # puntual) -- separado del filtro de Canal en vez de cambiarle el
+        # comportamiento, para no alterar en silencio lo que ya mostraba
+        # el dashboard para quien no lo marque.
+        canal_dia_estricto = (request.args.get("canal_dia") == "1") if (es_admin and canal_filtro) else False
 
         dim_session = get_dim_session()
         try:
@@ -354,7 +385,8 @@ def create_app():
                                    Persona.ciudad, Persona.canal,
                                    ClasificacionDiaria.fecha, ClasificacionDiaria.estado,
                                    ClasificacionDiaria.entrada_real,
-                                   ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor)
+                                   ClasificacionDiaria.salida_real, ClasificacionDiaria.comentario_supervisor,
+                                   ClasificacionDiaria.canal_esperado, ClasificacionDiaria.canales_marcados)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha >= desde, ClasificacionDiaria.fecha <= hasta)
                 .filter(condicion_no_baja)
@@ -365,7 +397,8 @@ def create_app():
             # pasado, igual queres ver como viene el dia de hoy) -- consulta
             # aparte, chica.
             query_hoy = (
-                dim_session.query(ClasificacionDiaria.estado)
+                dim_session.query(ClasificacionDiaria.estado, ClasificacionDiaria.canal_esperado,
+                                   ClasificacionDiaria.canales_marcados)
                 .join(Persona, Persona.dni == ClasificacionDiaria.dni)
                 .filter(ClasificacionDiaria.fecha == hoy_peru)
                 .filter(condicion_no_baja)
@@ -403,9 +436,14 @@ def create_app():
         periodo_args = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
         filtro_args = {
             "rol": rol_filtro or "", "region": region_filtro or "", "supervisor": supervisor_filtro or "",
-            "canal": canal_filtro or "",
+            "canal": canal_filtro or "", "canal_dia": "1" if canal_dia_estricto else "",
         }
         canales_disponibles = CANALES_FILTRABLES if es_admin else []
+
+        if canal_dia_estricto:
+            canal_objetivo = canonizar_canal(canal_filtro)
+            filas = [f for f in filas if _canal_del_dia_coincide(f[10], f[11], canal_objetivo)]
+            filas_hoy = [f for f in filas_hoy if _canal_del_dia_coincide(f[1], f[2], canal_objetivo)]
 
         if not filas:
             return render_template(
@@ -418,6 +456,7 @@ def create_app():
 
         r = pd.DataFrame(filas, columns=[
             "dni", "nombre", "region", "ciudad", "canal", "fecha", "estado", "entrada_real", "salida_real", "comentario",
+            "canal_esperado", "canales_marcados",
         ])
         r["fecha"] = pd.to_datetime(r["fecha"])
         r["estado_base"] = r["estado"].apply(lambda s: s.split(" (")[0])
@@ -425,7 +464,7 @@ def create_app():
         r["ciudad"] = r["ciudad"].fillna("Sin ciudad")
         r["canal"] = r["canal"].fillna("Sin canal")
 
-        hoy_es = [f.split(" (")[0] for (f,) in filas_hoy]
+        hoy_es = [f[0].split(" (")[0] for f in filas_hoy]
         resumen_hoy = {
             "asistio": hoy_es.count("ASISTIÓ A TIEMPO"),
             "tardanza": hoy_es.count("TARDANZA"),

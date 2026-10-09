@@ -219,9 +219,9 @@
     <div class="top-row">
       <h1 class="title">Asistencia</h1>
       <form class="periodo-form" method="get">
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['7d'].desde and periodo_args.hasta == presets['7d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">7 días</a>
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['30d'].desde and periodo_args.hasta == presets['30d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">30 días</a>
-        <a class="preset {{ 'activo' if periodo_args.desde == presets['mes'].desde and periodo_args.hasta == presets['mes'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal) }}">Este mes</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['7d'].desde and periodo_args.hasta == presets['7d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['7d'].desde, hasta=presets['7d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal, canal_dia=filtro_args.canal_dia) }}">7 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['30d'].desde and periodo_args.hasta == presets['30d'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['30d'].desde, hasta=presets['30d'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal, canal_dia=filtro_args.canal_dia) }}">30 días</a>
+        <a class="preset {{ 'activo' if periodo_args.desde == presets['mes'].desde and periodo_args.hasta == presets['mes'].hasta else '' }}" href="{{ url_for('dashboard', desde=presets['mes'].desde, hasta=presets['mes'].hasta, rol=filtro_args.rol, region=filtro_args.region, supervisor=filtro_args.supervisor, canal=filtro_args.canal, canal_dia=filtro_args.canal_dia) }}">Este mes</a>
         <input type="date" name="desde" value="{{ periodo_args.desde }}">
         <span style="color:var(--muted);">→</span>
         <input type="date" name="hasta" value="{{ periodo_args.hasta }}">
@@ -242,6 +242,9 @@
           <option value="">Canal: todos</option>
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
+        <label class="field chk" title="Sin esto, el Canal de arriba incluye TODOS los días de cualquiera que alguna vez trabaje ese canal -- con esto marcado, solo cuentan los días que esa persona trabajó realmente ese canal puntual (un Multicanal de Tradicional que un día cubrió Autoservicio no suma ese día a Tradicional)">
+          <input type="checkbox" name="canal_dia" value="1" {{ 'checked' if filtro_args.canal_dia else '' }}> Solo días trabajados en ese canal
+        </label>
         {% endif %}
         <button class="aplicar" type="submit">Aplicar</button>
       </form>
