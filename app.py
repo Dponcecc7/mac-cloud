@@ -1172,6 +1172,68 @@ def create_app():
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @app.get("/personal/exportar-faltas")
+    @requiere_pagina("personal")
+    def personal_exportar_faltas():
+        # Davor, 2026-10-09: "coloca una opción para exportar todas las
+        # faltas del personal" -- TODAS (no acotado a un mes), respetando
+        # los mismos filtros/scope que ya tiene la pantalla Personal (si
+        # alguien filtró Canal=Farmacia antes de exportar, el Excel sale
+        # igual de acotado). estado.like("FALTA%") -- mismo criterio ya
+        # usado en reportes.py::ficha() para "Faltas del mes"; DESCANSO
+        # (incluido médico) es un estado_base propio desde 2026-09-14 y
+        # nunca empieza con "FALTA", así que no hace falta excluirlo aparte.
+        dim_session = get_dim_session()
+        try:
+            filtro_args, *_resto = _filtros_personal(dim_session)
+            personas = _consultar_personal(dim_session, filtro_args)
+            supervisores_por_dni = _resolver_supervisores(dim_session, personas)
+            dnis = [p.dni for p in personas]
+            faltas = []
+            if dnis:
+                faltas = (
+                    dim_session.query(
+                        ClasificacionDiaria.dni, ClasificacionDiaria.fecha,
+                        ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor,
+                    )
+                    .filter(ClasificacionDiaria.dni.in_(dnis), ClasificacionDiaria.estado.like("FALTA%"))
+                    .order_by(ClasificacionDiaria.fecha.desc())
+                    .all()
+                )
+        finally:
+            dim_session.close()
+
+        personas_por_dni = {p.dni: p for p in personas}
+        columnas = [
+            "DNI", "Nombre", "Fecha", "Estado", "Motivo", "Supervisor",
+            "Rol", "Canal", "Región", "Ciudad",
+        ]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Faltas"
+        ws.append(columnas)
+        for celda in ws[1]:
+            celda.font = Font(bold=True)
+        for dni, fecha, estado, comentario in faltas:
+            p = personas_por_dni.get(dni)
+            sup = supervisores_por_dni.get(dni, {"principal": None})
+            ws.append([
+                dni, p.nombre_completo if p else None, fecha, estado, _motivo_limpio(comentario),
+                sup["principal"], p.rol if p else None, p.canal if p else None,
+                p.region if p else None, p.ciudad if p else None,
+            ])
+        for i, titulo in enumerate(columnas, start=1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(titulo) + 2)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        hoy = dt.datetime.now(PERU_TZ).strftime("%Y-%m-%d")
+        return send_file(
+            buf, as_attachment=True, download_name=f"Faltas_{hoy}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     return app
 
 

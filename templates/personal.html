@@ -235,6 +235,7 @@
     {% endif %}
     <div class="top-actions">
       <a class="btn-descargar" href="{{ url_for('personal_exportar', **filtro_qs) }}">⬇ Descargar Excel</a>
+      <a class="btn-descargar" href="{{ url_for('personal_exportar_faltas', **filtro_qs) }}">⬇ Exportar faltas</a>
       {% if puede_editar %}
       <form id="form-todos" method="post" action="{{ url_for('personal_editar_masivo', **filtro_qs) }}" style="margin:0;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
