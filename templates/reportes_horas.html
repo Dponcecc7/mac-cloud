@@ -65,7 +65,17 @@
        verticales declarados) pero sticky sí funciona. */
     table { border-collapse:separate; border-spacing:0; width:100%; font-size:11.5px; }
     thead th { position:sticky; top:0; z-index:3; background:var(--card); box-shadow:0 1px 0 var(--line); }
-    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
+    /* white-space:normal + max-width (Davor, 2026-10-09: "ajustar las
+       columnas, por el grande de encabezado a veces se hace muy ancho,
+       hacer como salto de linea") -- un encabezado largo como "Salidas
+       que cumplieron" forzaba toda la columna al ancho de ESE texto en
+       una sola línea, aunque el dato de abajo fuera un simple "0". Con
+       max-width el encabezado se envuelve en 2 líneas y la columna queda
+       del ancho que realmente necesita el dato (el max-width del th no
+       afecta a Nombre/Supervisor/Ciudad/Región -- esas columnas las sigue
+       marcando el contenido más largo de sus celdas de datos, no el
+       encabezado). */
+    th { text-align:left; padding:7px 9px; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:normal; max-width:95px; line-height:1.35; vertical-align:bottom; cursor:pointer; user-select:none; }
     th:hover { color:var(--brand); }
     th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
     th.num, td.num { text-align:right; }
@@ -290,7 +300,6 @@
               <th class="num" data-tipo="num">Horas a trabajar <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas a trabajar sin faltas <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Diferencia (h) <span class="flecha">↕</span></th>
-              <th class="num" data-tipo="num">% Cumplimiento <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">% Cumplimiento sin faltas <span class="flecha">↕</span></th>
             </tr>
           </thead>
@@ -298,8 +307,6 @@
             {% for f in filas %}
             {% set pct = f.pct_cumplimiento_sin_faltas %}
             {% set clase_pct = 'ok' if pct is not none and pct >= 95 else ('warn' if pct is not none and pct >= 80 else 'bad') %}
-            {% set pct_full = f.pct_cumplimiento %}
-            {% set clase_pct_full = 'ok' if pct_full is not none and pct_full >= 95 else ('warn' if pct_full is not none and pct_full >= 80 else 'bad') %}
             <tr>
               <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni, semana=semana_contexto) }}" title="Ver detalle día a día de esta semana">{{ f.nombre|title }}</a></td>
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
@@ -327,7 +334,6 @@
               <td class="num" data-label="Diferencia (h)">
                 {% if f.diferencia_h is not none %}<span class="{{ 'dif-neg' if f.diferencia_h < 0 else ('dif-pos' if f.diferencia_h > 0 else '') }}">{{ f.diferencia_h }}</span>{% else %}—{% endif %}
               </td>
-              <td class="num" data-label="% Cumplimiento">{% if pct_full is not none %}<span class="badge-pct {{ clase_pct_full }}">{{ pct_full }}%</span>{% else %}—{% endif %}</td>
               <td class="num" data-label="% Cumpl. sin faltas">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
