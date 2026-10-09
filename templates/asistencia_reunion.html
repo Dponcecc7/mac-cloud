@@ -36,13 +36,13 @@
     .form-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:14px; }
     label.field { display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:700; color:var(--muted); }
     .ipt { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
-    select.ipt-filtro { font:inherit; font-size:12.5px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .ipt-filtro { font:inherit; font-size:12.5px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .actions { display:flex; justify-content:flex-end; gap:8px; }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; background:var(--brand); color:#fff; }
     .btn.sm { padding:6px 12px; font-size:12px; }
     .btn.ghost { background:var(--line); color:var(--ink); }
     .empty { color:var(--muted); font-size:13px; }
-    .filtros-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-start; }
+    .filtros-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
 
     /* Región con opción múltiple (Davor, 2026-09-17) -- mismo componente
        que ya usa Personal (checkboxes en un panel flotante). */
@@ -134,9 +134,8 @@
 
     {% if roles_disponibles %}
     <form method="get" class="filtros-bar">
-      <label class="field" style="gap:2px;">Fecha
-        <input class="ipt-filtro" type="date" name="fecha" value="{{ fecha_elegida }}" onchange="this.form.submit()">
-      </label>
+      <input class="ipt-filtro" type="date" name="fecha" value="{{ fecha_elegida }}" onchange="this.form.submit()" title="Fecha de la reunión -- también se usa para avisar quién faltó ese día">
+
       <div class="ms">
         <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
           {% if not filtro_args.supervisor %}Supervisor: todos{% elif filtro_args.supervisor|length == 1 %}{{ (supervisores_disponibles|selectattr('0', 'equalto', filtro_args.supervisor[0])|first)[1]|title }}{% else %}{{ filtro_args.supervisor|length }} supervisores{% endif %}
@@ -191,7 +190,10 @@
           <p class="note" style="margin:0;">No hay nadie activo en tu alcance con estos filtros.</p>
         {% else %}
         <div class="form-row">
-          <label class="field">Fecha<input class="ipt" type="date" name="fecha" value="{{ fecha_elegida }}" required></label>
+          <label class="field">Fecha
+            <input class="ipt" type="date" value="{{ fecha_elegida }}" disabled title="Para cambiar la fecha, usá el filtro de arriba -- así el aviso de quién faltó ese día siempre corresponde a la fecha real de la reunión.">
+            <input type="hidden" name="fecha" value="{{ fecha_elegida }}">
+          </label>
           <label class="field">Hora de inicio<input class="ipt" type="time" name="hora_inicio" required></label>
           <label class="field">Hora de fin<input class="ipt" type="time" name="hora_fin" required></label>
         </div>
