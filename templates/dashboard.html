@@ -242,7 +242,9 @@
           <option value="">Canal: todos</option>
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
-        <label class="field chk" title="Sin esto, el Canal de arriba incluye TODOS los días de cualquiera que alguna vez trabaje ese canal -- con esto marcado, solo cuentan los días que esa persona trabajó realmente ese canal puntual (un Multicanal de Tradicional que un día cubrió Autoservicio no suma ese día a Tradicional)">
+        {% endif %}
+        {% if mostrar_filtro_canal_dia %}
+        <label class="field chk" title="Sin esto, el Canal (de arriba, o el tuyo propio si ya estás acotado a un canal) incluye TODOS los días de cualquiera que alguna vez trabaje ese canal -- con esto marcado, solo cuentan los días que esa persona trabajó realmente ese canal puntual (un Multicanal de Tradicional que un día cubrió Autoservicio no suma ese día a Tradicional)">
           <input type="checkbox" name="canal_dia" value="1" {{ 'checked' if filtro_args.canal_dia else '' }}> Solo días trabajados en ese canal
         </label>
         {% endif %}

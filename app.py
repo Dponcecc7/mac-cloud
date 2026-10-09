@@ -343,16 +343,24 @@ def create_app():
         # está acotado por condicion_scope(), no lo necesita.
         es_admin = current_user.rol == "admin"
         canal_filtro = (request.args.get("canal") or None) if es_admin else None
-        # "Otro filtro adicional" (Davor, 2026-10-09): el Canal de arriba es
-        # a nivel PERSONA (condicion_canal() -- incluye a alguien si ALGUNA
-        # vez trabaja ese canal), así que un Multicanal de Tradicional que
-        # un día cubrió Autoservicio igual sumaba ESE día a las stats de
-        # Tradicional. Este checkbox, solo si hay canal_filtro, filtra
-        # además a nivel DÍA (canales_marcados/canal_esperado de esa fecha
-        # puntual) -- separado del filtro de Canal en vez de cambiarle el
-        # comportamiento, para no alterar en silencio lo que ya mostraba
-        # el dashboard para quien no lo marque.
-        canal_dia_estricto = (request.args.get("canal_dia") == "1") if (es_admin and canal_filtro) else False
+        # Un analista de canal (Diego=Farmacia, Yeny=Autoservicio, Kevin=
+        # Tradicional) no tiene el <select> de Canal (ya está acotado por
+        # condicion_scope() via canal_asignado), pero el mismo problema de
+        # abajo le aplica igual -- su canal "elegido" es simplemente el
+        # suyo fijo, no uno que seleccione.
+        canal_asignado_usuario = getattr(current_user, "canal_asignado", None) if not es_admin else None
+        canal_efectivo = canal_filtro or canal_asignado_usuario
+        # "Otro filtro adicional" (Davor, 2026-10-09; caso real Diego no
+        # veía el checkbox): el Canal de arriba (o el canal_asignado del
+        # propio analista) es a nivel PERSONA (condicion_canal() -- incluye
+        # a alguien si ALGUNA vez trabaja ese canal), así que un Multicanal
+        # de Tradicional que un día cubrió Autoservicio igual sumaba ESE
+        # día a las stats de Tradicional. Este checkbox, solo si hay un
+        # canal en efecto, filtra además a nivel DÍA (canales_marcados/
+        # canal_esperado de esa fecha puntual) -- separado del filtro de
+        # Canal en vez de cambiarle el comportamiento, para no alterar en
+        # silencio lo que ya mostraba el dashboard para quien no lo marque.
+        canal_dia_estricto = (request.args.get("canal_dia") == "1") if canal_efectivo else False
 
         dim_session = get_dim_session()
         try:
@@ -439,9 +447,13 @@ def create_app():
             "canal": canal_filtro or "", "canal_dia": "1" if canal_dia_estricto else "",
         }
         canales_disponibles = CANALES_FILTRABLES if es_admin else []
+        # El <select> de Canal es solo admin, pero el checkbox de abajo
+        # tiene que verse también para un analista de canal (su canal ya
+        # está fijo via canal_asignado, no necesita elegirlo).
+        mostrar_filtro_canal_dia = bool(canales_disponibles) or bool(canal_asignado_usuario)
 
         if canal_dia_estricto:
-            canal_objetivo = canonizar_canal(canal_filtro)
+            canal_objetivo = canonizar_canal(canal_efectivo)
             filas = [f for f in filas if _canal_del_dia_coincide(f[10], f[11], canal_objetivo)]
             filas_hoy = [f for f in filas_hoy if _canal_del_dia_coincide(f[1], f[2], canal_objetivo)]
 
@@ -451,7 +463,7 @@ def create_app():
                 periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
                 filtro_args=filtro_args, roles_disponibles=roles_disponibles,
                 regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
-                canales_disponibles=canales_disponibles,
+                canales_disponibles=canales_disponibles, mostrar_filtro_canal_dia=mostrar_filtro_canal_dia,
             )
 
         r = pd.DataFrame(filas, columns=[
@@ -788,7 +800,7 @@ def create_app():
             periodo_desde=desde, periodo_hasta=hasta, periodo_args=periodo_args, presets=presets,
             filtro_args=filtro_args, roles_disponibles=roles_disponibles,
             regiones_disponibles=regiones_disponibles, supervisores_disponibles=supervisores_disponibles,
-            canales_disponibles=canales_disponibles,
+            canales_disponibles=canales_disponibles, mostrar_filtro_canal_dia=mostrar_filtro_canal_dia,
         )
 
     def _filtros_personal(dim_session):
