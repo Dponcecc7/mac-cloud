@@ -300,19 +300,37 @@ def _periodo_horas_desde_query():
 
     Devuelve siempre AMBOS strings (semana_str Y mes_str, sin importar el
     modo activo) -- así cada <input> conserva su propio último valor
-    elegido al alternar entre modos, en vez de resetearse al actual."""
+    elegido al alternar entre modos, en vez de resetearse al actual.
+    `incluye_hoy` (para que la plantilla sepa si tiene sentido mostrar el
+    checkbox de abajo) es sobre el periodo SIN ajustar -- aunque se haya
+    pedido excluir_hoy=1 y `hasta` ya haya bajado un día, la pregunta
+    sigue siendo "¿hoy caía originalmente en este periodo?"."""
     modo = "mes" if request.args.get("modo") == "mes" else "semana"
     desde_sem, hasta_sem, semana_str = _semana_desde_query()
     desde_mes, hasta_mes, mes_str = _mes_desde_query()
-    if modo == "mes":
-        return modo, desde_mes, hasta_mes, semana_str, mes_str
-    return modo, desde_sem, hasta_sem, semana_str, mes_str
+    desde, hasta = (desde_mes, hasta_mes) if modo == "mes" else (desde_sem, hasta_sem)
+
+    # "No considerar hoy" (Davor, 2026-10-10: "como hoy estan trabajando
+    # tambien considera el día y el avance se muestra mal... el día aun
+    # esta en curso") -- si el periodo elegido llega hasta hoy (semana o
+    # mes actual), un mercaderista que todavía no terminó su turno
+    # aparece con 0h trabajadas contra el día completo de "horas a
+    # trabajar", arrastrando el % para abajo por un día que ni siquiera
+    # terminó. Solo tiene efecto cuando hoy realmente está incluido en el
+    # rango -- si se está mirando un mes/semana ya pasada, no cambia nada.
+    hoy = dt.date.today()
+    incluye_hoy = desde <= hoy <= hasta
+    excluir_hoy = request.args.get("excluir_hoy") == "1"
+    if excluir_hoy and incluye_hoy:
+        hasta = hoy - dt.timedelta(days=1)
+
+    return modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy
 
 
 @bp.get("/horas")
 @requiere_pagina("reportes_horas")
 def horas():
-    modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
+    modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy = _periodo_horas_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     # "Solo activos" (Davor, 2026-10-09: "filtro, para mostrar solo a los
     # activos") -- alguien que este mes/semana estuvo Activo y después se
@@ -340,6 +358,7 @@ def horas():
         "reportes_horas.html", usuario=current_user, activo="horas",
         modo=modo, semana_str=semana_str, mes_str=mes_str, semana_contexto=semana_contexto,
         desde=desde, hasta=hasta, filas=filas, solo_activos=solo_activos,
+        incluye_hoy=incluye_hoy, excluir_hoy=excluir_hoy,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
@@ -349,7 +368,7 @@ def horas():
 @bp.get("/horas/exportar")
 @requiere_pagina("reportes_horas")
 def horas_exportar():
-    modo, desde, hasta, semana_str, mes_str = _periodo_horas_desde_query()
+    modo, desde, hasta, semana_str, mes_str, _incluye_hoy, _excluir_hoy = _periodo_horas_desde_query()
     periodo_str = mes_str if modo == "mes" else semana_str
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     estado_filtro = "Activo" if request.args.get("solo_activos") == "1" else None

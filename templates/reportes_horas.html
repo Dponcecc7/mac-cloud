@@ -214,8 +214,8 @@
 
     <div class="top-actions">
       <div class="modo-toggle">
-        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">Semana</a>
-        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">Mes</a>
+        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Semana</a>
+        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Mes</a>
       </div>
       <form method="get">
         <input type="hidden" name="modo" value="{{ modo }}">
@@ -232,11 +232,16 @@
         <input type="week" name="semana" value="{{ semana_str }}" onchange="this.form.submit()">
         <input type="hidden" name="mes" value="{{ mes_str }}">
         {% endif %}
+        {% if incluye_hoy %}
+        <label class="chk-activos" title="Hoy el turno de la gente todavía está en curso -- contarlo completo contra 0h trabajadas hasta ahora ensucia el % de cumplimiento. Tildá esto para calcular el periodo solo hasta ayer.">
+          <input type="checkbox" name="excluir_hoy" value="1" onchange="this.form.submit()" {{ 'checked' if excluir_hoy else '' }}> No considerar hoy (día en curso)
+        </label>
+        {% endif %}
       </form>
       <span style="color:var(--muted); font-size:12.5px;">
-        {% if modo == 'mes' %}{{ desde.strftime('%d/%m/%Y') }} — {{ hasta.strftime('%d/%m/%Y') }} (mes completo){% else %}{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} (sábado){% endif %}
+        {% if modo == 'mes' %}{{ desde.strftime('%d/%m/%Y') }} — {{ hasta.strftime('%d/%m/%Y') }} ({{ 'mes hasta ayer' if excluir_hoy and incluye_hoy else 'mes completo' }}){% else %}{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} ({{ 'hasta ayer' if excluir_hoy and incluye_hoy else 'sábado' }}){% endif %}
       </span>
-      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else '')) }}">↓ Exportar Excel</a>
+      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
@@ -245,6 +250,7 @@
         <input type="hidden" name="modo" value="{{ modo }}">
         <input type="hidden" name="semana" value="{{ semana_str }}">
         <input type="hidden" name="mes" value="{{ mes_str }}">
+        <input type="hidden" name="excluir_hoy" value="{{ '1' if excluir_hoy else '' }}">
         <select name="supervisor">
           <option value="">Supervisor: todos</option>
           {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
