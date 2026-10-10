@@ -14,7 +14,7 @@ COLUMNAS = [
     "dni", "nombre", "supervisor", "ciudad", "region", "fecha",
     "motivo_falta", "horas_trabajadas", "horas_a_trabajar",
     "_horas_vacante_dia", "_horas_sustento_dia", "_horas_descanso_dia", "_horas_sin_marcacion_dia",
-    "es_tardanza", "recupero_dia", "es_salida_temprana", "es_descanso_medico",
+    "es_tardanza", "recupero_dia", "es_salida_temprana", "es_descanso_medico", "_dia_activo",
 ]
 
 
@@ -26,6 +26,10 @@ def _fila(dni, fecha, horas_trab, horas_a_trab, es_tardanza=False, es_salida_tem
         "_horas_vacante_dia": 0.0, "_horas_sustento_dia": 0.0, "_horas_descanso_dia": 0.0, "_horas_sin_marcacion_dia": 0.0,
         "es_tardanza": es_tardanza, "recupero_dia": recupero, "es_salida_temprana": es_salida_temprana,
         "es_descanso_medico": False,
+        # Todas las filas de este archivo son días realmente trabajados
+        # (tardanza incluida -- igual vino) -- mismo criterio que
+        # horas_semanales.py::_dia_activo.
+        "_dia_activo": True,
     }
 
 

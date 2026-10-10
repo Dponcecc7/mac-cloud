@@ -265,6 +265,12 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     # descuentan de nuevo acá -- ya salieron antes.
     ya_excluido_de_base = (r["motivo_falta"] == "Vacante") | es_con_sustento | es_descanso
     r["_horas_sin_marcacion_dia"] = r["horas_a_trabajar"].where(~ya_excluido_de_base & ~con_marcacion, 0.0)
+    # "Días activos" (Davor, 2026-10-10: "días que se esta considerando las
+    # horas a trabajar sin faltas") -- exactamente los días que SÍ entran en
+    # "horas_a_trabajar_sin_faltas" de abajo: ni Vacante/con sustento/
+    # Descanso, y con marcación real. Mismo criterio que _horas_sin_marcacion_dia,
+    # pero contando días en vez de horas.
+    r["_dia_activo"] = ~ya_excluido_de_base & con_marcacion
 
     return r
 
@@ -288,6 +294,7 @@ def resumen_por_persona(detalle_semana):
         es_descanso_medico=("es_descanso_medico", "any"),
         recupero_dia=("recupero_dia", "any"),
         motivo_falta=("motivo_falta", "first"),
+        dia_activo=("_dia_activo", "any"),
     ).reset_index()
 
     g_dias = dias_flags.groupby("dni").agg(
@@ -298,6 +305,7 @@ def resumen_por_persona(detalle_semana):
         tardanzas_recuperadas=("es_tardanza", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
         dias_salida_temprana=("es_salida_temprana", "sum"),
         salidas_cumplieron=("es_salida_temprana", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
+        dias_activos=("dia_activo", "sum"),
     )
 
     g = detalle_semana.groupby("dni").agg(
@@ -341,7 +349,14 @@ def resumen_por_persona(detalle_semana):
 
     g = g.drop(columns=["_horas_vacante", "_horas_sustento", "_horas_sin_marcacion"])
     g = g[[
-        "dni", "nombre", "supervisor", "ciudad", "region", "dias_falta_vacante",
+        "dni", "nombre", "supervisor", "ciudad", "region",
+        # dias_activos (Davor, 2026-10-10: "colocar como días activos, días
+        # que se esta considerando las horas a trabajar sin faltas") -- la
+        # cantidad de días que de verdad entran en horas_a_trabajar_sin_faltas
+        # (ni Vacante/con sustento/Descanso, con marcación real), para que
+        # se entienda sobre cuántos días se está sacando ese cálculo.
+        "dias_activos",
+        "dias_falta_vacante",
         # dias_falta/dias_descanso_medico/dias_vacante (Davor, 2026-10-09:
         # "dale mayor visibilidad la tabla") -- mismos 3 números que ya
         # estaban adentro del texto de dias_falta_vacante, expuestos acá

@@ -200,6 +200,7 @@ def _patron_semanal(dni):
 
 COLUMNAS_HORAS = [
     ("nombre", "Nombre"), ("supervisor", "Supervisor"), ("ciudad", "Ciudad"), ("region", "Región"),
+    ("dias_activos", "Días activos"),
     ("dias_falta_vacante", "Días Falta/Vacante"),
     ("dias_tardanza", "Días tardanza"), ("tardanzas_recuperadas", "Tardanzas recuperadas"),
     ("dias_salida_temprana", "Días salida anticipada"), ("salidas_cumplieron", "Salidas que cumplieron su horario"),

@@ -298,13 +298,13 @@
               <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
               <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
               <th data-tipo="texto">Región <span class="flecha">↕</span></th>
+              <th class="num" data-tipo="num">Días activos <span class="flecha">↕</span></th>
               <th data-tipo="texto">Días Falta/Vacante <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Días tardanza <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Tardanzas recuperadas <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Días salida anticipada <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Salidas que cumplieron <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas trabajadas <span class="flecha">↕</span></th>
-              <th class="num" data-tipo="num">Horas a trabajar <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Horas a trabajar sin faltas <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">Diferencia (h) <span class="flecha">↕</span></th>
               <th class="num" data-tipo="num">% Cumplimiento sin faltas <span class="flecha">↕</span></th>
@@ -319,6 +319,7 @@
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
+              <td class="num" data-label="Días activos">{{ f.dias_activos }}</td>
               <td data-label="Días Falta/Vacante">
                 {% if f.dias_falta or f.dias_descanso_medico or f.dias_tardanza or f.dias_vacante %}
                 <div class="incidencias">
@@ -336,7 +337,6 @@
               <td class="num" data-label="Días salida anticipada">{{ f.dias_salida_temprana }}</td>
               <td class="num" data-label="Salidas que cumplieron">{{ f.salidas_cumplieron }}</td>
               <td class="num" data-label="Horas trabajadas">{{ f.horas_trabajadas }}</td>
-              <td class="num" data-label="Horas a trabajar">{{ f.horas_a_trabajar }}</td>
               <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
               <td class="num" data-label="Diferencia (h)">
                 {% if f.diferencia_h is not none %}<span class="{{ 'dif-neg' if f.diferencia_h < 0 else ('dif-pos' if f.diferencia_h > 0 else '') }}">{{ f.diferencia_h }}</span>{% else %}—{% endif %}

@@ -13,7 +13,7 @@ COLUMNAS = [
     "dni", "nombre", "supervisor", "ciudad", "region", "fecha",
     "motivo_falta", "horas_trabajadas", "horas_a_trabajar",
     "_horas_vacante_dia", "_horas_sustento_dia", "_horas_descanso_dia", "_horas_sin_marcacion_dia",
-    "es_tardanza", "recupero_dia", "es_salida_temprana", "es_descanso_medico",
+    "es_tardanza", "recupero_dia", "es_salida_temprana", "es_descanso_medico", "_dia_activo",
 ]
 
 
@@ -26,6 +26,10 @@ def _fila(dni, fecha, horas_trab, horas_a_trab, horas_descanso=0.0, motivo_falta
         "_horas_sin_marcacion_dia": 0.0,
         "es_tardanza": False, "recupero_dia": False, "es_salida_temprana": False,
         "es_descanso_medico": es_descanso_medico,
+        # Ni Vacante/sustento/Descanso (este fixture solo usa horas_descanso
+        # como exclusión) y con marcación real -- mismo criterio que
+        # horas_semanales.py::_dia_activo.
+        "_dia_activo": horas_descanso == 0.0,
     }
 
 
