@@ -37,9 +37,10 @@
 
     .volver { display:inline-block; font-size:12.5px; color:var(--muted); text-decoration:none; margin-bottom:8px; }
     .volver:hover { color:var(--brand); }
-    nav.tabs { display:flex; gap:14px; font-size:13px; margin-bottom:16px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:700; padding-bottom:4px; border-bottom:2px solid transparent; white-space:nowrap; }
-    nav.tabs a.active { color:var(--brand); border-bottom-color:var(--brand); }
+    nav.tabs { display:flex; gap:6px; font-size:12.5px; margin-bottom:16px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:600; padding:7px 13px; border-radius:999px; background:var(--card); border:1px solid var(--line); white-space:nowrap; }
+    nav.tabs a:hover { color:var(--ink); border-color:var(--brand); }
+    nav.tabs a.active { color:#fff; background:var(--brand); border-color:var(--brand); font-weight:700; }
     h1.title { font-size:22px; margin:0 0 2px; }
     .subtitulo { color:var(--muted); font-size:13px; margin:0 0 18px; }
     .selector-mes { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); font-weight:600; margin:0 0 16px; }
