@@ -570,8 +570,8 @@
 
   <dialog id="dlg-vacaciones" style="border:none; border-radius:14px; padding:0; max-width:320px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
     <form method="dialog" style="padding:20px 22px;">
-      <p style="margin:0 0 4px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
-      <p style="margin:0 0 10px; font-size:12px; color:var(--muted);">Poné el último día antes de que vuelva a trabajar -- se va a marcar "Vacaciones" todos los días desde hoy hasta esa fecha.</p>
+      <p id="dlg-vacaciones-titulo" style="margin:0 0 4px; font-weight:700; font-size:14px;">¿Hasta qué fecha se va de vacaciones?</p>
+      <p id="dlg-vacaciones-nota" style="margin:0 0 10px; font-size:12px; color:var(--muted);">Poné el último día antes de que vuelva a trabajar -- se va a marcar "Vacaciones" todos los días desde hoy hasta esa fecha.</p>
       <input type="date" id="dlg-vacaciones-fecha" class="ipt-filtro" style="width:100%; margin-bottom:14px;" required>
       <div style="display:flex; justify-content:flex-end; gap:8px;">
         <button type="button" id="dlg-vacaciones-cancelar" class="btn sm" style="background:var(--line); color:var(--ink);">Cancelar</button>
@@ -580,17 +580,34 @@
     </form>
   </dialog>
   <script>
-    // Rango de vacaciones (Davor, 2026-09-14): al elegir "Vacaciones" como
-    // motivo de Falta, pide el rango completo en vez de marcar un solo día
-    // -- el campo oculto que arma acá lo lee asistencia.py::marcar()/guardar()
-    // para escribir "Falta - Vacaciones" en Tabla 3 para cada día del rango.
+    // Rango de vacaciones/licencia (Davor, 2026-09-14, ampliado 2026-10-12
+    // para Licencia: "que tambien salga fecha inicio y fecha fin asi como
+    // sale de vacaciones"): al elegir uno de estos motivos como motivo de
+    // Falta, pide el rango completo en vez de marcar un solo día -- el
+    // campo oculto que arma acá lo lee asistencia.py::marcar()/guardar()
+    // para escribir "Falta - {motivo}" en Tabla 3 para cada día del rango.
     (function () {
       var dlg = document.getElementById('dlg-vacaciones');
       var fechaInput = document.getElementById('dlg-vacaciones-fecha');
+      var titulo = document.getElementById('dlg-vacaciones-titulo');
+      var nota = document.getElementById('dlg-vacaciones-nota');
+      var TEXTOS = {
+        'Vacaciones': {
+          titulo: '¿Hasta qué fecha se va de vacaciones?',
+          nota: 'Poné el último día antes de que vuelva a trabajar -- se va a marcar "Vacaciones" todos los días desde hoy hasta esa fecha.',
+        },
+        'Licencia': {
+          titulo: '¿Hasta qué fecha dura la licencia?',
+          nota: 'Poné el último día antes de que vuelva a trabajar -- se va a marcar "Licencia" todos los días desde hoy hasta esa fecha.',
+        },
+      };
       var pendiente = null;
 
       window.pedirRangoVacaciones = function (select, fechaMin, sufijoDni) {
-        if (select.value !== 'Vacaciones') return;
+        var textos = TEXTOS[select.value];
+        if (!textos) return;
+        titulo.textContent = textos.titulo;
+        nota.textContent = textos.nota;
         var form = select.closest('form');
         var hiddenName = sufijoDni ? 'fecha_fin_vacaciones_' + sufijoDni : 'fecha_fin_vacaciones';
         pendiente = { select: select, form: form, hiddenName: hiddenName };

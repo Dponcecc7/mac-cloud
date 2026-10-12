@@ -1032,17 +1032,22 @@ def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, 
         ws.cell(row=fila_libre, column=8, value=str(hora_sal))
 
 
-def _escribir_rango_vacaciones(ws, fila_libre, dni, fecha_inicio, fecha_fin):
-    """Una fila "Falta - Vacaciones" por día CALENDARIO del rango -- el motor
+def _escribir_rango_vacaciones(ws, fila_libre, dni, fecha_inicio, fecha_fin, motivo="Vacaciones"):
+    """Una fila "Falta - {motivo}" por día CALENDARIO del rango -- el motor
     (motor_clasificacion.py) ya descarta solo lo que no corresponda (feriados,
     días sin fila de Patrón Recurrente ese weekday), así que no hace falta
     filtrar acá cuáles días "sí trabaja". Devuelve la lista de fechas
-    escritas, para armar los CorreccionWeb en el mismo orden."""
+    escritas, para armar los CorreccionWeb en el mismo orden.
+
+    `motivo` (Davor, 2026-10-12) -- generalizado para "Licencia" además de
+    "Vacaciones" (ver MOTIVOS_CON_RANGO), mismo nombre de función por no
+    duplicar código, default "Vacaciones" para no tocar a los llamadores
+    existentes (la página dedicada de Vacaciones)."""
     fila = fila_libre
     fechas = []
     d = fecha_inicio
     while d <= fecha_fin:
-        _agregar_fila_tabla3(ws, fila, dni, d, "Falta - Vacaciones")
+        _agregar_fila_tabla3(ws, fila, dni, d, f"Falta - {motivo}")
         fechas.append(d)
         fila += 1
         d += dt.timedelta(days=1)
@@ -1103,10 +1108,11 @@ def guardar():
             comentario_entrada = f"Falta - {motivo_falta}"
             if detalle_falta:
                 comentario_entrada += f" ({detalle_falta})"
-            # Mismo rango de vacaciones que marcar() -- acá el campo viene
-            # sufijado por DNI porque esta vista edita varias personas a la
-            # vez en un solo POST (ver fecha_fin_vacaciones en marcar()).
-            if motivo_falta == "Vacaciones":
+            # Mismo rango de vacaciones/licencia que marcar() -- acá el
+            # campo viene sufijado por DNI porque esta vista edita varias
+            # personas a la vez en un solo POST (ver fecha_fin_vacaciones
+            # en marcar()).
+            if motivo_falta in MOTIVOS_CON_RANGO:
                 fecha_fin_raw = request.form.get(f"fecha_fin_vacaciones_{dni}", "").strip()
                 if fecha_fin_raw:
                     try:
@@ -1163,6 +1169,7 @@ def guardar():
                 "dni": dni, "comentario_entrada": comentario_entrada, "comentario_salida": comentario_salida,
                 "entrada_corr": entrada_corr, "salida_corr": salida_corr, "salida_corr_hoy": salida_corr_hoy,
                 "fecha_fin_vacaciones": fecha_fin_vacaciones, "estado_reportado": estado_reportado,
+                "motivo_rango": motivo_falta if fecha_fin_vacaciones else None,
             })
 
     # "volver" explícito (Davor, 2026-09-05, "Histórico diario": "con la
@@ -1204,17 +1211,22 @@ def guardar():
         vacaciones_nuevas = []
         for e in ediciones:
             if e.get("fecha_fin_vacaciones"):
-                fechas_rango = _escribir_rango_vacaciones(ws, fila_libre, e["dni"], fecha, e["fecha_fin_vacaciones"])
+                motivo_rango = e.get("motivo_rango") or "Vacaciones"
+                fechas_rango = _escribir_rango_vacaciones(ws, fila_libre, e["dni"], fecha, e["fecha_fin_vacaciones"], motivo=motivo_rango)
                 fila_libre += len(fechas_rango)
                 for f in fechas_rango:
                     correcciones_web.append(CorreccionWeb(
-                        dni=e["dni"], fecha=f, comentario_entrada="Falta - Vacaciones",
+                        dni=e["dni"], fecha=f, comentario_entrada=f"Falta - {motivo_rango}",
                         registrado_por=current_user.email,
                     ))
-                vacaciones_nuevas.append(VacacionRegistrada(
-                    dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
-                    registrado_por=current_user.email,
-                ))
+                # VacacionRegistrada es solo para el seguimiento/edición de
+                # la página dedicada de Vacaciones -- Licencia no tiene esa
+                # pantalla (Davor, 2026-10-12).
+                if motivo_rango == "Vacaciones":
+                    vacaciones_nuevas.append(VacacionRegistrada(
+                        dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
+                        registrado_por=current_user.email,
+                    ))
             elif e.get("estado_reportado"):
                 _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, estado_reportado=e["estado_reportado"])
                 fila_libre += 1
@@ -1298,6 +1310,14 @@ ACCIONES_MARCAR = ("Asistió", "Descanso", "Vacante", "Falta")
 # "se le considera el día", no se descuenta.
 ACCIONES_CON_MOTIVO = ("Falta", "Descanso")
 
+# Motivos de Falta que piden un RANGO de fechas en vez de un solo día
+# (Davor, 2026-10-12: "cuando colocó licencia que tambien salga fecha
+# inicio y fecha fin asi como sale de vacaciones") -- mismo mecanismo que
+# ya existía solo para "Vacaciones" desde 2026-09-14 (dlg-vacaciones en
+# asistencia_marcar.html + _escribir_rango_vacaciones() de abajo), ahora
+# generalizado para incluir "Licencia" también.
+MOTIVOS_CON_RANGO = ("Vacaciones", "Licencia")
+
 
 @bp.post("/marcar")
 @requiere_pagina("asistencia")
@@ -1344,13 +1364,14 @@ def marcar():
     if accion in ACCIONES_CON_MOTIVO and not motivo:
         return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="falta_sin_motivo", **filtros_volver))
 
-    # Rango de vacaciones (Davor, 2026-09-14): si el motivo elegido es
-    # "Vacaciones", asistencia_marcar.html despliega un diálogo pidiendo
-    # "hasta qué fecha" antes de dejar enviar el form -- este campo solo
-    # llega lleno en ese caso puntual, cualquier otro motivo de Falta sigue
-    # el camino de un solo día de siempre (fecha_fin_vacaciones vacío).
+    # Rango de vacaciones/licencia (Davor, 2026-09-14, ampliado 2026-10-12
+    # para Licencia): si el motivo elegido es uno de MOTIVOS_CON_RANGO,
+    # asistencia_marcar.html despliega un diálogo pidiendo "hasta qué
+    # fecha" antes de dejar enviar el form -- este campo solo llega lleno
+    # en ese caso puntual, cualquier otro motivo de Falta sigue el camino
+    # de un solo día de siempre (fecha_fin_vacaciones vacío).
     fecha_fin_vacaciones = None
-    if accion == "Falta" and motivo == "Vacaciones":
+    if accion == "Falta" and motivo in MOTIVOS_CON_RANGO:
         fecha_fin_raw = request.form.get("fecha_fin_vacaciones", "").strip()
         if fecha_fin_raw:
             try:
@@ -1384,7 +1405,7 @@ def marcar():
             ws = wb["Registro diario supervisor"]
             fila_libre = ws.max_row + 1
             if fecha_fin_vacaciones:
-                fechas_rango_escritas = _escribir_rango_vacaciones(ws, fila_libre, dni, fecha, fecha_fin_vacaciones)
+                fechas_rango_escritas = _escribir_rango_vacaciones(ws, fila_libre, dni, fecha, fecha_fin_vacaciones, motivo=motivo)
             elif accion in ACCIONES_CON_MOTIVO:
                 _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_con_motivo)
             else:
@@ -1410,13 +1431,18 @@ def marcar():
             if fechas_rango_escritas:
                 for f in fechas_rango_escritas:
                     session.add(CorreccionWeb(
-                        dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones",
+                        dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
                         registrado_por=current_user.email,
                     ))
-                session.add(VacacionRegistrada(
-                    dni=dni, fecha_inicio=fecha, fecha_fin=fecha_fin_vacaciones,
-                    registrado_por=current_user.email,
-                ))
+                # VacacionRegistrada es solo para el seguimiento/edición de
+                # la página dedicada de Vacaciones -- Licencia no tiene esa
+                # pantalla, así que no corresponde una fila ahí (Davor,
+                # 2026-10-12).
+                if motivo == "Vacaciones":
+                    session.add(VacacionRegistrada(
+                        dni=dni, fecha_inicio=fecha, fecha_fin=fecha_fin_vacaciones,
+                        registrado_por=current_user.email,
+                    ))
             else:
                 session.add(CorreccionWeb(
                     dni=dni, fecha=fecha,
