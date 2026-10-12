@@ -813,11 +813,12 @@ def _dar_de_baja_historico(usuario_actual, limite=100):
 
 
 def _vacaciones_vigentes(usuario_actual, limite=200):
-    """Rangos de vacaciones registrados que todavía no terminaron (fecha_fin
-    >= hoy) -- para la pestaña "Vacaciones" de Asistencia diaria (Davor,
-    2026-09-14: "una pestaña... para editar y saber"). Los que ya terminaron
-    no se muestran acá (nada que editar), pero el registro sigue en
-    Postgres para auditoría."""
+    """Rangos de vacaciones/licencia registrados que todavía no terminaron
+    (fecha_fin >= hoy) -- para la pestaña "Vacaciones / Licencias" de
+    Asistencia diaria (Davor, 2026-09-14: "una pestaña... para editar y
+    saber"; ampliado 2026-10-12 para incluir Licencia). Los que ya
+    terminaron no se muestran acá (nada que editar), pero el registro
+    sigue en Postgres para auditoría."""
     hoy = dt.date.today()
     session = get_session()
     try:
@@ -834,7 +835,7 @@ def _vacaciones_vigentes(usuario_actual, limite=200):
         session.close()
     return [
         {
-            "id": v.id, "dni": v.dni, "nombre": nombre,
+            "id": v.id, "dni": v.dni, "nombre": nombre, "motivo": v.motivo,
             "fecha_inicio": v.fecha_inicio, "fecha_fin": v.fecha_fin,
             "registrado_por": v.registrado_por, "fecha_registro": v.fecha_registro,
         }
@@ -2057,6 +2058,13 @@ def _diff_rango_vacaciones(vieja_inicio, vieja_fin, nueva_inicio, nueva_fin):
 @_analista_requerido
 def vacaciones_registrar():
     dni = request.form.get("dni", "").strip()
+    # "armala tambien" (Davor, 2026-10-12) -- esta pantalla ahora registra
+    # Vacaciones O Licencia, no solo Vacaciones; motivo inválido/vacío cae
+    # a "Vacaciones" (comportamiento de siempre, el <select> del template
+    # ya no debería mandar nada fuera de MOTIVOS_CON_RANGO).
+    motivo = request.form.get("motivo", "").strip()
+    if motivo not in MOTIVOS_CON_RANGO:
+        motivo = "Vacaciones"
     fecha_inicio, fecha_fin, error = _validar_rango_vacaciones(
         request.form.get("fecha_inicio", "").strip(), request.form.get("fecha_fin", "").strip(),
     )
@@ -2079,7 +2087,7 @@ def vacaciones_registrar():
         try:
             wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
             ws = wb["Registro diario supervisor"]
-            fechas = _escribir_rango_vacaciones(ws, ws.max_row + 1, dni, fecha_inicio, fecha_fin)
+            fechas = _escribir_rango_vacaciones(ws, ws.max_row + 1, dni, fecha_inicio, fecha_fin, motivo=motivo)
             subir_in_place(TABLA3_RUTA_GRAPH, wb)
         except requests.exceptions.RequestException as e:
             return render_template(
@@ -2093,10 +2101,13 @@ def vacaciones_registrar():
         try:
             for f in fechas:
                 session.add(CorreccionWeb(
-                    dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones",
+                    dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
                     registrado_por=current_user.email,
                 ))
-            session.add(VacacionRegistrada(dni=dni, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, registrado_por=current_user.email))
+            session.add(VacacionRegistrada(
+                dni=dni, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, motivo=motivo,
+                registrado_por=current_user.email,
+            ))
             session.commit()
         finally:
             session.close()
@@ -2105,8 +2116,8 @@ def vacaciones_registrar():
 
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-        titulo="Vacaciones registradas", ok=True,
-        detalle=f"Se registraron {len(fechas)} días de vacaciones para el DNI {dni} ({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')}).",
+        titulo=f"{motivo} registrada" if motivo == "Licencia" else "Vacaciones registradas", ok=True,
+        detalle=f"Se registraron {len(fechas)} días de {motivo.lower()} para el DNI {dni} ({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')}).",
         volver=url_for("asistencia.vacaciones_form"),
     )
 
@@ -2146,7 +2157,7 @@ def vacaciones_editar(vacacion_id):
                 titulo="Falló", ok=False, detalle="No se encontró ese registro de vacaciones (o no tenés acceso).",
                 volver=url_for("asistencia.vacaciones_form"),
             )
-        dni, vieja_inicio, vieja_fin = registro.dni, registro.fecha_inicio, registro.fecha_fin
+        dni, vieja_inicio, vieja_fin, motivo = registro.dni, registro.fecha_inicio, registro.fecha_fin, registro.motivo
     finally:
         session_lookup.close()
 
@@ -2169,7 +2180,7 @@ def vacaciones_editar(vacacion_id):
             ws = wb["Registro diario supervisor"]
             fila_libre = ws.max_row + 1
             for f in fechas_agregadas:
-                _agregar_fila_tabla3(ws, fila_libre, dni, f, "Falta - Vacaciones")
+                _agregar_fila_tabla3(ws, fila_libre, dni, f, f"Falta - {motivo}")
                 fila_libre += 1
             _borrar_fechas_tabla3(ws, fila_libre, dni, fechas_quitadas)
             fila_libre += len(fechas_quitadas)
@@ -2185,7 +2196,7 @@ def vacaciones_editar(vacacion_id):
         session = get_session()
         try:
             for f in fechas_agregadas:
-                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada="Falta - Vacaciones", registrado_por=current_user.email))
+                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}", registrado_por=current_user.email))
             for f in fechas_quitadas:
                 session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
             registro = session.get(VacacionRegistrada, vacacion_id)
@@ -2200,9 +2211,9 @@ def vacaciones_editar(vacacion_id):
 
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-        titulo="Vacaciones actualizadas", ok=True,
+        titulo=f"{motivo} actualizada" if motivo == "Licencia" else "Vacaciones actualizadas", ok=True,
         detalle=(
-            f"Rango actualizado para el DNI {dni}: {nueva_inicio.strftime('%d/%m/%Y')} al {nueva_fin.strftime('%d/%m/%Y')}. "
+            f"Rango de {motivo.lower()} actualizado para el DNI {dni}: {nueva_inicio.strftime('%d/%m/%Y')} al {nueva_fin.strftime('%d/%m/%Y')}. "
             f"({len(fechas_agregadas)} día(s) agregado(s), {len(fechas_quitadas)} día(s) quitado(s).)"
         ),
         volver=url_for("asistencia.vacaciones_form"),

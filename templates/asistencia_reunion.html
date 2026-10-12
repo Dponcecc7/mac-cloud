@@ -127,7 +127,7 @@
       <a href="{{ url_for('asistencia.reemplazo_form') }}">Agregar reemplazo</a>
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}">Vacaciones / Licencias</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}" class="active">Reunión de trabajo</a>{% endif %}
     </nav>
 

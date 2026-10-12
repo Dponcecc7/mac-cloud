@@ -48,6 +48,8 @@
     .vac-row .quien { flex:1; min-width:180px; }
     .vac-row .fechas { font-size:12.5px; color:var(--muted); }
     .editar-txt { font-size:12px; font-weight:700; color:var(--brand); }
+    .badge-motivo { display:inline-block; padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; background:#dcfce7; color:#16a34a; flex-shrink:0; }
+    .badge-motivo.licencia { background:#dbeafe; color:var(--brand); }
     .vac-editar { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:0 16px 16px; }
     .vac-editar label { display:flex; flex-direction:column; gap:4px; font-size:11.5px; font-weight:700; color:var(--muted); }
     .vac-editar input[type="date"] { font:inherit; font-size:13px; padding:7px 9px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
@@ -117,20 +119,20 @@
       <a href="{{ url_for('asistencia.reemplazo_form') }}">Agregar reemplazo</a>
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.headcount_nuevo_form') }}">Agregar headcount</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.dar_de_baja_form') }}">Dar de baja</a>{% endif %}
-      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="active">Vacaciones</a>{% endif %}
+      {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.vacaciones_form') }}" class="active">Vacaciones / Licencias</a>{% endif %}
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
-    <div class="note">Registrá el rango completo de un viaje de vacaciones de una sola vez -- se escribe "Falta - Vacaciones" para cada día del rango, igual que si lo marcaras uno por uno en "Marcar asistencia". Si la fecha de vuelta cambia, editá el rango de abajo en vez de cargar uno nuevo.</div>
+    <div class="note">Registrá el rango completo de vacaciones o licencia de una sola vez -- se escribe "Falta - Vacaciones"/"Falta - Licencia" para cada día del rango, igual que si lo marcaras uno por uno en "Marcar asistencia". Si la fecha de vuelta cambia, editá el rango de abajo en vez de cargar uno nuevo.</div>
 
     <form method="post" action="{{ url_for('asistencia.vacaciones_registrar') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="panel">
         <p class="panel-title">Registrar nuevo rango</p>
         {% if not activos %}
-          <p class="note" style="margin:0;">No hay nadie activo en tu alcance para registrar vacaciones.</p>
+          <p class="note" style="margin:0;">No hay nadie activo en tu alcance para registrar vacaciones o licencia.</p>
         {% else %}
-        <div class="form-row" style="grid-template-columns:2fr 1fr 1fr;">
+        <div class="form-row" style="grid-template-columns:2fr 1fr 1fr 1fr;">
           <label class="field">Persona
             <div class="buscador">
               <span class="lupa">🔍</span>
@@ -138,6 +140,12 @@
               <input type="hidden" name="dni" id="dni-elegido">
               <ul class="sugerencias" id="sugerencias"></ul>
             </div>
+          </label>
+          <label class="field">Motivo
+            <select class="ipt" name="motivo">
+              <option value="Vacaciones">Vacaciones</option>
+              <option value="Licencia">Licencia</option>
+            </select>
           </label>
           <label class="field">Desde<input class="ipt" type="date" name="fecha_inicio" value="{{ hoy }}" required></label>
           <label class="field">Hasta<input class="ipt" type="date" name="fecha_fin" required></label>
@@ -149,12 +157,13 @@
 
     <p class="panel-title" style="margin:18px 0 10px;">Rangos vigentes o próximos ({{ vigentes|length }})</p>
     {% if not vigentes %}
-    <p class="empty">No hay vacaciones registradas todavía.</p>
+    <p class="empty">No hay vacaciones ni licencias registradas todavía.</p>
     {% else %}
     {% for v in vigentes %}
     <details class="vac-item">
       <summary>
         <div class="vac-row">
+          <span class="badge-motivo {{ 'licencia' if v.motivo == 'Licencia' else '' }}">{{ v.motivo }}</span>
           <div class="quien"><b>{{ (v.nombre or v.dni)|title }}</b> <span style="color:var(--muted); font-size:12px;">· DNI {{ v.dni }}</span></div>
           <span class="fechas">{{ v.fecha_inicio.strftime("%d/%m/%Y") }} al {{ v.fecha_fin.strftime("%d/%m/%Y") }}</span>
           <span class="editar-txt">Editar</span>
