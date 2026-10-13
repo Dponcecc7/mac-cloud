@@ -899,12 +899,12 @@ def planning_exportar():
     wb = openpyxl.Workbook()
     ws0 = wb.active
     ws0.title = "Mercaderista x Ciudad"
-    ws0.append(["Mercaderista", "DNI", "Otros DNI vistos (Excel inconsistente)", "Ciudad", "PDVs asignados", "PDVs pendientes", "% Cumplimiento"])
+    ws0.append(["Mercaderista", "DNI", "Otros DNI vistos (Excel inconsistente)", "Ciudad", "Mercado", "PDVs asignados", "PDVs pendientes", "% Cumplimiento"])
     for celda in ws0[1]:
         celda.font = Font(bold=True)
     for m in por_mercaderista:
         ws0.append(fila_segura([
-            m["mercaderista"], m["dni"], ", ".join(m["dni_variantes"]) or None, m["ciudad"],
+            m["mercaderista"], m["dni"], ", ".join(m["dni_variantes"]) or None, m["ciudad"], m["mercado"],
             m["pdvs_asignados"], m["pdvs_pendientes"], m["pct_cumplimiento"],
         ]))
 

@@ -10,6 +10,7 @@ Restringido a Davor (admin) y Kevin Llanos (analista, canal_asignado=TRADICIONAL
 importar qué filtro elija quien mira (a diferencia de Cobertura, acá no hay
 selector de canal)."""
 import datetime as dt
+import re
 from collections import Counter
 
 import pandas as pd
@@ -419,6 +420,21 @@ def _ciudad_normalizada(ciudad):
     return texto if texto.strip(".-_/ ") else None
 
 
+_RE_PALABRA_MERCADO = re.compile(r"\bmercado\b", re.IGNORECASE)
+
+
+def _mercado_sin_palabra(mercado):
+    """Nombre del mercado sin la palabra "mercado" (Davor, 2026-10-13:
+    "ponles... el nombre del mercado, pero excluye la palabra mercado") --
+    ya está claro por el encabezado de la columna, repetirla en cada fila
+    es ruido ("Mercado Central" -> "Central"). None si no queda nada útil
+    (ej. el PDV se llamaba literal "Mercado")."""
+    if not mercado:
+        return None
+    limpio = re.sub(r"\s{2,}", " ", _RE_PALABRA_MERCADO.sub("", mercado)).strip(" -,")
+    return limpio or None
+
+
 def resumen_por_mercaderista(planning, pendientes):
     """Por mercaderista: cuántos PDVs tiene asignados en el Planning del
     período (sumando TODAS sus ciudades en una sola fila), cuántos de esos
@@ -493,6 +509,7 @@ def resumen_por_mercaderista(planning, pendientes):
         fila = conteo.setdefault(clave, {
             "ciudades": {}, "asignados": 0, "pendientes": 0,
             "dnis": Counter(), "nombres": Counter(),
+            "tipos": set(), "mercados": {},
         })
         ciudad_norm = _ciudad_normalizada(p.ciudad)
         # dict en vez de set: dedupea case-insensitive (misma ciudad tipeada
@@ -507,6 +524,17 @@ def resumen_por_mercaderista(planning, pendientes):
             fila["dnis"][p.dni_asignado] += 1
         if p.mercaderista_nombre:
             fila["nombres"][p.mercaderista_nombre] += 1
+        fila["tipos"].add(p.tipo)
+        # Mercado (Davor, 2026-10-13: "Para los mercaderistas que tienen
+        # todo CANAL = Mayorista, ponles en esta tabla el nombre del
+        # mercado") -- se junta igual que "ciudades" (puede trabajar más
+        # de un mercado), pero recién se muestra más abajo SOLO si el
+        # grupo es 100% Mayorista -- un mercaderista mixto (Mayorista +
+        # Minorista) tiene PDVs que no son de ningún mercado puntual, así
+        # que mostrar "mercado" ahí sería engañoso.
+        mercado_limpio = _mercado_sin_palabra(p.mercado)
+        if mercado_limpio:
+            fila["mercados"].setdefault(mercado_limpio.upper(), mercado_limpio)
 
     filas = []
     for v in conteo.values():
@@ -514,8 +542,11 @@ def resumen_por_mercaderista(planning, pendientes):
         dni_principal = dnis_ordenados[0][0] if dnis_ordenados else None
         dni_variantes = [d for d, _n in dnis_ordenados[1:]]
         nombre_principal = v["nombres"].most_common(1)[0][0] if v["nombres"] else None
+        es_solo_mayorista = v["tipos"] == {"Mayorista"}
+        mercado_str = ", ".join(sorted(v["mercados"].values())) if es_solo_mayorista and v["mercados"] else None
         filas.append({
             "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": ", ".join(sorted(v["ciudades"].values())),
+            "mercado": mercado_str,
             "dni": dni_principal, "dni_variantes": dni_variantes,
             "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
             "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
