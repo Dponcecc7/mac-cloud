@@ -296,15 +296,17 @@
             <th>CO_LI</th>
             <th class="th-ordenable" onclick="ordenarPor('pendientes', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-pendientes-ciudad"></span></th>
             <th>Región</th>
+            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercado')">Mercado <span class="flecha-orden" id="flecha-pendientes-mercado"></span></th>
             <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-pendientes-mercaderista"></span></th>
             <th>Supervisor</th>
           </tr>
           {% for p in pendientes %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-dni="{{ p.dni_asignado or '' }}">
+          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercado="{{ (p.mercado or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-dni="{{ p.dni_asignado or '' }}">
             <td>{{ p.nombre_pdv or '—' }}</td>
             <td>{{ p.co_li }}</td>
             <td>{{ (p.ciudad or '—')|title }}</td>
             <td>{{ (p.region or '—')|title }}</td>
+            <td>{{ (p.mercado or '—')|title }}</td>
             <td>
               {{ (p.mercaderista or '—')|title }}
               {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}

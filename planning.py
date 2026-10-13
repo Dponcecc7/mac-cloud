@@ -348,7 +348,8 @@ def pdvs_pendientes(planning, v):
     pendientes.sort(key=lambda p: (p.nombre_pdv or ""))
     return [{
         "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-        "region": p.region, "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
+        "region": p.region, "mercado": p.mercado,
+        "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
         "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
     } for p in pendientes]
 
