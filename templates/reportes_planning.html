@@ -36,16 +36,33 @@
     nav.tabs a:hover { color:var(--ink); border-color:var(--brand); }
     nav.tabs a.active { color:#fff; background:var(--brand); border-color:var(--brand); font-weight:700; }
 
-    .top-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
-    .top-actions input[type=month] { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
     .btn.primary { background:var(--brand); color:#fff; }
     .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
-    .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
-    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    /* Filtros (Davor, 2026-10-15: "Toda esta parte esta muy cargado,
+       ordenado mejor visualmente") -- antes eran 3 bloques sueltos sin
+       marco (mes+exportar, región/ciudad/supervisor, buscadores), cada
+       uno con su propio <select>/<input> a secas sin etiqueta -- ahora un
+       solo panel con todo adentro, cada campo con su etiqueta arriba
+       (mismo patrón visual que ya usa "Cargar Planning del mes"). */
+    .filtros-panel { margin-bottom:14px; }
+    .filtros-fila { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+    .campo-filtro { display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+    .campo-filtro input, .campo-filtro select {
+      font:inherit; font-size:13px; font-weight:400; text-transform:none; letter-spacing:normal; color:var(--ink);
+      padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); min-width:150px;
+    }
+    .filtros-busqueda { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
 
-    .filtros-busqueda { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    /* "Cargar Planning" colapsado por default -- acción ocasional (una
+       vez al mes), no hace falta que ocupe espacio permanente en una
+       pantalla que se mira todos los días. */
+    .panel-colapsable summary { cursor:pointer; list-style:none; }
+    .panel-colapsable summary::-webkit-details-marker { display:none; }
+    .panel-colapsable summary::before { content:"▸ "; color:var(--muted); }
+    .panel-colapsable[open] summary::before { content:"▾ "; }
+    .panel-colapsable .carga-form { margin-top:12px; }
     .buscador { position:relative; flex:1; min-width:220px; max-width:320px; }
     .buscador .lupa { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:13px; pointer-events:none; }
     .buscador input[type=text] {
@@ -113,12 +130,9 @@
       .nav-pages a { padding:5px 9px; }
       nav.tabs { gap:6px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; font-size:12.5px; }
-      .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
-      .top-actions input[type=month] { width:100%; min-height:44px; font-size:15px; }
-      .top-actions .btn.ghost { text-align:center; min-height:44px; line-height:26px; }
-      .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
-      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
-      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .filtros-fila { flex-direction:column; align-items:stretch; gap:10px; }
+      .campo-filtro input, .campo-filtro select { width:100%; min-height:44px; font-size:15px; min-width:0; }
+      .filtros-fila .btn { width:100%; min-height:44px; text-align:center; }
       .filtros-busqueda { flex-direction:column; }
       .buscador { max-width:none; }
       .buscador input[type=text] { min-height:44px; font-size:15px; }
@@ -179,50 +193,54 @@
       {% endfor %}
     {% endwith %}
 
-    <div class="top-actions">
-      <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <input type="month" name="mes" value="{{ periodo_str }}">
-        <button class="btn primary" type="submit">Ver</button>
+    <div class="panel filtros-panel">
+      <form method="get" class="filtros-fila">
+        <label class="campo-filtro">Mes
+          <input type="month" name="mes" value="{{ periodo_str }}">
+        </label>
+        {% if regiones_disponibles %}
+        <label class="campo-filtro">Región
+          <select name="region">
+            <option value="">Todas</option>
+            {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if region_filtro == r else '' }}>{{ r|title }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        {% if ciudades_disponibles %}
+        <label class="campo-filtro">Ciudad
+          <select name="ciudad">
+            <option value="">Todas</option>
+            {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if ciudad_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        {% if supervisores_disponibles %}
+        <label class="campo-filtro">Supervisor
+          <select name="supervisor">
+            <option value="">Todos</option>
+            {% for s in supervisores_disponibles %}<option value="{{ s }}" {{ 'selected' if supervisor_filtro == s else '' }}>{{ s|title }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <button class="btn primary" type="submit">Aplicar</button>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
       </form>
-      <a class="btn ghost" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
-    </div>
-
-    {% if regiones_disponibles or ciudades_disponibles or supervisores_disponibles %}
-    <div class="filtros-admin">
-      <form method="get" style="display:contents;">
-        <input type="hidden" name="mes" value="{{ periodo_str }}">
-        <select name="region">
-          <option value="">Región: todas</option>
-          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if region_filtro == r else '' }}>{{ r|title }}</option>{% endfor %}
-        </select>
-        <select name="ciudad">
-          <option value="">Ciudad: todas</option>
-          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if ciudad_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
-        </select>
-        <select name="supervisor">
-          <option value="">Supervisor: todos</option>
-          {% for s in supervisores_disponibles %}<option value="{{ s }}" {{ 'selected' if supervisor_filtro == s else '' }}>{{ s|title }}</option>{% endfor %}
-        </select>
-        <button class="btn primary" type="submit">Aplicar filtros</button>
-      </form>
-    </div>
-    {% endif %}
-
-    <div class="filtros-busqueda">
-      <div class="buscador">
-        <span class="lupa">🔍</span>
-        <input type="text" id="buscar-mercaderista" placeholder="Buscar mercaderista (nombre o DNI)..." autocomplete="off">
-        <ul class="sugerencias" id="sugerencias-mercaderista"></ul>
-      </div>
-      <div class="buscador">
-        <span class="lupa">🔍</span>
-        <input type="text" id="buscar-pdv" placeholder="Buscar PDV..." autocomplete="off">
-        <ul class="sugerencias" id="sugerencias-pdv"></ul>
+      <div class="filtros-busqueda">
+        <div class="buscador">
+          <span class="lupa">🔍</span>
+          <input type="text" id="buscar-mercaderista" placeholder="Buscar mercaderista (nombre o DNI)..." autocomplete="off">
+          <ul class="sugerencias" id="sugerencias-mercaderista"></ul>
+        </div>
+        <div class="buscador">
+          <span class="lupa">🔍</span>
+          <input type="text" id="buscar-pdv" placeholder="Buscar PDV..." autocomplete="off">
+          <ul class="sugerencias" id="sugerencias-pdv"></ul>
+        </div>
       </div>
     </div>
 
-    <div class="panel">
-      <p class="panel-title">Cargar Planning del mes ({{ periodo_str }})</p>
+    <details class="panel panel-colapsable">
+      <summary class="panel-title">Cargar Planning del mes ({{ periodo_str }})</summary>
       <form class="carga-form" method="post" action="{{ url_for('reportes.planning_cargar') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Mes del planning
@@ -238,7 +256,7 @@
         {% endif %}
       </form>
       <p class="note">Mismo formato que ya se usaba: hoja "Mayorista" con encabezados en la fila 1, hoja "Minorista" con encabezados en la fila 4. Volver a subir el mismo mes reemplaza lo cargado antes para ese mes. Si no estás seguro del formato, descargá la plantilla y compará las columnas contra tu archivo. "Descargar lo ya cargado" te devuelve el Planning actual de este mes en el mismo formato -- útil si perdiste el Excel original y necesitás corregir varias filas a la vez (los días puntuales marcados como "programados" son una reconstrucción a partir del total, no necesariamente los mismos días del archivo original).</p>
-    </div>
+    </details>
 
     <div class="panel">
       <p class="panel-title">Resumen del período</p>
@@ -249,12 +267,11 @@
         <div class="kpi"><div class="valor">{{ (resumen.pct_cumplimiento ~ '%') if resumen.pct_cumplimiento is not none else '—' }}</div><div class="label">% Cumplimiento</div></div>
       </div>
       {% if usuario.rol in ("analista", "admin") %}
-      <form method="post" action="{{ url_for('reportes.planning_aplicar_reemplazos', mes=periodo_str) }}" style="margin-top:14px;" onsubmit="return confirm('¿Actualizar en la base a quien reemplazó a cada mercaderista dado de baja, para {{ periodo_str }}? Ya se muestra así en pantalla -- esto lo deja escrito de una vez en el Planning guardado.');">
+      <form method="post" action="{{ url_for('reportes.planning_aplicar_reemplazos', mes=periodo_str) }}" style="margin-top:14px;" onsubmit="return confirm('¿Actualizar en la base a quien reemplazó a cada mercaderista dado de baja, para {{ periodo_str }}? Ya se muestra así en pantalla -- esto lo deja escrito de una vez en el Planning guardado.');" title="Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">
         <button class="btn ghost" type="submit">↻ Aplicar reemplazos vigentes a este mes</button>
       </form>
-      <p class="note">Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes, por si algo más adelante lo consulta directo sin pasar por esta pantalla. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.</p>
       {% endif %}
     </div>
 
