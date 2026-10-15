@@ -444,8 +444,8 @@
       {% endif %}
     </div>
 
-    <div class="panel">
-      <p class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</p>
+    <details class="panel panel-colapsable">
+      <summary class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</summary>
       {% if not pendientes %}
         <p class="empty">Sin planning cargado para este período, o todos los PDVs ya tienen al menos una visita.</p>
       {% else %}
@@ -480,10 +480,10 @@
         </table>
       </div>
       {% endif %}
-    </div>
+    </details>
 
-    <div class="panel">
-      <p class="panel-title">PDVs Detalle — planificados vs visitados ({{ detalle|length }})</p>
+    <details class="panel panel-colapsable">
+      <summary class="panel-title">PDVs Detalle — planificados vs visitados ({{ detalle|length }})</summary>
       {% if not detalle %}
         <p class="empty">Sin planning cargado para este período.</p>
       {% else %}
@@ -521,10 +521,10 @@
       </div>
       <p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). Ordenado por % de cumplimiento, los más bajos primero.</p>
       {% endif %}
-    </div>
+    </details>
 
-    <div class="panel">
-      <p class="panel-title">Visitas fuera del Planning ({{ fuera_planning|length }})</p>
+    <details class="panel panel-colapsable">
+      <summary class="panel-title">Visitas fuera del Planning ({{ fuera_planning|length }})</summary>
       {% if not fuera_planning %}
         <p class="empty">No hay visitas Tradicional a PDVs fuera del Planning en este período.</p>
       {% else %}
@@ -552,7 +552,7 @@
       </div>
       <p class="note">Simplificación conocida: se calcula solo contra el Planning cargado en la MAC, sin auditar contra Athena si el punto de venta es realmente parte de una campaña Tradicional vigente.</p>
       {% endif %}
-    </div>
+    </details>
   </div>
 
 <dialog id="dlg-editar-pdv" style="border:none; border-radius:14px; padding:0; max-width:380px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
