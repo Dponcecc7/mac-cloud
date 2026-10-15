@@ -1,0 +1,27 @@
+{% if not fuera_planning %}
+  <p class="empty">No hay visitas Tradicional a PDVs fuera del Planning en este período.</p>
+{% else %}
+<div class="table-wrap">
+  <table id="tabla-fuera">
+    <tr>
+      <th class="th-ordenable" onclick="ordenarPor('fuera', 'punto')">Punto de venta <span class="flecha-orden" id="flecha-fuera-punto"></span></th>
+      <th>Punto venta ID</th>
+      <th class="th-ordenable" onclick="ordenarPor('fuera', 'nombre')">Mercaderista <span class="flecha-orden" id="flecha-fuera-nombre"></span></th>
+      <th class="th-ordenable" onclick="ordenarPor('fuera', 'veces')" data-numerico>Veces visitado <span class="flecha-orden" id="flecha-fuera-veces"></span></th>
+      <th>Primera visita</th>
+      <th>Última visita</th>
+    </tr>
+    {% for f in fuera_planning %}
+    <tr data-orden-punto="{{ (f.punto_venta or '')|upper }}" data-orden-nombre="{{ (f.nombre or '')|upper }}" data-orden-veces="{{ f.veces_visitado }}">
+      <td>{{ f.punto_venta or '—' }}</td>
+      <td>{{ f.punto_venta_id }}</td>
+      <td>{{ (f.nombre or '—')|title }}</td>
+      <td>{{ f.veces_visitado }}</td>
+      <td>{{ f.primera_visita.strftime('%d/%m/%Y') }}</td>
+      <td>{{ f.ultima_visita.strftime('%d/%m/%Y') }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="note">Simplificación conocida: se calcula solo contra el Planning cargado en la MAC, sin auditar contra Athena si el punto de venta es realmente parte de una campaña Tradicional vigente.</p>
+{% endif %}

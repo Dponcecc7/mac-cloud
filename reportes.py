@@ -12,7 +12,7 @@ import traceback
 
 import openpyxl
 import pandas as pd
-from flask import Blueprint, flash, redirect, request, render_template, send_file, url_for
+from flask import Blueprint, abort, flash, redirect, request, render_template, send_file, url_for
 from flask_login import current_user, login_required
 from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm import aliased
@@ -460,6 +460,23 @@ def _rango_dia_planning_desde_query():
     return desde, hasta
 
 
+def _filtros_planning_desde_query():
+    """(region_f, ciudad_f, supervisor_f, mercado_f) -- listas de selección
+    múltiple leídas de ?region=/?ciudad=/?supervisor=/?mercado=, vacías
+    para supervisor (ve solo lo suyo, sin filtro manual). Repetido antes
+    en planning()/planning_exportar()/planning_ruta_dia_exportar() y ahora
+    también en cada ruta de fragmento (Davor, 2026-10-16: "Esta un poco
+    lenta la MAC en esa pestaña" -- las tablas colapsadas pasan a cargar
+    su contenido recién al abrirlas, cada una con su propia ruta que
+    necesita los mismos filtros que la página principal)."""
+    if current_user.rol == "supervisor":
+        return [], [], [], []
+    return (
+        request.args.getlist("region"), request.args.getlist("ciudad"),
+        request.args.getlist("supervisor"), request.args.getlist("mercado"),
+    )
+
+
 def _señal_como_alerta(i):
     """Convierte un insight de insights_equipo() al mismo shape de dict que
     usa alertas_periodo(), para poder mostrarlos en una sola lista (Davor,
@@ -689,13 +706,7 @@ def cobertura_exportar():
 def planning():
     desde, hasta, periodo_str = _mes_desde_query()
     periodo = desde
-    if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = mercado_f = []
-    else:
-        region_f = request.args.getlist("region")
-        ciudad_f = request.args.getlist("ciudad")
-        supervisor_f = request.args.getlist("supervisor")
-        mercado_f = request.args.getlist("mercado")
+    region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
     regiones_disp, ciudades_disp, supervisores_disp, mercados_disp = valores_filtrables(periodo)
 
     # Una sola carga de planning/visitas para las 4 vistas de abajo -- antes
@@ -744,6 +755,58 @@ def planning():
         por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
         dia_desde_str=dia_desde.isoformat(), dia_hasta_str=dia_hasta.isoformat(), cumplimiento_dia=cumplimiento_dia,
     )
+
+
+def _planning_periodo_filtrado_desde_query():
+    """(planning_periodo, v, periodo_str) ya filtrados según ?mes=/?region=/
+    etc. -- repetido por las 4 rutas de fragmento de abajo."""
+    desde, hasta, periodo_str = _mes_desde_query()
+    region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
+    planning_periodo = planning_del_periodo(desde, region_f, ciudad_f, supervisor_f, mercado_f)
+    v = visitas_tradicional(desde, hasta, current_user)
+    return planning_periodo, v, periodo_str
+
+
+@bp.get("/planning/fragmento/personal")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_personal():
+    """Contenido de "Personal del Planning" cargado recién al abrir ese
+    <details> (Davor, 2026-10-16: "Esta un poco lenta la MAC en esa
+    pestaña") -- antes esta tabla (y las otras 3 de abajo) venían armadas
+    en el HTML de /reportes/planning aunque el panel estuviera colapsado
+    y nadie las mirara, lo que hacía esa página pesar hasta 11 MB y tardar
+    ~16s sin ningún filtro aplicado. Ahora solo se arma (y se paga el
+    costo de armarla) cuando el usuario realmente abre el panel."""
+    if current_user.rol not in ("analista", "admin"):
+        abort(403)
+    planning_periodo, v, periodo_str = _planning_periodo_filtrado_desde_query()
+    pendientes = pdvs_pendientes(planning_periodo, v)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
+    return render_template("_planning_fragmento_personal.html", por_mercaderista=por_mercaderista, periodo_str=periodo_str)
+
+
+@bp.get("/planning/fragmento/pendientes")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_pendientes():
+    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    pendientes = pdvs_pendientes(planning_periodo, v)
+    return render_template("_planning_fragmento_pendientes.html", pendientes=pendientes, usuario=current_user)
+
+
+@bp.get("/planning/fragmento/detalle")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_detalle():
+    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    detalle = pdvs_detalle(planning_periodo, v)
+    return render_template("_planning_fragmento_detalle.html", detalle=detalle, usuario=current_user)
+
+
+@bp.get("/planning/fragmento/fuera")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_fuera():
+    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    fuera = pdvs_fuera_planning(planning_periodo, v)
+    return render_template("_planning_fragmento_fuera.html", fuera_planning=fuera)
 
 
 def _plantilla_planning():
@@ -962,13 +1025,7 @@ def planning_plantilla():
 def planning_exportar():
     desde, hasta, periodo_str = _mes_desde_query()
     periodo = desde
-    if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = mercado_f = []
-    else:
-        region_f = request.args.getlist("region")
-        ciudad_f = request.args.getlist("ciudad")
-        supervisor_f = request.args.getlist("supervisor")
-        mercado_f = request.args.getlist("mercado")
+    region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
 
     planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f, mercado_f)
     v = visitas_tradicional(desde, hasta, current_user)
@@ -1033,13 +1090,7 @@ def planning_ruta_dia_exportar():
     Fecha, por si deseo descargarme visitas de varios dias"), mismo panel
     "Cumplimiento de ruta del día"."""
     dia_desde, dia_hasta = _rango_dia_planning_desde_query()
-    if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = mercado_f = []
-    else:
-        region_f = request.args.getlist("region")
-        ciudad_f = request.args.getlist("ciudad")
-        supervisor_f = request.args.getlist("supervisor")
-        mercado_f = request.args.getlist("mercado")
+    region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
 
     periodos_del_rango = {dia_desde.replace(day=1), dia_hasta.replace(day=1)}
     planning_del_rango = []

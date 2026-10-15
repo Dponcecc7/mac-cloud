@@ -783,17 +783,32 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
 
     programado_por_fecha = {}
     if ids_planning:
+        # JOIN por PlanningPdv.periodo en vez de "IN (id1, id2, ..., idN)"
+        # con los miles de ids de planning_filtrado -- Davor, 2026-10-16:
+        # "Esta un poco lenta la MAC en esa pestaña". Un IN con 6000+
+        # parámetros (visto real en producción, sin filtro de región/
+        # ciudad aplicado) tiraba abajo la conexión a Postgres ("server
+        # closed the connection unexpectedly", medido directo contra la
+        # base). `periodo` es índice simple y son 1-2 valores (el mes del
+        # rango, o 2 si el rango cruza fin de mes) -- se filtra en Python
+        # contra el set de ids_planning después, que de todos modos ya hay
+        # que acotar por región/ciudad/supervisor/mercado (eso SQL no lo
+        # sabe, viene de planning_filtrado).
+        ids_set = set(ids_planning)
+        periodos = {p.periodo for p in planning_filtrado}
         session = get_session()
         try:
             filas_rango = (
                 session.query(PlanningPdvDia.fecha, PlanningPdvDia.planning_pdv_id)
-                .filter(PlanningPdvDia.fecha.between(desde, hasta), PlanningPdvDia.planning_pdv_id.in_(ids_planning))
+                .join(PlanningPdv, PlanningPdv.id == PlanningPdvDia.planning_pdv_id)
+                .filter(PlanningPdvDia.fecha.between(desde, hasta), PlanningPdv.periodo.in_(periodos))
                 .all()
             )
         finally:
             session.close()
         for fecha, pid in filas_rango:
-            programado_por_fecha.setdefault(fecha, set()).add(pid)
+            if pid in ids_set:
+                programado_por_fecha.setdefault(fecha, set()).add(pid)
 
     co_lis_en_planning_del_dni = {
         (p.dni_asignado, p.co_li) for p in planning_filtrado if p.dni_asignado

@@ -350,39 +350,11 @@
     </div>
 
     {% if usuario.rol in ("analista", "admin") %}
-    <details class="panel panel-colapsable">
+    <details class="panel panel-colapsable" id="det-personal">
       <summary class="panel-title">Personal del Planning — reemplazar mercaderista ({{ por_mercaderista|length }})</summary>
-      {% if not por_mercaderista %}
-        <p class="empty">Sin planning cargado para este período.</p>
-      {% else %}
-      <div class="table-wrap">
-        <table>
-          <tr>
-            <th>Mercaderista</th>
-            <th>DNI</th>
-            <th>Ciudad</th>
-            <th>Mercado</th>
-            <th>PDVs asignados</th>
-            <th></th>
-          </tr>
-          {% for m in por_mercaderista %}
-          <tr>
-            <td>{{ m.mercaderista|title }}</td>
-            <td>{{ m.dni or '—' }}</td>
-            <td>{{ (m.ciudad or '—')|title }}</td>
-            <td>{{ m.mercado or '—' }}</td>
-            <td>{{ m.pdvs_asignados }}</td>
-            <td>
-              {% if m.dni %}
-              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirReemplazarMercaderista('{{ (m.dni or '')|e }}', '{{ (m.mercaderista or '')|e }}')">Reemplazar</a>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </table>
+      <div class="fragmento-lazy" id="frag-personal" data-url="{{ url_for('reportes.planning_fragmento_personal', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
       </div>
-      <p class="note">Cambia el DNI de TODOS los PDVs de {{ periodo_str }} que tenía ese mercaderista, por alguien de Personal Activo -- útil cuando el Excel de Planning vino con el DNI de alguien que ya no corresponde. Si se vuelve a subir el Excel de este mes más adelante, esta corrección se pierde igual que "Editar" PDV.</p>
-      {% endif %}
     </details>
     {% endif %}
 
@@ -492,114 +464,25 @@
       {% endif %}
     </div>
 
-    <details class="panel panel-colapsable">
+    <details class="panel panel-colapsable" id="det-pendientes">
       <summary class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</summary>
-      {% if not pendientes %}
-        <p class="empty">Sin planning cargado para este período, o todos los PDVs ya tienen al menos una visita.</p>
-      {% else %}
-      <div class="table-wrap">
-        <table id="tabla-pendientes">
-          <tr>
-            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-pendientes-nombre"></span></th>
-            <th>CO_LI</th>
-            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-pendientes-ciudad"></span></th>
-            <th>Región</th>
-            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercado')">Mercado <span class="flecha-orden" id="flecha-pendientes-mercado"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-pendientes-mercaderista"></span></th>
-            <th>Supervisor</th>
-          </tr>
-          {% for p in pendientes %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercado="{{ (p.mercado or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-dni="{{ p.dni_asignado or '' }}">
-            <td>{{ p.nombre_pdv or '—' }}</td>
-            <td>{{ p.co_li }}</td>
-            <td>{{ (p.ciudad or '—')|title }}</td>
-            <td>{{ (p.region or '—')|title }}</td>
-            <td>{{ (p.mercado or '—')|title }}</td>
-            <td>
-              {{ (p.mercaderista or '—')|title }}
-              {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
-              {% if usuario.rol in ("analista", "admin") %}
-              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
-              {% endif %}
-            </td>
-            <td>{{ (p.supervisor or '—')|title }}</td>
-          </tr>
-          {% endfor %}
-        </table>
+      <div class="fragmento-lazy" id="frag-pendientes" data-url="{{ url_for('reportes.planning_fragmento_pendientes', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
       </div>
-      {% endif %}
     </details>
 
-    <details class="panel panel-colapsable">
+    <details class="panel panel-colapsable" id="det-detalle">
       <summary class="panel-title">PDVs Detalle — planificados vs visitados ({{ detalle|length }})</summary>
-      {% if not detalle %}
-        <p class="empty">Sin planning cargado para este período.</p>
-      {% else %}
-      <div class="table-wrap">
-        <table id="tabla-detalle">
-          <tr>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-detalle-nombre"></span></th>
-            <th>CO_LI</th>
-            <th>Ciudad</th>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-detalle-mercaderista"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'planificadas')" data-numerico>Golpes planificados <span class="flecha-orden" id="flecha-detalle-planificadas"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'visitas')" data-numerico>Golpes realizados <span class="flecha-orden" id="flecha-detalle-visitas"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('detalle', 'cumplimiento')" data-numerico>% Cumplimiento <span class="flecha-orden" id="flecha-detalle-cumplimiento"></span></th>
-            <th>Última visita</th>
-          </tr>
-          {% for p in detalle %}
-          <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}" data-orden-dni="{{ p.dni_asignado or '' }}">
-            <td>{{ p.nombre_pdv or '—' }}</td>
-            <td>{{ p.co_li }}</td>
-            <td>{{ (p.ciudad or '—')|title }}</td>
-            <td>
-              {{ (p.mercaderista or '—')|title }}
-              {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
-              {% if usuario.rol in ("analista", "admin") %}
-              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
-              {% endif %}
-            </td>
-            <td>{{ p.visitas_planificadas }}</td>
-            <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
-            <td {{ 'class=celda-cero' if p.pct_cumplimiento is not none and p.pct_cumplimiento < 50 else '' }}>{{ (p.pct_cumplimiento ~ '%') if p.pct_cumplimiento is not none else '—' }}</td>
-            <td>{{ p.fecha_ultima_visita.strftime('%d/%m/%Y') if p.fecha_ultima_visita else '—' }}</td>
-          </tr>
-          {% endfor %}
-        </table>
+      <div class="fragmento-lazy" id="frag-detalle" data-url="{{ url_for('reportes.planning_fragmento_detalle', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
       </div>
-      <p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). Ordenado por % de cumplimiento, los más bajos primero.</p>
-      {% endif %}
     </details>
 
-    <details class="panel panel-colapsable">
+    <details class="panel panel-colapsable" id="det-fuera">
       <summary class="panel-title">Visitas fuera del Planning ({{ fuera_planning|length }})</summary>
-      {% if not fuera_planning %}
-        <p class="empty">No hay visitas Tradicional a PDVs fuera del Planning en este período.</p>
-      {% else %}
-      <div class="table-wrap">
-        <table id="tabla-fuera">
-          <tr>
-            <th class="th-ordenable" onclick="ordenarPor('fuera', 'punto')">Punto de venta <span class="flecha-orden" id="flecha-fuera-punto"></span></th>
-            <th>Punto venta ID</th>
-            <th class="th-ordenable" onclick="ordenarPor('fuera', 'nombre')">Mercaderista <span class="flecha-orden" id="flecha-fuera-nombre"></span></th>
-            <th class="th-ordenable" onclick="ordenarPor('fuera', 'veces')" data-numerico>Veces visitado <span class="flecha-orden" id="flecha-fuera-veces"></span></th>
-            <th>Primera visita</th>
-            <th>Última visita</th>
-          </tr>
-          {% for f in fuera_planning %}
-          <tr data-orden-punto="{{ (f.punto_venta or '')|upper }}" data-orden-nombre="{{ (f.nombre or '')|upper }}" data-orden-veces="{{ f.veces_visitado }}">
-            <td>{{ f.punto_venta or '—' }}</td>
-            <td>{{ f.punto_venta_id }}</td>
-            <td>{{ (f.nombre or '—')|title }}</td>
-            <td>{{ f.veces_visitado }}</td>
-            <td>{{ f.primera_visita.strftime('%d/%m/%Y') }}</td>
-            <td>{{ f.ultima_visita.strftime('%d/%m/%Y') }}</td>
-          </tr>
-          {% endfor %}
-        </table>
+      <div class="fragmento-lazy" id="frag-fuera" data-url="{{ url_for('reportes.planning_fragmento_fuera', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
       </div>
-      <p class="note">Simplificación conocida: se calcula solo contra el Planning cargado en la MAC, sin auditar contra Athena si el punto de venta es realmente parte de una campaña Tradicional vigente.</p>
-      {% endif %}
     </details>
   </div>
 
@@ -846,7 +729,14 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
 // texto largo (Mercado, listas separadas por coma). El ancho elegido se
 // recuerda en localStorage por tabla+columna, así no se pierde al
 // recargar la página.
-(function () {
+//
+// Función reusable (no IIFE) -- las tablas de los paneles colapsados
+// (PDVs pendientes/Detalle/Fuera/Personal) ya no vienen armadas en el
+// HTML inicial (ver cargarFragmentoAlAbrir más abajo), así que esto
+// tiene que poder volver a correr DESPUÉS de inyectar cada una por AJAX.
+// Es seguro llamarlo de nuevo: salta las tablas que ya tienen la clase
+// "cols-redimensionables" (ya procesadas) y solo toca las nuevas.
+function activarRedimensionColumnas() {
   var MIN_COL_PX = 50;
 
   function claveAncho(tabla, indice) {
@@ -861,6 +751,7 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
   }
 
   document.querySelectorAll('.table-wrap table').forEach(function (tabla) {
+    if (tabla.classList.contains('cols-redimensionables')) return;
     var filaEncabezado = tabla.querySelector('tr');
     if (!filaEncabezado) return;
     var encabezados = Array.prototype.filter.call(filaEncabezado.children, function (c) { return c.tagName === 'TH'; });
@@ -913,7 +804,48 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
     actualizarAnchoTabla();
     tabla.classList.add('cols-redimensionables');
   });
-})();
+}
+activarRedimensionColumnas();
+</script>
+
+<script>
+// Carga diferida de los paneles colapsados (Davor, 2026-10-16: "Esta un
+// poco lenta la MAC en esa pestaña, podemos modificar eso?") -- antes
+// PDVs pendientes/Detalle/Fuera del Planning/Personal del Planning venían
+// armados en el HTML inicial aunque el panel estuviera cerrado (11 MB y
+// ~16s sin filtro aplicado, medido con Playwright). Ahora cada uno pide
+// su contenido recién la primera vez que se abre (mismos filtros de
+// región/ciudad/supervisor/mercado/mes que ya trae la URL del fragmento,
+// armada en el template con los mismos valores con que se renderizó esta
+// página) y lo deja cacheado en el DOM para no volver a pedirlo si se
+// cierra y se vuelve a abrir.
+function cargarFragmentoAlAbrir(detallesId, contenedorId) {
+  var detalles = document.getElementById(detallesId);
+  var contenedor = document.getElementById(contenedorId);
+  if (!detalles || !contenedor) return;
+  detalles.addEventListener('toggle', function () {
+    if (!detalles.open || contenedor.dataset.cargado) return;
+    fetch(contenedor.dataset.url)
+      .then(function (resp) {
+        if (!resp.ok) throw new Error('status ' + resp.status);
+        return resp.text();
+      })
+      .then(function (html) {
+        contenedor.innerHTML = html;
+        contenedor.dataset.cargado = '1';
+        activarRedimensionColumnas();
+        if (typeof aplicarFiltrosBusqueda === 'function') aplicarFiltrosBusqueda();
+      })
+      .catch(function () {
+        contenedor.innerHTML = '<p class="empty">No se pudo cargar -- cerrá y volvé a abrir este panel para reintentar.</p>';
+      });
+  });
+}
+
+cargarFragmentoAlAbrir('det-personal', 'frag-personal');
+cargarFragmentoAlAbrir('det-pendientes', 'frag-pendientes');
+cargarFragmentoAlAbrir('det-detalle', 'frag-detalle');
+cargarFragmentoAlAbrir('det-fuera', 'frag-fuera');
 </script>
 </body>
 </html>

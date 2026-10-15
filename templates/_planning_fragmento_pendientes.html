@@ -1,0 +1,34 @@
+{% if not pendientes %}
+  <p class="empty">Sin planning cargado para este período, o todos los PDVs ya tienen al menos una visita.</p>
+{% else %}
+<div class="table-wrap">
+  <table id="tabla-pendientes">
+    <tr>
+      <th class="th-ordenable" onclick="ordenarPor('pendientes', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-pendientes-nombre"></span></th>
+      <th>CO_LI</th>
+      <th class="th-ordenable" onclick="ordenarPor('pendientes', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-pendientes-ciudad"></span></th>
+      <th>Región</th>
+      <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercado')">Mercado <span class="flecha-orden" id="flecha-pendientes-mercado"></span></th>
+      <th class="th-ordenable" onclick="ordenarPor('pendientes', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-pendientes-mercaderista"></span></th>
+      <th>Supervisor</th>
+    </tr>
+    {% for p in pendientes %}
+    <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-ciudad="{{ (p.ciudad or '')|upper }}" data-orden-mercado="{{ (p.mercado or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-dni="{{ p.dni_asignado or '' }}">
+      <td>{{ p.nombre_pdv or '—' }}</td>
+      <td>{{ p.co_li }}</td>
+      <td>{{ (p.ciudad or '—')|title }}</td>
+      <td>{{ (p.region or '—')|title }}</td>
+      <td>{{ (p.mercado or '—')|title }}</td>
+      <td>
+        {{ (p.mercaderista or '—')|title }}
+        {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
+        {% if usuario.rol in ("analista", "admin") %}
+        <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
+        {% endif %}
+      </td>
+      <td>{{ (p.supervisor or '—')|title }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}

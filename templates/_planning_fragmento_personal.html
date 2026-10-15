@@ -1,0 +1,31 @@
+{% if not por_mercaderista %}
+  <p class="empty">Sin planning cargado para este período.</p>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr>
+      <th>Mercaderista</th>
+      <th>DNI</th>
+      <th>Ciudad</th>
+      <th>Mercado</th>
+      <th>PDVs asignados</th>
+      <th></th>
+    </tr>
+    {% for m in por_mercaderista %}
+    <tr>
+      <td>{{ m.mercaderista|title }}</td>
+      <td>{{ m.dni or '—' }}</td>
+      <td>{{ (m.ciudad or '—')|title }}</td>
+      <td>{{ m.mercado or '—' }}</td>
+      <td>{{ m.pdvs_asignados }}</td>
+      <td>
+        {% if m.dni %}
+        <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirReemplazarMercaderista('{{ (m.dni or '')|e }}', '{{ (m.mercaderista or '')|e }}')">Reemplazar</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="note">Cambia el DNI de TODOS los PDVs de {{ periodo_str }} que tenía ese mercaderista, por alguien de Personal Activo -- útil cuando el Excel de Planning vino con el DNI de alguien que ya no corresponde. Si se vuelve a subir el Excel de este mes más adelante, esta corrección se pierde igual que "Editar" PDV.</p>
+{% endif %}
