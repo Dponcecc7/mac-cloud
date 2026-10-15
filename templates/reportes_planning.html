@@ -67,7 +67,15 @@
     .ms-panel.abierto { display:block; }
     .ms-opt { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:normal; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
     .ms-opt:hover { background:var(--bg); }
-    .ms-opt input { width:auto; margin:0; }
+    .ms-opt input {
+      /* Reset explícito: .campo-filtro input (arriba) le pone min-width:150px,
+         padding, borde y fondo a CUALQUIER <input> adentro de un <label
+         class="campo-filtro"> -- el checkbox de acá hereda eso también
+         (está anidado dentro de ese mismo <label>), lo que dejaba un hueco
+         enorme entre el check y el texto (Davor, 2026-10-16: "Se ha
+         desalineado el filtro opción multiple, deja muchos espacios"). */
+      width:auto; min-width:0; margin:0; padding:0; border:none; background:none; border-radius:0;
+    }
 
     /* "Cargar Planning" colapsado por default -- acción ocasional (una
        vez al mes), no hace falta que ocupe espacio permanente en una
