@@ -649,12 +649,21 @@ def cumplimiento_ruta_dia(dia, planning_filtrado, v_dia):
     `planning_filtrado`: lista de PlanningPdv ya acotada por región/ciudad/
     supervisor (ver planning_del_periodo()) -- el período se obtiene de ahí
     mismo (todos comparten el mismo mes). `v_dia`: visitas Tradicional de
-    ESE día puntual (visitas_tradicional(dia, dia, usuario_actual)).
+    ESE día puntual (visitas_tradicional(dia, dia, usuario_actual)), SIN
+    acotar por región/ciudad/supervisor (ver docstring de
+    visitas_tradicional() -- esos filtros nunca se aplican ahí porque
+    comparar el supervisor de Planning (texto libre) contra Persona.dni
+    rompía la consulta). Para que los filtros de arriba sí afecten este
+    panel (Davor, 2026-10-15: "los filtros superiores no afectan esta
+    tabla"), acá se acota `v_dia` por los DNI que SÍ quedaron dentro de
+    `planning_filtrado` -- un mercaderista fuera del filtro no debe
+    aparecer ni como "cumplido" ni como "fuera de planning".
 
     Requiere que el mes se haya cargado DESPUÉS de este cambio (2026-10-15)
     -- un Planning viejo no tiene filas en PlanningPdvDia, así que ningún
     PDV sale "programado para hoy" (hay que volver a subir el Excel del mes
     para tener detalle día a día)."""
+    dnis_en_scope = {p.dni_asignado for p in planning_filtrado if p.dni_asignado}
     ids_planning = [p.id for p in planning_filtrado]
     ids_programados_hoy = set()
     if ids_planning:
@@ -676,6 +685,8 @@ def cumplimiento_ruta_dia(dia, planning_filtrado, v_dia):
     visitas_hoy = {}
     if len(v_dia):
         for _, r in v_dia.iterrows():
+            if r["dni"] not in dnis_en_scope:
+                continue
             visitas_hoy[(r["dni"], str(r["punto_venta_id"]))] = r
 
     filas = []

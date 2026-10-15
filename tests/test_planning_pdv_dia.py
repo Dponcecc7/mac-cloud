@@ -167,6 +167,37 @@ def test_cumplimiento_ruta_dia_clasifica_los_4_casos(db):
     assert por_co_li["999"] == "Fuera de planning"
 
 
+def test_cumplimiento_ruta_dia_excluye_visitas_de_dni_fuera_del_filtro(db):
+    # Davor, 2026-10-15: "los filtros superiores no afectan esta tabla" --
+    # si region/ciudad/supervisor ya dejaron a un mercaderista AFUERA de
+    # planning_filtrado, sus visitas de ese día no deben aparecer (ni como
+    # Cumplido ni como "Fuera de planning"): el panel tiene que achicarse
+    # igual que las demás tablas de la página cuando se filtra.
+    df = pd.DataFrame([_plan("11111111", "100", "PDV Dentro Del Filtro", [dt.date(2026, 10, 10)])])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    session = dimension_models.get_session()
+    planning_filtrado = session.query(PlanningPdv).all()  # ya "filtrado": solo el DNI 11111111
+    session.expunge_all()
+    session.close()
+
+    dia = dt.date(2026, 10, 10)
+    v_dia = pd.DataFrame([
+        {
+            "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
+            "punto_venta_id": "100", "punto_venta": "PDV Dentro Del Filtro", "hora_inicio": "09:00:00",
+        },
+        {
+            "dni": "22222222", "nombre": "Otro Mercaderista", "ciudad": "Lima", "supervisor": "Sup Dos",
+            "punto_venta_id": "500", "punto_venta": "PDV De Otro Supervisor", "hora_inicio": "10:00:00",
+        },
+    ])
+
+    filas = cumplimiento_ruta_dia(dia, planning_filtrado, v_dia)
+    dnis_en_resultado = {f["dni"] for f in filas}
+    assert dnis_en_resultado == {"11111111"}
+
+
 def test_cumplimiento_ruta_dia_sin_planning_pdv_dia_no_rompe(db):
     # Planning cargado ANTES de este cambio (sin filas en PlanningPdvDia) --
     # no debe reventar, solo no marcar a nadie como "programado hoy".
