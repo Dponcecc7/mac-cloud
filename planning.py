@@ -16,7 +16,7 @@ from collections import Counter
 import pandas as pd
 
 from cobertura import _cargar_visitas
-from dimension_models import PlanningPdv, get_session
+from dimension_models import PlanningPdv, PlanningPdvDia, get_session
 from parseo_headcount import validar_columnas
 from reemplazos import resolver_cadena_vigente
 
@@ -41,15 +41,30 @@ def _dias_programados(df, cols_fecha):
     return df[cols_fecha].notna().sum(axis=1)
 
 
+def _fechas_marcadas(df, cols_fecha):
+    """Lista de fechas (date) puntuales marcadas con "X" en cada fila --
+    a diferencia de _dias_programados() (solo el TOTAL), esto guarda EN
+    QUÉ días calendario le tocaba cada PDV (Davor, 2026-10-15: "quiero
+    que por día pueda tener PDV visitado y PDVs fuera de lo programado al
+    día"). Se usa para poblar PlanningPdvDia en guardar_planning()."""
+    if not cols_fecha:
+        return pd.Series([[] for _ in range(len(df))], index=df.index)
+    fecha_de_col = {c: pd.to_datetime(c, dayfirst=True).date() for c in cols_fecha}
+    marcado = df[cols_fecha].notna()
+    return marcado.apply(lambda fila: [fecha_de_col[c] for c in cols_fecha if fila[c]], axis=1)
+
+
 def _tabla_normalizada(df, tipo):
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
     cols_fecha = _columnas_fecha(df)
     dias_programados = _dias_programados(df, cols_fecha)
+    fechas_programadas = _fechas_marcadas(df, cols_fecha)
 
     co_li_num = pd.to_numeric(df["CO_LI"], errors="coerce")
     df = df[co_li_num.notna()].copy()
     dias_programados = dias_programados[co_li_num.notna()]
+    fechas_programadas = fechas_programadas[co_li_num.notna()]
 
     salida = pd.DataFrame({
         "co_li": co_li_num[co_li_num.notna()].astype("int64").astype(str),
@@ -63,6 +78,7 @@ def _tabla_normalizada(df, tipo):
         "mercaderista_nombre": df.get("MERCADERISTA"),
         "supervisor": df.get("SUPERVISOR"),
         "dias_programados": dias_programados,
+        "fechas_programadas": fechas_programadas,
     })
     salida["dni_asignado"] = salida["dni_asignado"].apply(
         lambda v: str(int(v)) if pd.notna(v) and str(v).strip() else None
@@ -87,15 +103,31 @@ def _consolidar_por_pdv(df):
     personalizada en .agg() fuerza el camino "pure python" (una llamada por
     grupo, en Python puro, no vectorizado), que con el volumen real del
     Excel de Planning (miles de filas) tardaba tanto que gunicorn mataba el
-    worker por timeout -- WORKER TIMEOUT real en producción, 2026-09-08."""
+    worker por timeout -- WORKER TIMEOUT real en producción, 2026-09-08.
+
+    `fechas_programadas` (Davor, 2026-10-15) se une aparte, FUERA de este
+    mismo .agg() -- es una lista por fila, no un escalar, así que no
+    puede ir en el dict de arriba sin forzar igual el camino lento que el
+    comentario de arriba evita a propósito. Un solo paso lineal en Python
+    puro (dict + set, O(filas)) arma la unión por (co_li, tipo) antes del
+    groupby vectorizado, y se la vuelve a pegar después con un merge."""
     if not len(df):
         return df
-    return df.groupby(["co_li", "tipo"], as_index=False).agg({
+    fechas_por_grupo = {}
+    for co_li, tipo, fechas in zip(df["co_li"], df["tipo"], df["fechas_programadas"]):
+        fechas_por_grupo.setdefault((co_li, tipo), set()).update(fechas)
+
+    agrupado = df.groupby(["co_li", "tipo"], as_index=False).agg({
         "nombre_pdv": "first", "ciudad": "first", "region": "first",
         "subcanal": "first", "mercado": "first", "dni_asignado": "first",
         "mercaderista_nombre": "first", "supervisor": "first",
         "dias_programados": "sum",
     })
+    agrupado["fechas_programadas"] = [
+        sorted(fechas_por_grupo.get((co_li, tipo), set()))
+        for co_li, tipo in zip(agrupado["co_li"], agrupado["tipo"])
+    ]
+    return agrupado
 
 
 def parsear_planning(archivo):
@@ -122,19 +154,34 @@ def guardar_planning(df, periodo, cargado_por):
     """Reemplaza TODAS las filas de `periodo` (sin importar el tipo) por las
     de `df` -- más simple que un upsert fila por fila y evita dejar basura de
     PDVs que salieron del planning ese mes (Davor podría re-subir un mes ya
-    cargado para corregirlo)."""
+    cargado para corregirlo). El DELETE de PlanningPdv se lleva en cascada
+    (ondelete=CASCADE) las filas de PlanningPdvDia del mes viejo -- no hace
+    falta borrarlas aparte.
+
+    `fechas_programadas` (Davor, 2026-10-15) -- un solo session.flush() ANTES
+    de crear las filas de PlanningPdvDia (no uno por PDV) para que todos los
+    PlanningPdv ya tengan su `id` asignado sin pagar un round-trip extra por
+    cada fila del Excel (miles de filas en el caso real)."""
     session = get_session()
     try:
         session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo).delete()
         hoy = dt.date.today()
+        pendientes_fechas = []
         for _, fila in df.iterrows():
-            session.add(PlanningPdv(
+            pdv = PlanningPdv(
                 periodo=periodo, co_li=fila["co_li"], tipo=fila["tipo"],
                 nombre_pdv=fila["nombre_pdv"], ciudad=fila["ciudad"], region=fila["region"],
                 subcanal=fila["subcanal"], mercado=fila["mercado"], dni_asignado=fila["dni_asignado"],
                 mercaderista_nombre=fila["mercaderista_nombre"], supervisor=fila["supervisor"],
                 dias_programados=int(fila["dias_programados"]), cargado_por=cargado_por, cargado_en=hoy,
-            ))
+            )
+            session.add(pdv)
+            if fila["fechas_programadas"]:
+                pendientes_fechas.append((pdv, fila["fechas_programadas"]))
+        session.flush()
+        for pdv, fechas in pendientes_fechas:
+            for f in fechas:
+                session.add(PlanningPdvDia(planning_pdv_id=pdv.id, fecha=f))
         session.commit()
         return len(df)
     except Exception:
@@ -582,3 +629,81 @@ def pdvs_fuera_planning(planning, v):
         "dni": r["dni"], "nombre": r["nombre"], "veces_visitado": int(r["veces_visitado"]),
         "primera_visita": r["primera_visita"].date(), "ultima_visita": r["ultima_visita"].date(),
     } for _, r in resumen.iterrows()]
+
+
+def cumplimiento_ruta_dia(dia, planning_filtrado, v_dia):
+    """Cumplimiento de ruta de UN día puntual, por mercaderista (Davor,
+    2026-10-15: "cuando cargue el planning el mercaderista esta asignado a
+    una ruta... quiero que por día pueda tener PDV visitado y PDVs fuera de
+    lo programado al día, para poder mandar esas capturas al equipo").
+
+    Una fila por (dni, co_li) que ESE día puntual estaba programado (via
+    PlanningPdvDia.fecha == dia) y/o fue realmente visitado:
+    - "Cumplido": estaba programado para hoy y lo visitó.
+    - "Pendiente": estaba programado para hoy y todavía no lo visitó.
+    - "Fuera de lo programado (otro día de su ruta)": lo visitó hoy, el PDV
+      SÍ es parte de su cartera del mes, pero no le tocaba justo hoy.
+    - "Fuera de planning": lo visitó hoy y el PDV ni siquiera está en su
+      Planning de este mes.
+
+    `planning_filtrado`: lista de PlanningPdv ya acotada por región/ciudad/
+    supervisor (ver planning_del_periodo()) -- el período se obtiene de ahí
+    mismo (todos comparten el mismo mes). `v_dia`: visitas Tradicional de
+    ESE día puntual (visitas_tradicional(dia, dia, usuario_actual)).
+
+    Requiere que el mes se haya cargado DESPUÉS de este cambio (2026-10-15)
+    -- un Planning viejo no tiene filas en PlanningPdvDia, así que ningún
+    PDV sale "programado para hoy" (hay que volver a subir el Excel del mes
+    para tener detalle día a día)."""
+    ids_planning = [p.id for p in planning_filtrado]
+    ids_programados_hoy = set()
+    if ids_planning:
+        session = get_session()
+        try:
+            filas_dia = (
+                session.query(PlanningPdvDia.planning_pdv_id)
+                .filter(PlanningPdvDia.fecha == dia, PlanningPdvDia.planning_pdv_id.in_(ids_planning))
+                .all()
+            )
+        finally:
+            session.close()
+        ids_programados_hoy = {pid for (pid,) in filas_dia}
+
+    co_lis_en_planning_del_dni = {
+        (p.dni_asignado, p.co_li) for p in planning_filtrado if p.dni_asignado
+    }
+
+    visitas_hoy = {}
+    if len(v_dia):
+        for _, r in v_dia.iterrows():
+            visitas_hoy[(r["dni"], str(r["punto_venta_id"]))] = r
+
+    filas = []
+    vistos = set()
+    for p in planning_filtrado:
+        if p.id not in ids_programados_hoy or not p.dni_asignado:
+            continue
+        clave = (p.dni_asignado, p.co_li)
+        vistos.add(clave)
+        visita = visitas_hoy.get(clave)
+        filas.append({
+            "dni": p.dni_asignado, "mercaderista": p.mercaderista_nombre, "co_li": p.co_li,
+            "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "supervisor": p.supervisor,
+            "estado": "Cumplido" if visita is not None else "Pendiente",
+            "hora_visita": visita["hora_inicio"] if visita is not None else None,
+        })
+
+    for (dni, co_li), r in visitas_hoy.items():
+        if (dni, co_li) in vistos:
+            continue
+        en_planning = (dni, co_li) in co_lis_en_planning_del_dni
+        filas.append({
+            "dni": dni, "mercaderista": r["nombre"], "co_li": co_li,
+            "nombre_pdv": r["punto_venta"], "ciudad": r["ciudad"], "supervisor": r.get("supervisor"),
+            "estado": "Fuera de lo programado (otro día de su ruta)" if en_planning else "Fuera de planning",
+            "hora_visita": r["hora_inicio"],
+        })
+
+    orden_estado = {"Cumplido": 0, "Pendiente": 1, "Fuera de lo programado (otro día de su ruta)": 2, "Fuera de planning": 3}
+    filas.sort(key=lambda f: ((f["mercaderista"] or "").upper(), orden_estado.get(f["estado"], 9)))
+    return filas

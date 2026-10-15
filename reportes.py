@@ -29,8 +29,8 @@ from patron_recurrente import sin_acentos
 from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
-    aplicar_reemplazos_vigentes, guardar_planning, parsear_planning, planning_del_periodo, pdvs_detalle,
-    pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning,
+    aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, planning_del_periodo,
+    pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning,
     resumen_por_mercaderista, valores_filtrables, visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, filas_dni_dia_semana_estado, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
@@ -679,6 +679,29 @@ def planning():
     fuera = pdvs_fuera_planning(planning_periodo, v)
     por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
 
+    # Cumplimiento de ruta del día (Davor, 2026-10-15: "cuando cargue el
+    # planning el mercaderista esta asignado a una ruta... quiero que por
+    # día pueda tener PDV visitado y PDVs fuera de lo programado al día,
+    # para poder mandar esas capturas al equipo") -- panel aparte, con su
+    # propio selector de UN solo día (no el mes de arriba), reusando los
+    # mismos filtros de región/ciudad/supervisor ya elegidos. Requiere que
+    # ese mes se haya cargado DESPUÉS de este cambio (ver
+    # planning.py::cumplimiento_ruta_dia()) -- un Planning viejo no tiene
+    # detalle día a día, solo el total mensual de siempre.
+    dia_str = request.args.get("dia") or dt.date.today().isoformat()
+    try:
+        dia = dt.date.fromisoformat(dia_str)
+    except ValueError:
+        dia = dt.date.today()
+        dia_str = dia.isoformat()
+    periodo_dia = dia.replace(day=1)
+    planning_del_dia = (
+        planning_periodo if periodo_dia == periodo
+        else planning_del_periodo(periodo_dia, region_f, ciudad_f, supervisor_f)
+    )
+    v_dia = visitas_tradicional(dia, dia, current_user)
+    cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
+
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
         periodo_str=periodo_str, periodos_disponibles=periodos_disponibles(),
@@ -686,6 +709,7 @@ def planning():
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
         por_mercaderista=por_mercaderista,
+        dia_str=dia_str, cumplimiento_dia=cumplimiento_dia,
     )
 
 
@@ -940,6 +964,51 @@ def planning_exportar():
     buf.seek(0)
     return send_file(
         buf, as_attachment=True, download_name=f"Cobertura_vs_Planning_{periodo_str}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@bp.get("/planning/ruta-dia/exportar")
+@requiere_pagina("reportes_planning")
+def planning_ruta_dia_exportar():
+    """Excel de un solo día (Davor, 2026-10-15: "puede ser un excel para
+    exportar", mismo panel "Cumplimiento de ruta del día")."""
+    dia_str = request.args.get("dia") or dt.date.today().isoformat()
+    try:
+        dia = dt.date.fromisoformat(dia_str)
+    except ValueError:
+        dia = dt.date.today()
+        dia_str = dia.isoformat()
+    if current_user.rol == "supervisor":
+        region_f = ciudad_f = supervisor_f = None
+    else:
+        region_f = request.args.get("region") or None
+        ciudad_f = request.args.get("ciudad") or None
+        supervisor_f = request.args.get("supervisor") or None
+
+    planning_del_dia = planning_del_periodo(dia.replace(day=1), region_f, ciudad_f, supervisor_f)
+    v_dia = visitas_tradicional(dia, dia, current_user)
+    cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cumplimiento del día"
+    ws.append(["Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"])
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for f in cumplimiento_dia:
+        ws.append(fila_segura([
+            f["mercaderista"], f["dni"], f["co_li"], f["nombre_pdv"], f["ciudad"], f["supervisor"],
+            f["estado"], f["hora_visita"],
+        ]))
+    for i, titulo in enumerate(["Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"], start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(14, len(titulo) + 2)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, as_attachment=True, download_name=f"Cumplimiento_Ruta_{dia_str}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 

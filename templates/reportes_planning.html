@@ -94,6 +94,14 @@
     .flecha-orden { display:inline-block; width:10px; }
     .empty { color:var(--muted); font-size:13px; padding:12px 0; }
     .celda-cero { color:var(--bad); font-weight:700; }
+    .badge-estado { display:inline-block; padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .badge-estado.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge-estado.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge-estado.bad { background:var(--bad-bg); color:var(--bad); }
+    .dia-form { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .dia-form input[type=date] { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+    .resumen-dia { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px; font-size:12.5px; }
+    .resumen-dia span { font-weight:700; }
 
     @media (max-width: 700px) {
       .wrap { padding:0 12px 40px; }
@@ -248,6 +256,65 @@
       </form>
       <p class="note">Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes, por si algo más adelante lo consulta directo sin pasar por esta pantalla. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.</p>
       {% endif %}
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</p>
+      <form method="get" class="dia-form">
+        <input type="hidden" name="mes" value="{{ periodo_str }}">
+        <input type="hidden" name="region" value="{{ region_filtro }}">
+        <input type="hidden" name="ciudad" value="{{ ciudad_filtro }}">
+        <input type="hidden" name="supervisor" value="{{ supervisor_filtro }}">
+        <label style="font-size:12px; color:var(--muted); font-weight:600;">Día
+          <input type="date" name="dia" value="{{ dia_str }}">
+        </label>
+        <button class="btn primary" type="submit">Ver</button>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_ruta_dia_exportar', dia=dia_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
+      </form>
+      {% if not cumplimiento_dia %}
+        <p class="empty">Sin ruta programada ni visitas para ese día -- si el mes se cargó antes del 15/10, volvé a subir el Excel de Planning para tener el detalle día a día (antes solo se guardaba el total del mes).</p>
+      {% else %}
+      {% set n_cumplidos = cumplimiento_dia|selectattr('estado', 'equalto', 'Cumplido')|list|length %}
+      {% set n_pendientes = cumplimiento_dia|selectattr('estado', 'equalto', 'Pendiente')|list|length %}
+      {% set n_fuera = cumplimiento_dia|rejectattr('estado', 'in', ['Cumplido', 'Pendiente'])|list|length %}
+      <div class="resumen-dia">
+        <div><span style="color:var(--ok);">{{ n_cumplidos }}</span> cumplidos</div>
+        <div><span style="color:var(--warn);">{{ n_pendientes }}</span> pendientes del día</div>
+        <div><span style="color:var(--bad);">{{ n_fuera }}</span> fuera de lo programado</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Mercaderista</th>
+            <th>DNI</th>
+            <th>CO_LI</th>
+            <th>Nombre PDV</th>
+            <th>Ciudad</th>
+            <th>Supervisor</th>
+            <th>Estado</th>
+            <th>Hora visita</th>
+          </tr>
+          {% for f in cumplimiento_dia %}
+          <tr>
+            <td>{{ (f.mercaderista or '—')|title }}</td>
+            <td>{{ f.dni or '—' }}</td>
+            <td>{{ f.co_li }}</td>
+            <td>{{ f.nombre_pdv or '—' }}</td>
+            <td>{{ (f.ciudad or '—')|title }}</td>
+            <td>{{ (f.supervisor or '—')|title }}</td>
+            <td>
+              {% if f.estado == 'Cumplido' %}<span class="badge-estado ok">Cumplido</span>
+              {% elif f.estado == 'Pendiente' %}<span class="badge-estado warn">Pendiente</span>
+              {% else %}<span class="badge-estado bad">{{ f.estado }}</span>
+              {% endif %}
+            </td>
+            <td>{{ f.hora_visita or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+      <p class="note">"Fuera de lo programado (otro día de su ruta)": el PDV sí es parte de su cartera del mes, pero no le tocaba justo hoy. "Fuera de planning": visitó un PDV que ni siquiera está en su Planning de este mes.</p>
     </div>
 
     <div class="panel">

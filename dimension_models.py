@@ -373,6 +373,33 @@ class PlanningPdv(Base):
     )
 
 
+class PlanningPdvDia(Base):
+    """Día CALENDARIO puntual en el que un PlanningPdv estaba programado --
+    Davor, 2026-10-15: "cuando cargue el planning el mercaderista esta
+    asignado a una ruta... quiero que por día pueda tener PDV visitado y
+    PDVs fuera de lo programado al día". El Excel de Planning trae una
+    columna por fecha del mes con una "X" marcando los días puntuales de
+    cada PDV -- hasta ahora guardar_planning() solo guardaba el TOTAL
+    (PlanningPdv.dias_programados), descartando EN QUÉ días exactos
+    tocaba cada uno (ver planning.py::_columnas_fecha()/_dias_programados()).
+    Esta tabla guarda esos días sueltos para poder comparar "lo programado
+    HOY" contra "lo visitado HOY" -- una fila por (PlanningPdv, fecha)
+    marcada con X en el Excel original.
+
+    Los Plannings ya cargados ANTES de este cambio no tienen filas acá
+    (quedan sin detalle diario, solo con el total de siempre) -- hay que
+    volver a subir el Excel del mes para tener el detalle día a día."""
+    __tablename__ = "planning_pdv_dia"
+
+    id = Column(Integer, primary_key=True)
+    planning_pdv_id = Column(Integer, ForeignKey("planning_pdv.id", ondelete="CASCADE"), nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("planning_pdv_id", "fecha", name="uq_planning_pdv_dia"),
+    )
+
+
 VACANTES_VIEW_SQL = """
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,
