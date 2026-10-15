@@ -16,7 +16,7 @@ from collections import Counter
 import pandas as pd
 
 from cobertura import _cargar_visitas
-from dimension_models import PlanningPdv, PlanningPdvDia, get_session
+from dimension_models import PlanningPdv, PlanningPdvDia, Persona, get_session
 from parseo_headcount import validar_columnas
 from reemplazos import resolver_cadena_vigente
 
@@ -227,6 +227,72 @@ def reasignar_pdv(pdv_id, dni_nuevo, nombre_nuevo):
         session.close()
 
 
+def personal_activo():
+    """[{"dni", "nombre", "canal"}, ...] de Personal Activo HOY -- Davor,
+    2026-10-15: "agregar... donde aparezca las personas cargadas en el
+    planning con la opción de reemplazar alguno en base al personal
+    activo". Usado para armar el desplegable de candidatos de
+    reasignar_mercaderista(); no se restringe a canal Tradicional porque un
+    Multicanal activo también puede estar cubriendo PDVs Tradicional (ver
+    PersonaSupervisorCanal/PersonaZonaCanal en reemplazos.py)."""
+    session = get_session()
+    try:
+        filas = (
+            session.query(Persona.dni, Persona.nombre_completo, Persona.canal)
+            .filter(Persona.estado == "Activo")
+            .order_by(Persona.nombre_completo)
+            .all()
+        )
+        return [{"dni": dni, "nombre": nombre, "canal": canal} for dni, nombre, canal in filas]
+    finally:
+        session.close()
+
+
+def reasignar_mercaderista(periodo, dni_viejo, dni_nuevo):
+    """Reemplaza de una sola vez al mercaderista asignado a TODOS los PDVs
+    de `periodo` que tenían `dni_viejo`, por alguien de Personal Activo
+    (Davor, 2026-10-15, mismo pedido que personal_activo()) -- a diferencia
+    de reasignar_pdv() (corrige UN PDV puntual a mano), esto corre sobre
+    toda la cartera del mes de una vez: pensado para cuando el Excel de
+    Planning vino con el DNI de alguien que ya no corresponde (se fue antes
+    de cargarlo, o el archivo trae a su reemplazo bajo el DNI viejo y
+    todavía no se hizo "Agregar reemplazo" en Personal).
+
+    `dni_nuevo` tiene que ser de alguien Activo en Personal -- a propósito
+    no acepta cualquier DNI tipeado a mano (eso ya lo cubre reasignar_pdv()
+    por fila) para no dejar una cartera entera apuntando a un DNI inventado
+    o de alguien ya dado de baja. Devuelve (cantidad de PDVs cambiados,
+    nombre del nuevo mercaderista)."""
+    dni_viejo = (dni_viejo or "").strip()
+    dni_nuevo = (dni_nuevo or "").strip()
+    if not dni_viejo or not dni_nuevo:
+        raise ValueError("Falta el DNI a reemplazar o el DNI nuevo.")
+    if dni_viejo == dni_nuevo:
+        raise ValueError("El DNI nuevo no puede ser igual al que ya tenía.")
+
+    session = get_session()
+    try:
+        persona_nueva = session.get(Persona, dni_nuevo)
+        if persona_nueva is None or persona_nueva.estado != "Activo":
+            raise ValueError(f'El DNI {dni_nuevo} no está en Personal como Activo.')
+
+        n = (
+            session.query(PlanningPdv)
+            .filter(PlanningPdv.periodo == periodo, PlanningPdv.dni_asignado == dni_viejo)
+            .update(
+                {PlanningPdv.dni_asignado: dni_nuevo, PlanningPdv.mercaderista_nombre: persona_nueva.nombre_completo},
+                synchronize_session=False,
+            )
+        )
+        session.commit()
+        return n, persona_nueva.nombre_completo
+    except ValueError:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def aplicar_reemplazos_vigentes(periodo):
     """Persiste en la base el reemplazo vigente de cada PDV del período --
     Davor, 2026-09-22: "puedes reemplazar los mercaderistas que han sido
@@ -261,7 +327,14 @@ def aplicar_reemplazos_vigentes(periodo):
         session.close()
 
 
-def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None):
+def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None, mercado_filtro=None):
+    """`mercado_filtro`: lista de nombres de mercado YA limpios (ver
+    valores_filtrables/_mercado_sin_palabra), selección múltiple (Davor,
+    2026-10-15: "adiciona también como filtro, nombre del mercado, con
+    opción múltiple"). Se filtra en Python, no en SQL -- PlanningPdv.mercado
+    guarda el texto crudo del Excel ("Mercado Central", con la palabra), así
+    que hay que limpiarlo igual que al armar las opciones del desplegable
+    para poder compararlo."""
     session = get_session()
     try:
         query = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
@@ -274,6 +347,10 @@ def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, superv
         filas = query.all()
     finally:
         session.close()
+
+    if mercado_filtro:
+        mercados_elegidos = set(mercado_filtro)
+        filas = [p for p in filas if _mercado_sin_palabra(p.mercado) in mercados_elegidos]
 
     # Reemplazo vigente (Davor, 2026-09-22: "que también automáticamente se
     # cambiara la persona según entraba su reemplazo") -- dni_asignado/
@@ -333,18 +410,25 @@ def periodos_disponibles():
 
 
 def valores_filtrables(periodo):
-    """Región/Ciudad/Supervisor distintos DENTRO del planning de `periodo` --
-    a propósito no reusa los desplegables de Persona (reportes._filtros_admin)
-    porque son texto libre tipeado en el Excel de Planning, no siempre calzan
-    letra por letra con lo que hay en la tabla Persona."""
+    """Región/Ciudad/Supervisor/Mercado distintos DENTRO del planning de
+    `periodo` -- a propósito no reusa los desplegables de Persona
+    (reportes._filtros_admin) porque son texto libre tipeado en el Excel de
+    Planning, no siempre calzan letra por letra con lo que hay en la tabla
+    Persona.
+
+    `mercados` usa el nombre YA limpio (_mercado_sin_palabra, sin la
+    palabra "mercado") -- mismo texto que ve el usuario en la tabla
+    "Mercaderista x Ciudad", para que el filtro y lo que se muestra
+    coincidan letra por letra."""
     session = get_session()
     try:
         query = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
-        filas = query.with_entities(PlanningPdv.region, PlanningPdv.ciudad, PlanningPdv.supervisor).all()
-        regiones = sorted({r for r, _, _ in filas if r})
-        ciudades = sorted({c for _, c, _ in filas if c})
-        supervisores = sorted({s for _, _, s in filas if s})
-        return regiones, ciudades, supervisores
+        filas = query.with_entities(PlanningPdv.region, PlanningPdv.ciudad, PlanningPdv.supervisor, PlanningPdv.mercado).all()
+        regiones = sorted({r for r, _, _, _ in filas if r})
+        ciudades = sorted({c for _, c, _, _ in filas if c})
+        supervisores = sorted({s for _, _, s, _ in filas if s})
+        mercados = sorted({_mercado_sin_palabra(m) for _, _, _, m in filas if _mercado_sin_palabra(m)})
+        return regiones, ciudades, supervisores, mercados
     finally:
         session.close()
 

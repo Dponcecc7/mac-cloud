@@ -223,8 +223,15 @@
           </select>
         </label>
         {% endif %}
+        {% if mercados_disponibles %}
+        <label class="campo-filtro">Mercado
+          <select name="mercado" multiple size="3" title="Ctrl/Cmd + clic para elegir varios">
+            {% for mdo in mercados_disponibles %}<option value="{{ mdo }}" {{ 'selected' if mdo in mercado_filtro else '' }}>{{ mdo|title }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
         <button class="btn primary" type="submit">Aplicar</button>
-        <a class="btn ghost" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">↓ Exportar Excel</a>
       </form>
       <div class="filtros-busqueda">
         <div class="buscador">
@@ -270,11 +277,46 @@
       {% if usuario.rol in ("analista", "admin") %}
       <form method="post" action="{{ url_for('reportes.planning_aplicar_reemplazos', mes=periodo_str) }}" style="margin-top:14px;" onsubmit="return confirm('¿Actualizar en la base a quien reemplazó a cada mercaderista dado de baja, para {{ periodo_str }}? Ya se muestra así en pantalla -- esto lo deja escrito de una vez en el Planning guardado.');" title="Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">
+        <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
         <button class="btn ghost" type="submit">↻ Aplicar reemplazos vigentes a este mes</button>
       </form>
       {% endif %}
     </div>
+
+    {% if usuario.rol in ("analista", "admin") %}
+    <div class="panel">
+      <p class="panel-title">Personal del Planning — reemplazar mercaderista ({{ por_mercaderista|length }})</p>
+      {% if not por_mercaderista %}
+        <p class="empty">Sin planning cargado para este período.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Mercaderista</th>
+            <th>DNI</th>
+            <th>Ciudad</th>
+            <th>PDVs asignados</th>
+            <th></th>
+          </tr>
+          {% for m in por_mercaderista %}
+          <tr>
+            <td>{{ m.mercaderista|title }}</td>
+            <td>{{ m.dni or '—' }}</td>
+            <td>{{ (m.ciudad or '—')|title }}</td>
+            <td>{{ m.pdvs_asignados }}</td>
+            <td>
+              {% if m.dni %}
+              <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirReemplazarMercaderista('{{ (m.dni or '')|e }}', '{{ (m.mercaderista or '')|e }}')">Reemplazar</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <p class="note">Cambia el DNI de TODOS los PDVs de {{ periodo_str }} que tenía ese mercaderista, por alguien de Personal Activo -- útil cuando el Excel de Planning vino con el DNI de alguien que ya no corresponde. Si se vuelve a subir el Excel de este mes más adelante, esta corrección se pierde igual que "Editar" PDV.</p>
+      {% endif %}
+    </div>
+    {% endif %}
 
     <div class="panel">
       <p class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</p>
@@ -283,11 +325,12 @@
         <input type="hidden" name="region" value="{{ region_filtro }}">
         <input type="hidden" name="ciudad" value="{{ ciudad_filtro }}">
         <input type="hidden" name="supervisor" value="{{ supervisor_filtro }}">
+        {% for mdo in mercado_filtro %}<input type="hidden" name="mercado" value="{{ mdo }}">{% endfor %}
         <label style="font-size:12px; color:var(--muted); font-weight:600;">Día
           <input type="date" name="dia" value="{{ dia_str }}">
         </label>
         <button class="btn primary" type="submit">Ver</button>
-        <a class="btn ghost" href="{{ url_for('reportes.planning_ruta_dia_exportar', dia=dia_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel</a>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_ruta_dia_exportar', dia=dia_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">↓ Exportar Excel</a>
       </form>
       {% if not cumplimiento_dia %}
         <p class="empty">Sin ruta programada ni visitas para ese día -- si el mes se cargó antes del 15/10, volvé a subir el Excel de Planning para tener el detalle día a día (antes solo se guardaba el total del mes).</p>
@@ -343,7 +386,7 @@
       {% if not por_mercaderista %}
         <p class="empty">Sin planning cargado para este período.</p>
       {% else %}
-      <a class="btn ghost" style="margin-bottom:10px; display:inline-block;" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">↓ Exportar Excel (incluye esta tabla)</a>
+      <a class="btn ghost" style="margin-bottom:10px; display:inline-block;" href="{{ url_for('reportes.planning_exportar', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">↓ Exportar Excel (incluye esta tabla)</a>
       <div class="table-wrap">
         <table id="tabla-mercaderista">
           <tr>
@@ -488,7 +531,7 @@
 <dialog id="dlg-editar-pdv" style="border:none; border-radius:14px; padding:0; max-width:380px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
   <form method="post" id="form-editar-pdv" style="padding:20px 22px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro) }}">
+    <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
     <p style="margin:0 0 4px; font-weight:700; font-size:14px;">Reasignar PDV</p>
     <p id="dlg-editar-pdv-info" style="margin:0 0 14px; font-size:12px; color:var(--muted);"></p>
     <label style="display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px;">DNI del mercaderista</label>
@@ -520,6 +563,48 @@
     };
 
     document.getElementById('dlg-editar-pdv-cancelar').addEventListener('click', function () {
+      dlg.close('cancelar');
+    });
+  })();
+</script>
+
+<dialog id="dlg-reemplazar-mercaderista" style="border:none; border-radius:14px; padding:0; max-width:380px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
+  <form method="post" action="{{ url_for('reportes.planning_reasignar_mercaderista') }}" style="padding:20px 22px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="volver" value="{{ url_for('reportes.planning', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+    <input type="hidden" name="dni_viejo" id="dlg-reemplazar-dni-viejo">
+    <p style="margin:0 0 4px; font-weight:700; font-size:14px;">Reemplazar mercaderista</p>
+    <p id="dlg-reemplazar-info" style="margin:0 0 14px; font-size:12px; color:var(--muted);"></p>
+    <label style="display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px;">Nuevo mercaderista (Personal Activo)</label>
+    <input type="text" name="dni_nuevo" id="dlg-reemplazar-dni-nuevo" list="dl-personal-activo" required autocomplete="off" placeholder="Buscar por nombre o DNI..." style="width:100%; margin-bottom:14px; font:inherit; font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid var(--line);">
+    <datalist id="dl-personal-activo">
+      {% for per in personal_activo %}
+      <option value="{{ per.dni }}">{{ (per.nombre or '')|title }} ({{ (per.canal or '')|title }})</option>
+      {% endfor %}
+    </datalist>
+    <p class="note" style="margin:0 0 14px;">Reemplaza TODOS los PDVs de {{ periodo_str }} que tenía este mercaderista -- no se puede deshacer, salvo reemplazando de nuevo o volviendo a cargar el Excel.</p>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" id="dlg-reemplazar-mercaderista-cancelar" class="btn ghost" style="padding:8px 16px;">Cancelar</button>
+      <button type="submit" class="btn primary" style="padding:8px 16px;">Reemplazar</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dlg = document.getElementById('dlg-reemplazar-mercaderista');
+    var info = document.getElementById('dlg-reemplazar-info');
+    var inputDniViejo = document.getElementById('dlg-reemplazar-dni-viejo');
+    var inputDniNuevo = document.getElementById('dlg-reemplazar-dni-nuevo');
+
+    window.abrirReemplazarMercaderista = function (dniViejo, nombreViejo) {
+      inputDniViejo.value = dniViejo || '';
+      inputDniNuevo.value = '';
+      info.textContent = 'Reemplazando a ' + (nombreViejo || 'mercaderista') + ' (DNI ' + dniViejo + ')';
+      dlg.showModal();
+      inputDniNuevo.focus();
+    };
+
+    document.getElementById('dlg-reemplazar-mercaderista-cancelar').addEventListener('click', function () {
       dlg.close('cancelar');
     });
   })();

@@ -29,9 +29,10 @@ from patron_recurrente import sin_acentos
 from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
-    aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, planning_del_periodo,
-    pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles, reasignar_pdv, resumen_planning,
-    resumen_por_mercaderista, valores_filtrables, visitas_tradicional,
+    aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, personal_activo,
+    planning_del_periodo, pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles,
+    reasignar_mercaderista, reasignar_pdv, resumen_planning, resumen_por_mercaderista, valores_filtrables,
+    visitas_tradicional,
 )
 from proyecciones import estacionalidad_faltas, filas_dni_dia_semana_estado, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
@@ -659,18 +660,20 @@ def planning():
     periodo = desde
     if current_user.rol == "supervisor":
         region_f = ciudad_f = supervisor_f = None
+        mercado_f = []
     else:
         region_f = request.args.get("region") or None
         ciudad_f = request.args.get("ciudad") or None
         supervisor_f = request.args.get("supervisor") or None
-    regiones_disp, ciudades_disp, supervisores_disp = valores_filtrables(periodo)
+        mercado_f = request.args.getlist("mercado")
+    regiones_disp, ciudades_disp, supervisores_disp, mercados_disp = valores_filtrables(periodo)
 
     # Una sola carga de planning/visitas para las 4 vistas de abajo -- antes
     # cada función hacía su propia consulta completa a Postgres (4 veces la
     # misma carga de visitas del canal Tradicional por cada request), lo que
     # colgaba el worker con el volumen real de datos (502 en producción,
     # 2026-09-08).
-    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
+    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f, mercado_f)
     v = visitas_tradicional(desde, hasta, current_user)
 
     resumen = resumen_planning(planning_periodo, v)
@@ -697,7 +700,7 @@ def planning():
     periodo_dia = dia.replace(day=1)
     planning_del_dia = (
         planning_periodo if periodo_dia == periodo
-        else planning_del_periodo(periodo_dia, region_f, ciudad_f, supervisor_f)
+        else planning_del_periodo(periodo_dia, region_f, ciudad_f, supervisor_f, mercado_f)
     )
     v_dia = visitas_tradicional(dia, dia, current_user)
     cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
@@ -706,9 +709,11 @@ def planning():
         "reportes_planning.html", usuario=current_user, activo="planning",
         periodo_str=periodo_str, periodos_disponibles=periodos_disponibles(),
         region_filtro=region_f or "", ciudad_filtro=ciudad_f or "", supervisor_filtro=supervisor_f or "",
+        mercado_filtro=mercado_f or [],
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
+        mercados_disponibles=mercados_disp,
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
-        por_mercaderista=por_mercaderista,
+        por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
         dia_str=dia_str, cumplimiento_dia=cumplimiento_dia,
     )
 
@@ -879,6 +884,29 @@ def planning_reasignar_pdv(pdv_id):
     return redirect(volver)
 
 
+@bp.post("/planning/mercaderista/reasignar")
+@requiere_pagina("reportes_planning")
+def planning_reasignar_mercaderista():
+    """Reemplaza de una sola vez a un mercaderista cargado en el Planning
+    del período por alguien de Personal Activo (Davor, 2026-10-15: "agregar
+    como un apartado... la opción de reemplazar alguno en base al personal
+    activo"). A diferencia de planning_reasignar_pdv() esto corre sobre
+    TODA la cartera del mes del DNI viejo, no un PDV puntual."""
+    desde, hasta, periodo_str = _mes_desde_query()
+    volver = request.form.get("volver") or url_for("reportes.planning", mes=periodo_str)
+    dni_viejo = request.form.get("dni_viejo", "")
+    dni_nuevo = request.form.get("dni_nuevo", "")
+    try:
+        n, nombre_nuevo = reasignar_mercaderista(desde, dni_viejo, dni_nuevo)
+        if n:
+            flash(f"{n} PDV(s) de {periodo_str} reasignados de {dni_viejo} a {nombre_nuevo} ({dni_nuevo}).", "ok")
+        else:
+            flash(f"No se encontró ningún PDV de {periodo_str} asignado al DNI {dni_viejo}.", "error")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(volver)
+
+
 @bp.post("/planning/aplicar-reemplazos")
 @requiere_pagina("reportes_planning")
 def planning_aplicar_reemplazos():
@@ -908,12 +936,14 @@ def planning_exportar():
     periodo = desde
     if current_user.rol == "supervisor":
         region_f = ciudad_f = supervisor_f = None
+        mercado_f = []
     else:
         region_f = request.args.get("region") or None
         ciudad_f = request.args.get("ciudad") or None
         supervisor_f = request.args.get("supervisor") or None
+        mercado_f = request.args.getlist("mercado")
 
-    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f)
+    planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f, mercado_f)
     v = visitas_tradicional(desde, hasta, current_user)
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
@@ -981,12 +1011,14 @@ def planning_ruta_dia_exportar():
         dia_str = dia.isoformat()
     if current_user.rol == "supervisor":
         region_f = ciudad_f = supervisor_f = None
+        mercado_f = []
     else:
         region_f = request.args.get("region") or None
         ciudad_f = request.args.get("ciudad") or None
         supervisor_f = request.args.get("supervisor") or None
+        mercado_f = request.args.getlist("mercado")
 
-    planning_del_dia = planning_del_periodo(dia.replace(day=1), region_f, ciudad_f, supervisor_f)
+    planning_del_dia = planning_del_periodo(dia.replace(day=1), region_f, ciudad_f, supervisor_f, mercado_f)
     v_dia = visitas_tradicional(dia, dia, current_user)
     cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
 

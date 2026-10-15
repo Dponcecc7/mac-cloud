@@ -17,7 +17,10 @@ from sqlalchemy import create_engine, event
 
 import dimension_models
 from dimension_models import Base, Persona, PlanningPdv, PlanningPdvDia
-from planning import _consolidar_por_pdv, _fechas_marcadas, cumplimiento_ruta_dia, guardar_planning
+from planning import (
+    _consolidar_por_pdv, _fechas_marcadas, cumplimiento_ruta_dia, guardar_planning,
+    personal_activo, planning_del_periodo, reasignar_mercaderista, valores_filtrables,
+)
 
 
 @pytest.fixture
@@ -210,3 +213,89 @@ def test_cumplimiento_ruta_dia_sin_planning_pdv_dia_no_rompe(db):
 
     filas = cumplimiento_ruta_dia(dt.date(2026, 10, 10), planning_filtrado, pd.DataFrame())
     assert filas == []
+
+
+def test_valores_filtrables_incluye_mercados_ya_limpios(db):
+    # Davor, 2026-10-15: "adiciona también como filtro, nombre del mercado"
+    # -- valores_filtrables() debe ofrecer el nombre YA sin la palabra
+    # "mercado" (igual que se muestra en pantalla), no el texto crudo del
+    # Excel.
+    fila1 = _plan("11111111", "100", "PDV Uno", [])
+    fila1["mercado"] = "Mercado Central"
+    fila2 = _plan("22222222", "200", "PDV Dos", [])
+    fila2["mercado"] = None
+    guardar_planning(pd.DataFrame([fila1, fila2]), dt.date(2026, 10, 1), "tester@x.com")
+
+    _, _, _, mercados = valores_filtrables(dt.date(2026, 10, 1))
+    assert mercados == ["Central"]
+
+
+def test_planning_del_periodo_filtra_por_mercado_multiple(db):
+    fila_central = _plan("11111111", "100", "PDV Central", [])
+    fila_central["mercado"] = "Mercado Central"
+    fila_norte = _plan("22222222", "200", "PDV Norte", [])
+    fila_norte["mercado"] = "Mercado Norte"
+    fila_sin_mercado = _plan("33333333", "300", "PDV Sin Mercado", [])
+    fila_sin_mercado["mercado"] = None
+    guardar_planning(pd.DataFrame([fila_central, fila_norte, fila_sin_mercado]), dt.date(2026, 10, 1), "tester@x.com")
+
+    sin_filtro = planning_del_periodo(dt.date(2026, 10, 1))
+    assert {p.co_li for p in sin_filtro} == {"100", "200", "300"}
+
+    con_filtro = planning_del_periodo(dt.date(2026, 10, 1), mercado_filtro=["Central", "Norte"])
+    assert {p.co_li for p in con_filtro} == {"100", "200"}
+
+
+def test_personal_activo_solo_devuelve_personas_con_estado_activo(db):
+    session = dimension_models.get_session()
+    session.add(Persona(dni="11111111", nombre_completo="Juan Perez", canal="TRADICIONAL", estado="Activo"))
+    session.add(Persona(dni="22222222", nombre_completo="Pedro Gomez", canal="TRADICIONAL", estado="Inactivo"))
+    session.commit()
+    session.close()
+
+    activos = personal_activo()
+    assert [a["dni"] for a in activos] == ["11111111"]
+
+
+def test_reasignar_mercaderista_cambia_toda_la_cartera_del_dni(db):
+    # A diferencia de reasignar_pdv() (un PDV puntual), esto reasigna TODOS
+    # los PDVs del mes que tenía ese DNI de una sola vez (Davor, 2026-10-15:
+    # "reemplazar alguno en base al personal activo... el campo a cambiar
+    # seria el DNI").
+    df = pd.DataFrame([
+        _plan("11111111", "100", "PDV Uno", []),
+        _plan("11111111", "200", "PDV Dos", []),
+        _plan("99999999", "300", "PDV De Otro Mercaderista", []),
+    ])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    session = dimension_models.get_session()
+    session.add(Persona(dni="22222222", nombre_completo="Reemplazo Nuevo", canal="TRADICIONAL", estado="Activo"))
+    session.commit()
+    session.close()
+
+    n, nombre_nuevo = reasignar_mercaderista(dt.date(2026, 10, 1), "11111111", "22222222")
+    assert n == 2
+    assert nombre_nuevo == "Reemplazo Nuevo"
+
+    session = dimension_models.get_session()
+    por_co_li = {p.co_li: (p.dni_asignado, p.mercaderista_nombre) for p in session.query(PlanningPdv).all()}
+    session.close()
+    assert por_co_li["100"] == ("22222222", "Reemplazo Nuevo")
+    assert por_co_li["200"] == ("22222222", "Reemplazo Nuevo")
+    assert por_co_li["300"] == ("99999999", "Juan Perez")  # no tocado, dni distinto
+
+
+def test_reasignar_mercaderista_rechaza_dni_nuevo_que_no_este_activo(db):
+    df = pd.DataFrame([_plan("11111111", "100", "PDV Uno", [])])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    session = dimension_models.get_session()
+    session.add(Persona(dni="22222222", nombre_completo="Inactivo Reciente", canal="TRADICIONAL", estado="Inactivo"))
+    session.commit()
+    session.close()
+
+    with pytest.raises(ValueError):
+        reasignar_mercaderista(dt.date(2026, 10, 1), "11111111", "22222222")
+    with pytest.raises(ValueError):
+        reasignar_mercaderista(dt.date(2026, 10, 1), "11111111", "00000000")  # ni siquiera existe en Personal
