@@ -18,7 +18,7 @@ from sqlalchemy import create_engine, event
 import dimension_models
 from dimension_models import Base, Persona, PlanningPdv, PlanningPdvDia
 from planning import (
-    _consolidar_por_pdv, _fechas_marcadas, cumplimiento_ruta_dia, guardar_planning,
+    _consolidar_por_pdv, _fechas_marcadas, _mercado_sin_palabra, cumplimiento_ruta_dia, guardar_planning,
     personal_activo, planning_del_periodo, reasignar_mercaderista, valores_filtrables,
 )
 
@@ -264,6 +264,16 @@ def test_valores_filtrables_incluye_mercados_ya_limpios(db):
 
     _, _, _, mercados = valores_filtrables(dt.date(2026, 10, 1))
     assert mercados == ["Central"]
+
+
+def test_mercado_sin_palabra_limpia_guiones_bajos_espacios_y_capitaliza():
+    # Davor, 2026-10-16: "Aplica formulas de excel como espacios() y
+    # nompropio() a ese campo" -- sobre un valor crudo real del Excel como
+    # "12 De Abril_ayacucho" que se veía feo en el filtro de Mercado.
+    assert _mercado_sin_palabra("12 de abril_ayacucho") == "12 De Abril Ayacucho"
+    assert _mercado_sin_palabra("MERCADO   CENTRAL  ") == "Central"
+    assert _mercado_sin_palabra("mercado") is None
+    assert _mercado_sin_palabra(None) is None
 
 
 def test_planning_del_periodo_filtra_por_mercado_multiple(db):

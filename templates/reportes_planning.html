@@ -55,6 +55,20 @@
     }
     .filtros-busqueda { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
 
+    /* Desplegable de selección múltiple con checkboxes (Davor, 2026-10-16:
+       "me parece mejor esa opción de filtro opción multiple" -- mismo
+       componente .ms que ya usa personal.html, para no reinventarlo y que
+       se pueda deseleccionar con un clic en vez del Ctrl+clic nada obvio
+       de un <select multiple> nativo). */
+    .ms { position:relative; }
+    .ms-toggle { width:100%; text-align:left; font:inherit; font-size:13px; font-weight:400; text-transform:none; letter-spacing:normal; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:150px; }
+    .ms-toggle:hover { border-color:var(--brand); }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(35,25,10,.18); padding:6px; min-width:200px; max-height:260px; overflow-y:auto; }
+    .ms-panel.abierto { display:block; }
+    .ms-opt { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:400; text-transform:none; letter-spacing:normal; color:var(--ink); padding:5px 6px; border-radius:5px; white-space:nowrap; cursor:pointer; }
+    .ms-opt:hover { background:var(--bg); }
+    .ms-opt input { width:auto; margin:0; }
+
     /* "Cargar Planning" colapsado por default -- acción ocasional (una
        vez al mes), no hace falta que ocupe espacio permanente en una
        pantalla que se mira todos los días. */
@@ -226,9 +240,14 @@
         {% endif %}
         {% if mercados_disponibles %}
         <label class="campo-filtro">Mercado
-          <select name="mercado" multiple size="3" title="Ctrl/Cmd + clic para elegir varios">
-            {% for mdo in mercados_disponibles %}<option value="{{ mdo }}" {{ 'selected' if mdo in mercado_filtro else '' }}>{{ mdo|title }}</option>{% endfor %}
-          </select>
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-mercado" onclick="togglePanel('mercado')">
+              {% if not mercado_filtro %}Todos{% elif mercado_filtro|length == 1 %}{{ mercado_filtro[0] }}{% else %}{{ mercado_filtro|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-mercado">
+              {% for mdo in mercados_disponibles %}<label class="ms-opt"><input type="checkbox" name="mercado" value="{{ mdo }}" {{ 'checked' if mdo in mercado_filtro else '' }}> {{ mdo }}</label>{% endfor %}
+            </div>
+          </div>
         </label>
         {% endif %}
         <button class="btn primary" type="submit">Aplicar</button>
@@ -285,8 +304,8 @@
     </div>
 
     {% if usuario.rol in ("analista", "admin") %}
-    <div class="panel">
-      <p class="panel-title">Personal del Planning — reemplazar mercaderista ({{ por_mercaderista|length }})</p>
+    <details class="panel panel-colapsable">
+      <summary class="panel-title">Personal del Planning — reemplazar mercaderista ({{ por_mercaderista|length }})</summary>
       {% if not por_mercaderista %}
         <p class="empty">Sin planning cargado para este período.</p>
       {% else %}
@@ -296,6 +315,7 @@
             <th>Mercaderista</th>
             <th>DNI</th>
             <th>Ciudad</th>
+            <th>Mercado</th>
             <th>PDVs asignados</th>
             <th></th>
           </tr>
@@ -304,6 +324,7 @@
             <td>{{ m.mercaderista|title }}</td>
             <td>{{ m.dni or '—' }}</td>
             <td>{{ (m.ciudad or '—')|title }}</td>
+            <td>{{ m.mercado or '—' }}</td>
             <td>{{ m.pdvs_asignados }}</td>
             <td>
               {% if m.dni %}
@@ -316,7 +337,7 @@
       </div>
       <p class="note">Cambia el DNI de TODOS los PDVs de {{ periodo_str }} que tenía ese mercaderista, por alguien de Personal Activo -- útil cuando el Excel de Planning vino con el DNI de alguien que ya no corresponde. Si se vuelve a subir el Excel de este mes más adelante, esta corrección se pierde igual que "Editar" PDV.</p>
       {% endif %}
-    </div>
+    </details>
     {% endif %}
 
     <div class="panel">
@@ -551,6 +572,15 @@
     </div>
   </form>
 </dialog>
+<script>
+function togglePanel(campo) {
+  document.querySelectorAll('.ms-panel').forEach(function (p) { if (p.id !== 'panel-' + campo) p.classList.remove('abierto'); });
+  document.getElementById('panel-' + campo).classList.toggle('abierto');
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(function (p) { p.classList.remove('abierto'); });
+});
+</script>
 <script>
   (function () {
     var dlg = document.getElementById('dlg-editar-pdv');

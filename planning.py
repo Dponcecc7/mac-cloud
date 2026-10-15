@@ -480,7 +480,7 @@ def pdvs_pendientes(planning, v):
     pendientes.sort(key=lambda p: (p.nombre_pdv or ""))
     return [{
         "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-        "region": p.region, "mercado": p.mercado,
+        "region": p.region, "mercado": _mercado_sin_palabra(p.mercado),
         "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
         "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
     } for p in pendientes]
@@ -556,14 +556,19 @@ _RE_PALABRA_MERCADO = re.compile(r"\bmercado\b", re.IGNORECASE)
 
 def _mercado_sin_palabra(mercado):
     """Nombre del mercado sin la palabra "mercado" (Davor, 2026-10-13:
-    "ponles... el nombre del mercado, pero excluye la palabra mercado") --
-    ya está claro por el encabezado de la columna, repetirla en cada fila
-    es ruido ("Mercado Central" -> "Central"). None si no queda nada útil
-    (ej. el PDV se llamaba literal "Mercado")."""
+    "ponles... el nombre del mercado, pero excluye la palabra mercado"),
+    más una limpieza tipo Excel ESPACIOS()+NOMPROPIO() (Davor, 2026-10-16,
+    sobre valores crudos del Excel como "12 De Abril_ayacucho" en el
+    filtro de Mercado): "_" -> espacio, espacios de sobra colapsados y
+    recortados, y Capitalización De Cada Palabra -- ya está claro por el
+    encabezado de la columna, repetir "mercado" en cada fila es ruido
+    ("Mercado Central" -> "Central"). None si no queda nada útil (ej. el
+    PDV se llamaba literal "Mercado")."""
     if not mercado:
         return None
-    limpio = re.sub(r"\s{2,}", " ", _RE_PALABRA_MERCADO.sub("", mercado)).strip(" -,")
-    return limpio or None
+    limpio = _RE_PALABRA_MERCADO.sub("", mercado).replace("_", " ")
+    limpio = re.sub(r"\s+", " ", limpio).strip(" -,")
+    return limpio.title() if limpio else None
 
 
 def resumen_por_mercaderista(planning, pendientes):
