@@ -134,10 +134,14 @@ def test_cumplimiento_ruta_dia_clasifica_los_4_casos(db):
     # visitar. Fuera de lo programado (otro día): visitó un PDV de su
     # propia cartera, pero programado para OTRO día. Fuera de planning:
     # visitó un PDV que ni está en su Planning del mes.
+    fila_cumplido = _plan("11111111", "100", "PDV Cumplido", [dt.date(2026, 10, 10)])
+    fila_cumplido["mercado"] = "Mercado Centro"
+    fila_otro_dia = _plan("11111111", "300", "PDV Otro Dia", [dt.date(2026, 10, 15)])
+    fila_otro_dia["mercado"] = "Mercado Norte"
     df = pd.DataFrame([
-        _plan("11111111", "100", "PDV Cumplido", [dt.date(2026, 10, 10)]),
+        fila_cumplido,
         _plan("11111111", "200", "PDV Pendiente", [dt.date(2026, 10, 10)]),
-        _plan("11111111", "300", "PDV Otro Dia", [dt.date(2026, 10, 15)]),
+        fila_otro_dia,
     ])
     guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
 
@@ -166,12 +170,21 @@ def test_cumplimiento_ruta_dia_clasifica_los_4_casos(db):
     ])
 
     filas = cumplimiento_ruta_dia(dia, dia, planning_filtrado, v_dia)
-    por_co_li = {f["co_li"]: f["estado"] for f in filas}
-    assert por_co_li["100"] == "Cumplido"
-    assert por_co_li["200"] == "Pendiente"
-    assert por_co_li["300"] == "Fuera de lo programado (otro día de su ruta)"
-    assert por_co_li["999"] == "Fuera de planning"
+    por_co_li = {f["co_li"]: f for f in filas}
+    assert por_co_li["100"]["estado"] == "Cumplido"
+    assert por_co_li["200"]["estado"] == "Pendiente"
+    assert por_co_li["300"]["estado"] == "Fuera de lo programado (otro día de su ruta)"
+    assert por_co_li["999"]["estado"] == "Fuera de planning"
     assert all(f["fecha"] == dia for f in filas)
+    # Davor, 2026-10-16: "Eliminar columna supervisor, en lugar de ello,
+    # colocar nombre del mercado" -- el mercado sale del PlanningPdv (ya
+    # limpio, sin la palabra "mercado"), incluso para "otro día de su
+    # ruta" (el PDV SÍ está en su cartera, solo que programado otro día).
+    # Para "Fuera de planning" no hay de dónde sacarlo (el PDV ni siquiera
+    # está en el Planning del mes) -- None, no revienta.
+    assert por_co_li["100"]["mercado"] == "Centro"
+    assert por_co_li["300"]["mercado"] == "Norte"
+    assert por_co_li["999"]["mercado"] is None
 
 
 def test_cumplimiento_ruta_dia_excluye_visitas_de_dni_fuera_del_filtro(db):
@@ -290,6 +303,39 @@ def test_planning_del_periodo_filtra_por_mercado_multiple(db):
 
     con_filtro = planning_del_periodo(dt.date(2026, 10, 1), mercado_filtro=["Central", "Norte"])
     assert {p.co_li for p in con_filtro} == {"100", "200"}
+
+
+def test_planning_del_periodo_region_ciudad_supervisor_aceptan_lista_multiple(db):
+    # Davor, 2026-10-16: "Estos filtros que tambien tengan opción multiple
+    # con check boxes" -- región/ciudad/supervisor pasaron de un valor
+    # único a una lista, igual que mercado.
+    df = pd.DataFrame([
+        {
+            "co_li": "100", "tipo": "Mayorista", "nombre_pdv": "PDV Lima", "ciudad": "Lima", "region": "Lima",
+            "subcanal": None, "mercado": None, "dni_asignado": "11111111", "mercaderista_nombre": "Juan",
+            "supervisor": "Sup Uno", "dias_programados": 0, "fechas_programadas": [],
+        },
+        {
+            "co_li": "200", "tipo": "Mayorista", "nombre_pdv": "PDV Cusco", "ciudad": "Cusco", "region": "Sur",
+            "subcanal": None, "mercado": None, "dni_asignado": "22222222", "mercaderista_nombre": "Pedro",
+            "supervisor": "Sup Dos", "dias_programados": 0, "fechas_programadas": [],
+        },
+        {
+            "co_li": "300", "tipo": "Mayorista", "nombre_pdv": "PDV Piura", "ciudad": "Piura", "region": "Norte",
+            "subcanal": None, "mercado": None, "dni_asignado": "33333333", "mercaderista_nombre": "Ana",
+            "supervisor": "Sup Tres", "dias_programados": 0, "fechas_programadas": [],
+        },
+    ])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    con_region = planning_del_periodo(dt.date(2026, 10, 1), region_filtro=["Lima", "Norte"])
+    assert {p.co_li for p in con_region} == {"100", "300"}
+
+    con_ciudad = planning_del_periodo(dt.date(2026, 10, 1), ciudad_filtro=["Cusco"])
+    assert {p.co_li for p in con_ciudad} == {"200"}
+
+    con_supervisor = planning_del_periodo(dt.date(2026, 10, 1), supervisor_filtro=["Sup Uno", "Sup Tres"])
+    assert {p.co_li for p in con_supervisor} == {"100", "300"}
 
 
 def test_personal_activo_solo_devuelve_personas_con_estado_activo(db):

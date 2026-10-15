@@ -328,22 +328,22 @@ def aplicar_reemplazos_vigentes(periodo):
 
 
 def planning_del_periodo(periodo, region_filtro=None, ciudad_filtro=None, supervisor_filtro=None, mercado_filtro=None):
-    """`mercado_filtro`: lista de nombres de mercado YA limpios (ver
-    valores_filtrables/_mercado_sin_palabra), selección múltiple (Davor,
-    2026-10-15: "adiciona también como filtro, nombre del mercado, con
-    opción múltiple"). Se filtra en Python, no en SQL -- PlanningPdv.mercado
-    guarda el texto crudo del Excel ("Mercado Central", con la palabra), así
-    que hay que limpiarlo igual que al armar las opciones del desplegable
-    para poder compararlo."""
+    """`region_filtro`/`ciudad_filtro`/`supervisor_filtro`/`mercado_filtro`:
+    listas de selección múltiple (Davor, 2026-10-16: "Estos filtros que
+    tambien tengan opción multiple con check boxes" -- antes región/ciudad/
+    supervisor eran un valor único). `mercado_filtro`: lista de nombres de
+    mercado YA limpios (ver valores_filtrables/_mercado_sin_palabra),
+    filtrada en Python (no en SQL) porque PlanningPdv.mercado guarda el
+    texto crudo del Excel ("Mercado Central", con la palabra)."""
     session = get_session()
     try:
         query = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
         if region_filtro:
-            query = query.filter(PlanningPdv.region == region_filtro)
+            query = query.filter(PlanningPdv.region.in_(region_filtro))
         if ciudad_filtro:
-            query = query.filter(PlanningPdv.ciudad == ciudad_filtro)
+            query = query.filter(PlanningPdv.ciudad.in_(ciudad_filtro))
         if supervisor_filtro:
-            query = query.filter(PlanningPdv.supervisor == supervisor_filtro)
+            query = query.filter(PlanningPdv.supervisor.in_(supervisor_filtro))
         filas = query.all()
     finally:
         session.close()
@@ -758,6 +758,7 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
     dnis_en_scope = {p.dni_asignado for p in planning_filtrado if p.dni_asignado}
     ids_planning = [p.id for p in planning_filtrado]
     pdv_por_id = {p.id: p for p in planning_filtrado}
+    pdv_por_clave = {(p.dni_asignado, p.co_li): p for p in planning_filtrado if p.dni_asignado}
 
     programado_por_fecha = {}
     if ids_planning:
@@ -797,7 +798,7 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
             visita = visitas.get(clave)
             filas.append({
                 "fecha": fecha, "dni": p.dni_asignado, "mercaderista": p.mercaderista_nombre, "co_li": p.co_li,
-                "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "supervisor": p.supervisor,
+                "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "mercado": _mercado_sin_palabra(p.mercado),
                 "estado": "Cumplido" if visita is not None else "Pendiente",
                 "hora_visita": visita["hora_inicio"] if visita is not None else None,
             })
@@ -806,9 +807,11 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
         if (fecha, dni, co_li) in vistos:
             continue
         en_planning = (dni, co_li) in co_lis_en_planning_del_dni
+        pdv_cartera = pdv_por_clave.get((dni, co_li))
         filas.append({
             "fecha": fecha, "dni": dni, "mercaderista": r["nombre"], "co_li": co_li,
-            "nombre_pdv": r["punto_venta"], "ciudad": r["ciudad"], "supervisor": r.get("supervisor"),
+            "nombre_pdv": r["punto_venta"], "ciudad": r["ciudad"],
+            "mercado": _mercado_sin_palabra(pdv_cartera.mercado) if pdv_cartera else None,
             "estado": "Fuera de lo programado (otro día de su ruta)" if en_planning else "Fuera de planning",
             "hora_visita": r["hora_inicio"],
         })

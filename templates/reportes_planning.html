@@ -216,26 +216,38 @@
         </label>
         {% if regiones_disponibles %}
         <label class="campo-filtro">Región
-          <select name="region">
-            <option value="">Todas</option>
-            {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if region_filtro == r else '' }}>{{ r|title }}</option>{% endfor %}
-          </select>
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-region" onclick="togglePanel('region')">
+              {% if not region_filtro %}Todas{% elif region_filtro|length == 1 %}{{ region_filtro[0]|title }}{% else %}{{ region_filtro|length }} seleccionadas{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-region">
+              {% for r in regiones_disponibles %}<label class="ms-opt"><input type="checkbox" name="region" value="{{ r }}" {{ 'checked' if r in region_filtro else '' }}> {{ r|title }}</label>{% endfor %}
+            </div>
+          </div>
         </label>
         {% endif %}
         {% if ciudades_disponibles %}
         <label class="campo-filtro">Ciudad
-          <select name="ciudad">
-            <option value="">Todas</option>
-            {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if ciudad_filtro == c else '' }}>{{ c|title }}</option>{% endfor %}
-          </select>
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-ciudad" onclick="togglePanel('ciudad')">
+              {% if not ciudad_filtro %}Todas{% elif ciudad_filtro|length == 1 %}{{ ciudad_filtro[0]|title }}{% else %}{{ ciudad_filtro|length }} seleccionadas{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-ciudad">
+              {% for c in ciudades_disponibles %}<label class="ms-opt"><input type="checkbox" name="ciudad" value="{{ c }}" {{ 'checked' if c in ciudad_filtro else '' }}> {{ c|title }}</label>{% endfor %}
+            </div>
+          </div>
         </label>
         {% endif %}
         {% if supervisores_disponibles %}
         <label class="campo-filtro">Supervisor
-          <select name="supervisor">
-            <option value="">Todos</option>
-            {% for s in supervisores_disponibles %}<option value="{{ s }}" {{ 'selected' if supervisor_filtro == s else '' }}>{{ s|title }}</option>{% endfor %}
-          </select>
+          <div class="ms">
+            <button type="button" class="ms-toggle" id="btn-supervisor" onclick="togglePanel('supervisor')">
+              {% if not supervisor_filtro %}Todos{% elif supervisor_filtro|length == 1 %}{{ supervisor_filtro[0]|title }}{% else %}{{ supervisor_filtro|length }} seleccionados{% endif %}
+            </button>
+            <div class="ms-panel" id="panel-supervisor">
+              {% for s in supervisores_disponibles %}<label class="ms-opt"><input type="checkbox" name="supervisor" value="{{ s }}" {{ 'checked' if s in supervisor_filtro else '' }}> {{ s|title }}</label>{% endfor %}
+            </div>
+          </div>
         </label>
         {% endif %}
         {% if mercados_disponibles %}
@@ -344,9 +356,9 @@
       <p class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</p>
       <form method="get" class="dia-form">
         <input type="hidden" name="mes" value="{{ periodo_str }}">
-        <input type="hidden" name="region" value="{{ region_filtro }}">
-        <input type="hidden" name="ciudad" value="{{ ciudad_filtro }}">
-        <input type="hidden" name="supervisor" value="{{ supervisor_filtro }}">
+        {% for rv in region_filtro %}<input type="hidden" name="region" value="{{ rv }}">{% endfor %}
+        {% for cv in ciudad_filtro %}<input type="hidden" name="ciudad" value="{{ cv }}">{% endfor %}
+        {% for sv in supervisor_filtro %}<input type="hidden" name="supervisor" value="{{ sv }}">{% endfor %}
         {% for mdo in mercado_filtro %}<input type="hidden" name="mercado" value="{{ mdo }}">{% endfor %}
         <label style="font-size:12px; color:var(--muted); font-weight:600;">Desde
           <input type="date" name="dia_desde" value="{{ dia_desde_str }}">
@@ -380,7 +392,7 @@
             <th>CO_LI</th>
             <th>Nombre PDV</th>
             <th>Ciudad</th>
-            <th>Supervisor</th>
+            <th>Mercado</th>
             <th>Estado</th>
             <th>Hora visita</th>
           </tr>
@@ -392,7 +404,7 @@
             <td>{{ f.co_li }}</td>
             <td>{{ f.nombre_pdv or '—' }}</td>
             <td>{{ (f.ciudad or '—')|title }}</td>
-            <td>{{ (f.supervisor or '—')|title }}</td>
+            <td>{{ f.mercado or '—' }}</td>
             <td>
               {% if f.estado == 'Cumplido' %}<span class="badge-estado ok">Cumplido</span>
               {% elif f.estado == 'Pendiente' %}<span class="badge-estado warn">Pendiente</span>

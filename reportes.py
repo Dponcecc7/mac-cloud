@@ -690,12 +690,11 @@ def planning():
     desde, hasta, periodo_str = _mes_desde_query()
     periodo = desde
     if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = None
-        mercado_f = []
+        region_f = ciudad_f = supervisor_f = mercado_f = []
     else:
-        region_f = request.args.get("region") or None
-        ciudad_f = request.args.get("ciudad") or None
-        supervisor_f = request.args.get("supervisor") or None
+        region_f = request.args.getlist("region")
+        ciudad_f = request.args.getlist("ciudad")
+        supervisor_f = request.args.getlist("supervisor")
         mercado_f = request.args.getlist("mercado")
     regiones_disp, ciudades_disp, supervisores_disp, mercados_disp = valores_filtrables(periodo)
 
@@ -737,8 +736,8 @@ def planning():
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
         periodo_str=periodo_str, periodos_disponibles=periodos_disponibles(),
-        region_filtro=region_f or "", ciudad_filtro=ciudad_f or "", supervisor_filtro=supervisor_f or "",
-        mercado_filtro=mercado_f or [],
+        region_filtro=region_f, ciudad_filtro=ciudad_f, supervisor_filtro=supervisor_f,
+        mercado_filtro=mercado_f,
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
         mercados_disponibles=mercados_disp,
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
@@ -964,12 +963,11 @@ def planning_exportar():
     desde, hasta, periodo_str = _mes_desde_query()
     periodo = desde
     if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = None
-        mercado_f = []
+        region_f = ciudad_f = supervisor_f = mercado_f = []
     else:
-        region_f = request.args.get("region") or None
-        ciudad_f = request.args.get("ciudad") or None
-        supervisor_f = request.args.get("supervisor") or None
+        region_f = request.args.getlist("region")
+        ciudad_f = request.args.getlist("ciudad")
+        supervisor_f = request.args.getlist("supervisor")
         mercado_f = request.args.getlist("mercado")
 
     planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f, mercado_f)
@@ -1036,12 +1034,11 @@ def planning_ruta_dia_exportar():
     "Cumplimiento de ruta del día"."""
     dia_desde, dia_hasta = _rango_dia_planning_desde_query()
     if current_user.rol == "supervisor":
-        region_f = ciudad_f = supervisor_f = None
-        mercado_f = []
+        region_f = ciudad_f = supervisor_f = mercado_f = []
     else:
-        region_f = request.args.get("region") or None
-        ciudad_f = request.args.get("ciudad") or None
-        supervisor_f = request.args.get("supervisor") or None
+        region_f = request.args.getlist("region")
+        ciudad_f = request.args.getlist("ciudad")
+        supervisor_f = request.args.getlist("supervisor")
         mercado_f = request.args.getlist("mercado")
 
     periodos_del_rango = {dia_desde.replace(day=1), dia_hasta.replace(day=1)}
@@ -1054,15 +1051,15 @@ def planning_ruta_dia_exportar():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Cumplimiento del día"
-    ws.append(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"])
+    ws.append(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Mercado", "Estado", "Hora visita"])
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for f in cumplimiento_dia:
         ws.append(fila_segura([
-            f["fecha"], f["mercaderista"], f["dni"], f["co_li"], f["nombre_pdv"], f["ciudad"], f["supervisor"],
+            f["fecha"], f["mercaderista"], f["dni"], f["co_li"], f["nombre_pdv"], f["ciudad"], f["mercado"],
             f["estado"], f["hora_visita"],
         ]))
-    for i, titulo in enumerate(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"], start=1):
+    for i, titulo in enumerate(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Mercado", "Estado", "Hora visita"], start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(14, len(titulo) + 2)
 
     buf = io.BytesIO()
