@@ -374,14 +374,16 @@
       {% else %}
       {% set n_cumplidos = cumplimiento_dia|selectattr('estado', 'equalto', 'Cumplido')|list|length %}
       {% set n_pendientes = cumplimiento_dia|selectattr('estado', 'equalto', 'Pendiente')|list|length %}
-      {% set n_fuera = cumplimiento_dia|rejectattr('estado', 'in', ['Cumplido', 'Pendiente'])|list|length %}
+      {% set n_otro_dia = cumplimiento_dia|selectattr('estado', 'equalto', 'Fuera de lo programado (otro día de su ruta)')|list|length %}
+      {% set n_fuera_planning = cumplimiento_dia|selectattr('estado', 'equalto', 'Fuera de planning')|list|length %}
       {% if n_cumplidos == 0 and n_pendientes == 0 %}
         <p class="empty">Este mes no tiene ruta programada día por día (0 cumplidos y 0 pendientes) -- se cargó antes del 15/10, cuando solo se guardaba el total mensual. Las visitas de abajo sí son reales, pero no se puede saber si les tocaba justo ese día. Volvé a subir el Excel de Planning de {{ periodo_str }} para tener el detalle por día.</p>
       {% endif %}
       <div class="resumen-dia">
         <div><span style="color:var(--ok);">{{ n_cumplidos }}</span> cumplidos</div>
         <div><span style="color:var(--warn);">{{ n_pendientes }}</span> pendientes</div>
-        <div><span style="color:var(--bad);">{{ n_fuera }}</span> fuera de lo programado</div>
+        <div><span style="color:var(--bad);">{{ n_otro_dia }}</span> fuera de lo programado (otro día de su ruta)</div>
+        <div><span style="color:var(--bad);">{{ n_fuera_planning }}</span> fuera de planning</div>
       </div>
       <div class="table-wrap">
         <table>
