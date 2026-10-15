@@ -7,7 +7,7 @@ opcionales) -- este test fija ese comportamiento para que no se rompa sin
 querer si alguien "simplifica" el patron mas adelante."""
 import pandas as pd
 
-from cobertura import PUNTOS_EXCLUIDOS
+from cobertura import PUNTOS_EXCLUIDOS, PUNTOS_NO_VISITA
 
 
 def _excluido(nombre_pdv):
@@ -37,3 +37,19 @@ def test_ubicaciones_administrativas_se_excluyen():
 def test_pdv_normal_no_se_excluye():
     assert not _excluido("BODEGA SAN MARTIN")
     assert not _excluido("FARMACIA CENTRAL")
+
+
+def _filtrar_no_visita(nombres_pdv):
+    # Misma máscara que usa _cargar_visitas() (cobertura.py) para descartar
+    # filas de PUNTOS_NO_VISITA ANTES de que lleguen a cualquier
+    # consumidor -- Davor, 2026-10-16: "REFRIGERIO... no consideres como
+    # visitados en toda la MAC... tampoco que sume en los indicadores de
+    # cobertura" (PDV ficticio que usan los mercaderistas para marcar su
+    # hora de almuerzo, punto_venta_id="1" real en Postgres).
+    v = pd.DataFrame({"punto_venta": nombres_pdv})
+    return v[~v["punto_venta"].astype(str).str.strip().str.upper().isin(PUNTOS_NO_VISITA)]["punto_venta"].tolist()
+
+
+def test_refrigerio_se_descarta_de_cargar_visitas():
+    quedan = _filtrar_no_visita(["REFRIGERIO", "refrigerio", " Refrigerio ", "BODEGA SAN MARTIN", "FARMACIA CENTRAL"])
+    assert quedan == ["BODEGA SAN MARTIN", "FARMACIA CENTRAL"]

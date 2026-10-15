@@ -49,6 +49,14 @@ PUNTOS_EXCLUIDOS = (
     # tiene "ALM" pero sin punto después.
     r"ALM\s*\.",
 )
+# PDV ficticio que usan los mercaderistas para marcar su hora de almuerzo
+# (punto_venta_id="1" en Postgres), no una visita real -- Davor, 2026-10-16:
+# "no consideres como visitados en toda la MAC... tampoco que sume en los
+# indicadores de cobertura". A diferencia de PUNTOS_EXCLUIDOS (que solo
+# excluye del cálculo de "visita larga", ver más abajo), esto se descarta
+# por completo en _cargar_visitas() para que desaparezca de TODOS los
+# indicadores a la vez, no solo de uno puntual.
+PUNTOS_NO_VISITA = ("REFRIGERIO",)
 
 
 def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
@@ -95,6 +103,9 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
         "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta", "tipo_negocio",
         "fecha_inicio", "hora_inicio", "hora_fin", "distancia_metros_inicio",
     ])
+    v = v[~v["punto_venta"].astype(str).str.strip().str.upper().isin(PUNTOS_NO_VISITA)]
+    if not len(v):
+        return pd.DataFrame()
     v["supervisor_dni_efectivo"] = v["dni"].map(overrides_sup).fillna(v["supervisor_dni"])
     v["supervisor"] = v["supervisor_dni_efectivo"].map(nombre_sup)
     v["fecha_inicio"] = pd.to_datetime(v["fecha_inicio"])
