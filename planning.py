@@ -760,6 +760,27 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
     pdv_por_id = {p.id: p for p in planning_filtrado}
     pdv_por_clave = {(p.dni_asignado, p.co_li): p for p in planning_filtrado if p.dni_asignado}
 
+    # Homologar el nombre por DNI (Davor, 2026-10-16: "Homologa los
+    # nombre, con respecto al DNI") -- el Excel de Planning trae el nombre
+    # en un orden ("JACKELINE MAMANI PHOCCO") y las visitas (Persona.
+    # nombre_completo, vía _cargar_visitas()) en otro ("MAMANI PHOCCO
+    # JACKELINE"), mismo DNI -- sin esto, el mismo mercaderista salía con
+    # 2 nombres distintos según si la fila venía de PlanningPdv o de una
+    # visita. Personal manda (es la fuente única de verdad); si el DNI ya
+    # no está ahí (caso raro, p.ej. dado de baja sin reemplazo), se usa el
+    # nombre que ya traía la fila en vez de dejarla en blanco.
+    nombres_por_dni = {}
+    if dnis_en_scope:
+        session = get_session()
+        try:
+            nombres_por_dni = dict(
+                session.query(Persona.dni, Persona.nombre_completo)
+                .filter(Persona.dni.in_(dnis_en_scope))
+                .all()
+            )
+        finally:
+            session.close()
+
     programado_por_fecha = {}
     if ids_planning:
         session = get_session()
@@ -797,7 +818,8 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
             vistos.add(clave)
             visita = visitas.get(clave)
             filas.append({
-                "fecha": fecha, "dni": p.dni_asignado, "mercaderista": p.mercaderista_nombre, "co_li": p.co_li,
+                "fecha": fecha, "dni": p.dni_asignado,
+                "mercaderista": nombres_por_dni.get(p.dni_asignado, p.mercaderista_nombre), "co_li": p.co_li,
                 "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "mercado": _mercado_sin_palabra(p.mercado),
                 "estado": "Cumplido" if visita is not None else "Pendiente",
                 "hora_visita": visita["hora_inicio"] if visita is not None else None,
@@ -809,7 +831,7 @@ def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
         en_planning = (dni, co_li) in co_lis_en_planning_del_dni
         pdv_cartera = pdv_por_clave.get((dni, co_li))
         filas.append({
-            "fecha": fecha, "dni": dni, "mercaderista": r["nombre"], "co_li": co_li,
+            "fecha": fecha, "dni": dni, "mercaderista": nombres_por_dni.get(dni, r["nombre"]), "co_li": co_li,
             "nombre_pdv": r["punto_venta"], "ciudad": r["ciudad"],
             "mercado": _mercado_sin_palabra(pdv_cartera.mercado) if pdv_cartera else None,
             "estado": "Fuera de lo programado (otro día de su ruta)" if en_planning else "Fuera de planning",

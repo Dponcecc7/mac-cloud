@@ -134,10 +134,23 @@
        cuando logra inicializarla (table-layout:fixed + ancho de cada
        columna fijado como punto de partida); las reglas de acá abajo
        quedan scoped a esa clase a propósito -- si el JS no corre por lo
-       que sea, las tablas se quedan exactamente como estaban antes (sin
-       esto, max-width:0 suelto podría angostar columnas sin que el
-       usuario pueda arreglarlo arrastrando). */
-    table.cols-redimensionables th, table.cols-redimensionables td { overflow:hidden; text-overflow:ellipsis; max-width:0; }
+       que sea, las tablas se quedan exactamente como estaban antes.
+
+       max-width:0 SOLO en td, nunca en th (bug real encontrado con
+       Playwright, 2026-10-16: con max-width:0 también en el th, el propio
+       <th> -- que es el que define el ancho de columna en table-layout:
+       fixed -- queda con su "ancho especificado" efectivamente anulado
+       por el max-width, así que el navegador deja de reconocer NINGÚN
+       ancho explícito en NINGUNA columna y reparte el espacio en partes
+       iguales entre todas, ignorando por completo tanto el ancho inicial
+       como cualquier arrastre -- por eso "no se podía mover" ninguna
+       columna. El th solo necesita overflow/ellipsis (ya tiene su propio
+       width fijado por JS); el truco de max-width:0 es para el td, que
+       en fixed layout no define ancho propio y solo necesita achicarse
+       para que el texto largo se trunque con "..." dentro de lo que el
+       th ya fijó). */
+    table.cols-redimensionables th { overflow:hidden; text-overflow:ellipsis; }
+    table.cols-redimensionables td { overflow:hidden; text-overflow:ellipsis; max-width:0; }
     th .th-resizer { position:absolute; right:0; top:0; height:100%; width:7px; cursor:col-resize; user-select:none; touch-action:none; }
     th .th-resizer:hover, th .th-resizer.resizing { background:var(--brand); opacity:.4; }
     tr:last-child td { border-bottom:none; }
@@ -407,7 +420,7 @@
         <div><span style="color:var(--bad);">{{ n_fuera_planning }}</span> fuera de planning</div>
       </div>
       <div class="table-wrap">
-        <table>
+        <table id="tabla-cumplimiento-dia">
           <tr>
             <th>Fecha</th>
             <th>Mercaderista</th>
@@ -420,7 +433,7 @@
             <th>Hora visita</th>
           </tr>
           {% for f in cumplimiento_dia %}
-          <tr>
+          <tr data-orden-mercaderista="{{ (f.mercaderista or '')|upper }}" data-orden-dni="{{ f.dni or '' }}" data-orden-pdv="{{ (f.nombre_pdv or '')|upper }}">
             <td>{{ f.fecha.strftime('%d/%m/%Y') if f.fecha else '—' }}</td>
             <td>{{ (f.mercaderista or '—')|title }}</td>
             <td>{{ f.dni or '—' }}</td>
@@ -716,6 +729,11 @@ var CONFIG_BUSQUEDA = {
   'tabla-pendientes':   { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-detalle':      { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-fuera':        { mercaderista: ['nombre'], pdv: ['punto'] },
+  // Davor, 2026-10-16: "Los filtros mercaderisa y PDV, no afecta la tabla
+  // 'Cumplimiento de ruta del día'" -- le faltaba el id y los data-orden-*
+  // que usa _coincide(), así que aplicarFiltrosBusqueda() simplemente no
+  // la encontraba (document.getElementById devolvía null).
+  'tabla-cumplimiento-dia': { mercaderista: ['mercaderista', 'dni'], pdv: ['pdv'] },
 };
 
 function _coincide(fila, atributos, texto) {

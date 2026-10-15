@@ -187,6 +187,39 @@ def test_cumplimiento_ruta_dia_clasifica_los_4_casos(db):
     assert por_co_li["999"]["mercado"] is None
 
 
+def test_cumplimiento_ruta_dia_homologa_nombre_con_personal(db):
+    # Davor, 2026-10-16: "Homologa los nombre, con respecto al DNI" -- el
+    # Excel de Planning trae el nombre en un orden ("Juan Perez") y las
+    # visitas (Persona.nombre_completo, vía _cargar_visitas()) en otro
+    # ("Perez Juan"), mismo DNI. Personal manda para AMBAS fuentes de fila
+    # (Cumplido/Pendiente desde PlanningPdv, Fuera de... desde la visita).
+    df = pd.DataFrame([
+        _plan("11111111", "100", "PDV Programado", [dt.date(2026, 10, 10)]),
+    ])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    session = dimension_models.get_session()
+    session.add(Persona(dni="11111111", nombre_completo="Perez Juan", estado="Activo"))
+    session.commit()
+    planning_filtrado = session.query(PlanningPdv).all()
+    session.expunge_all()
+    session.close()
+
+    dia = dt.date(2026, 10, 10)
+    v_dia = pd.DataFrame([
+        {
+            "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
+            "punto_venta_id": "999", "punto_venta": "PDV Fuera De Todo", "hora_inicio": "09:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
+        },
+    ])
+
+    filas = cumplimiento_ruta_dia(dia, dia, planning_filtrado, v_dia)
+    por_co_li = {f["co_li"]: f for f in filas}
+    assert por_co_li["100"]["mercaderista"] == "Perez Juan"  # venía de PlanningPdv como "Juan Perez"
+    assert por_co_li["999"]["mercaderista"] == "Perez Juan"  # venía de la visita como "Juan Perez"
+
+
 def test_cumplimiento_ruta_dia_excluye_visitas_de_dni_fuera_del_filtro(db):
     # Davor, 2026-10-15: "los filtros superiores no afectan esta tabla" --
     # si region/ciudad/supervisor ya dejaron a un mercaderista AFUERA de
