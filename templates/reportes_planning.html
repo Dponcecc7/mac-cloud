@@ -848,6 +848,18 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
     var encabezados = Array.prototype.filter.call(filaEncabezado.children, function (c) { return c.tagName === 'TH'; });
     if (!encabezados.length) return;
 
+    // La tabla viene con width:100% (CSS) -- con table-layout:fixed Y
+    // width:100%, el navegador REDISTRIBUYE proporcionalmente el ancho de
+    // TODAS las columnas para seguir llenando el 100% del contenedor cada
+    // vez que una cambia, así que achicar/agrandar una no se nota (las
+    // demás compensan solas). Por eso acá se pasa la tabla a un ancho fijo
+    // en píxeles (la suma de sus columnas) -- Davor, 2026-10-16: "No
+    // funciona no puedo agrandar las columnas".
+    function actualizarAnchoTabla() {
+      var total = encabezados.reduce(function (suma, th) { return suma + th.getBoundingClientRect().width; }, 0);
+      tabla.style.width = total + 'px';
+    }
+
     encabezados.forEach(function (th, indice) {
       var clave = claveAncho(tabla, indice);
       var guardado = leerAncho(clave);
@@ -864,6 +876,7 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
         agarradero.classList.add('resizing');
         function mover(ev) {
           th.style.width = Math.max(MIN_COL_PX, anchoInicio + (ev.clientX - inicioX)) + 'px';
+          actualizarAnchoTabla();
         }
         function soltar() {
           agarradero.classList.remove('resizing');
@@ -879,6 +892,7 @@ configurarBuscadorConSugerencias('buscar-pdv', 'sugerencias-pdv', PDVS_SUGERIDOS
     });
 
     tabla.style.tableLayout = 'fixed';
+    actualizarAnchoTabla();
     tabla.classList.add('cols-redimensionables');
   });
 })();
