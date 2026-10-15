@@ -151,23 +151,27 @@ def test_cumplimiento_ruta_dia_clasifica_los_4_casos(db):
         {
             "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
             "punto_venta_id": "100", "punto_venta": "PDV Cumplido", "hora_inicio": "09:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
         },
         {
             "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
             "punto_venta_id": "300", "punto_venta": "PDV Otro Dia", "hora_inicio": "10:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
         },
         {
             "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
             "punto_venta_id": "999", "punto_venta": "PDV Fuera De Todo", "hora_inicio": "11:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
         },
     ])
 
-    filas = cumplimiento_ruta_dia(dia, planning_filtrado, v_dia)
+    filas = cumplimiento_ruta_dia(dia, dia, planning_filtrado, v_dia)
     por_co_li = {f["co_li"]: f["estado"] for f in filas}
     assert por_co_li["100"] == "Cumplido"
     assert por_co_li["200"] == "Pendiente"
     assert por_co_li["300"] == "Fuera de lo programado (otro día de su ruta)"
     assert por_co_li["999"] == "Fuera de planning"
+    assert all(f["fecha"] == dia for f in filas)
 
 
 def test_cumplimiento_ruta_dia_excluye_visitas_de_dni_fuera_del_filtro(db):
@@ -189,14 +193,16 @@ def test_cumplimiento_ruta_dia_excluye_visitas_de_dni_fuera_del_filtro(db):
         {
             "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
             "punto_venta_id": "100", "punto_venta": "PDV Dentro Del Filtro", "hora_inicio": "09:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
         },
         {
             "dni": "22222222", "nombre": "Otro Mercaderista", "ciudad": "Lima", "supervisor": "Sup Dos",
             "punto_venta_id": "500", "punto_venta": "PDV De Otro Supervisor", "hora_inicio": "10:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 10),
         },
     ])
 
-    filas = cumplimiento_ruta_dia(dia, planning_filtrado, v_dia)
+    filas = cumplimiento_ruta_dia(dia, dia, planning_filtrado, v_dia)
     dnis_en_resultado = {f["dni"] for f in filas}
     assert dnis_en_resultado == {"11111111"}
 
@@ -211,8 +217,38 @@ def test_cumplimiento_ruta_dia_sin_planning_pdv_dia_no_rompe(db):
     planning_filtrado = session.query(PlanningPdv).all()
     session.close()
 
-    filas = cumplimiento_ruta_dia(dt.date(2026, 10, 10), planning_filtrado, pd.DataFrame())
+    filas = cumplimiento_ruta_dia(dt.date(2026, 10, 10), dt.date(2026, 10, 10), planning_filtrado, pd.DataFrame())
     assert filas == []
+
+
+def test_cumplimiento_ruta_dia_rango_de_varios_dias_etiqueta_la_fecha(db):
+    # Davor, 2026-10-16: "adiciona una columna que diga Fecha, por si deseo
+    # descargarme visitas de varios dias" -- desde != hasta debe devolver
+    # una fila por (fecha, dni, co_li), no colapsar todo el rango en una.
+    df = pd.DataFrame([
+        _plan("11111111", "100", "PDV Lunes", [dt.date(2026, 10, 12)]),
+        _plan("11111111", "200", "PDV Martes", [dt.date(2026, 10, 13)]),
+    ])
+    guardar_planning(df, dt.date(2026, 10, 1), "tester@x.com")
+
+    session = dimension_models.get_session()
+    planning_filtrado = session.query(PlanningPdv).all()
+    session.expunge_all()
+    session.close()
+
+    v_rango = pd.DataFrame([
+        {
+            "dni": "11111111", "nombre": "Juan Perez", "ciudad": "Lima", "supervisor": "Sup Uno",
+            "punto_venta_id": "100", "punto_venta": "PDV Lunes", "hora_inicio": "09:00:00",
+            "fecha_inicio": pd.Timestamp(2026, 10, 12),
+        },
+    ])
+
+    filas = cumplimiento_ruta_dia(dt.date(2026, 10, 12), dt.date(2026, 10, 13), planning_filtrado, v_rango)
+    por_fecha_co_li = {(f["fecha"], f["co_li"]): f["estado"] for f in filas}
+    assert por_fecha_co_li[(dt.date(2026, 10, 12), "100")] == "Cumplido"
+    assert por_fecha_co_li[(dt.date(2026, 10, 13), "200")] == "Pendiente"
+    assert len(filas) == 2
 
 
 def test_valores_filtrables_incluye_mercados_ya_limpios(db):

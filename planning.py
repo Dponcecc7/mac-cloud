@@ -715,90 +715,99 @@ def pdvs_fuera_planning(planning, v):
     } for _, r in resumen.iterrows()]
 
 
-def cumplimiento_ruta_dia(dia, planning_filtrado, v_dia):
-    """Cumplimiento de ruta de UN día puntual, por mercaderista (Davor,
-    2026-10-15: "cuando cargue el planning el mercaderista esta asignado a
-    una ruta... quiero que por día pueda tener PDV visitado y PDVs fuera de
-    lo programado al día, para poder mandar esas capturas al equipo").
+def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):
+    """Cumplimiento de ruta de un RANGO de días (uno o varios), por
+    mercaderista (Davor, 2026-10-15: "cuando cargue el planning el
+    mercaderista esta asignado a una ruta... quiero que por día pueda
+    tener PDV visitado y PDVs fuera de lo programado al día"; 2026-10-16:
+    "adiciona una columna que diga Fecha, por si deseo descargarme visitas
+    de varios dias" -- originalmente era un solo día puntual, `desde ==
+    hasta` sigue siendo el caso de uso normal del día a día).
 
-    Una fila por (dni, co_li) que ESE día puntual estaba programado (via
-    PlanningPdvDia.fecha == dia) y/o fue realmente visitado:
-    - "Cumplido": estaba programado para hoy y lo visitó.
-    - "Pendiente": estaba programado para hoy y todavía no lo visitó.
-    - "Fuera de lo programado (otro día de su ruta)": lo visitó hoy, el PDV
-      SÍ es parte de su cartera del mes, pero no le tocaba justo hoy.
-    - "Fuera de planning": lo visitó hoy y el PDV ni siquiera está en su
-      Planning de este mes.
+    Una fila por (fecha, dni, co_li) que ESE día del rango estaba
+    programado (vía PlanningPdvDia.fecha) y/o fue realmente visitado:
+    - "Cumplido": estaba programado ese día y lo visitó ese mismo día.
+    - "Pendiente": estaba programado ese día y todavía no lo visitó.
+    - "Fuera de lo programado (otro día de su ruta)": lo visitó ese día, el
+      PDV SÍ es parte de su cartera del mes, pero no le tocaba justo ese día.
+    - "Fuera de planning": lo visitó ese día y el PDV ni siquiera está en
+      su Planning de este mes.
 
     `planning_filtrado`: lista de PlanningPdv ya acotada por región/ciudad/
-    supervisor (ver planning_del_periodo()) -- el período se obtiene de ahí
-    mismo (todos comparten el mismo mes). `v_dia`: visitas Tradicional de
-    ESE día puntual (visitas_tradicional(dia, dia, usuario_actual)), SIN
-    acotar por región/ciudad/supervisor (ver docstring de
-    visitas_tradicional() -- esos filtros nunca se aplican ahí porque
-    comparar el supervisor de Planning (texto libre) contra Persona.dni
-    rompía la consulta). Para que los filtros de arriba sí afecten este
-    panel (Davor, 2026-10-15: "los filtros superiores no afectan esta
-    tabla"), acá se acota `v_dia` por los DNI que SÍ quedaron dentro de
-    `planning_filtrado` -- un mercaderista fuera del filtro no debe
-    aparecer ni como "cumplido" ni como "fuera de planning".
+    supervisor/mercado (ver planning_del_periodo()) -- puede abarcar más de
+    un mes si el rango de días cruza fin de mes. `v_rango`: visitas
+    Tradicional de TODO el rango [desde, hasta] (visitas_tradicional(desde,
+    hasta, usuario_actual)), SIN acotar por región/ciudad/supervisor (ver
+    docstring de visitas_tradicional() -- esos filtros nunca se aplican ahí
+    porque comparar el supervisor de Planning (texto libre) contra
+    Persona.dni rompía la consulta). Para que los filtros de arriba sí
+    afecten este panel (Davor, 2026-10-15: "los filtros superiores no
+    afectan esta tabla"), acá se acota `v_rango` por los DNI que SÍ
+    quedaron dentro de `planning_filtrado` -- un mercaderista fuera del
+    filtro no debe aparecer ni como "cumplido" ni como "fuera de planning".
 
     Requiere que el mes se haya cargado DESPUÉS de este cambio (2026-10-15)
     -- un Planning viejo no tiene filas en PlanningPdvDia, así que ningún
-    PDV sale "programado para hoy" (hay que volver a subir el Excel del mes
-    para tener detalle día a día)."""
+    PDV sale "programado" para ningún día del rango (hay que volver a
+    subir el Excel del mes para tener detalle día a día)."""
     dnis_en_scope = {p.dni_asignado for p in planning_filtrado if p.dni_asignado}
     ids_planning = [p.id for p in planning_filtrado]
-    ids_programados_hoy = set()
+    pdv_por_id = {p.id: p for p in planning_filtrado}
+
+    programado_por_fecha = {}
     if ids_planning:
         session = get_session()
         try:
-            filas_dia = (
-                session.query(PlanningPdvDia.planning_pdv_id)
-                .filter(PlanningPdvDia.fecha == dia, PlanningPdvDia.planning_pdv_id.in_(ids_planning))
+            filas_rango = (
+                session.query(PlanningPdvDia.fecha, PlanningPdvDia.planning_pdv_id)
+                .filter(PlanningPdvDia.fecha.between(desde, hasta), PlanningPdvDia.planning_pdv_id.in_(ids_planning))
                 .all()
             )
         finally:
             session.close()
-        ids_programados_hoy = {pid for (pid,) in filas_dia}
+        for fecha, pid in filas_rango:
+            programado_por_fecha.setdefault(fecha, set()).add(pid)
 
     co_lis_en_planning_del_dni = {
         (p.dni_asignado, p.co_li) for p in planning_filtrado if p.dni_asignado
     }
 
-    visitas_hoy = {}
-    if len(v_dia):
-        for _, r in v_dia.iterrows():
+    visitas = {}
+    if len(v_rango):
+        for _, r in v_rango.iterrows():
             if r["dni"] not in dnis_en_scope:
                 continue
-            visitas_hoy[(r["dni"], str(r["punto_venta_id"]))] = r
+            fecha_visita = r["fecha_inicio"].date() if hasattr(r["fecha_inicio"], "date") else r["fecha_inicio"]
+            visitas[(fecha_visita, r["dni"], str(r["punto_venta_id"]))] = r
 
     filas = []
     vistos = set()
-    for p in planning_filtrado:
-        if p.id not in ids_programados_hoy or not p.dni_asignado:
-            continue
-        clave = (p.dni_asignado, p.co_li)
-        vistos.add(clave)
-        visita = visitas_hoy.get(clave)
-        filas.append({
-            "dni": p.dni_asignado, "mercaderista": p.mercaderista_nombre, "co_li": p.co_li,
-            "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "supervisor": p.supervisor,
-            "estado": "Cumplido" if visita is not None else "Pendiente",
-            "hora_visita": visita["hora_inicio"] if visita is not None else None,
-        })
+    for fecha, ids_programados in programado_por_fecha.items():
+        for pid in ids_programados:
+            p = pdv_por_id.get(pid)
+            if p is None or not p.dni_asignado:
+                continue
+            clave = (fecha, p.dni_asignado, p.co_li)
+            vistos.add(clave)
+            visita = visitas.get(clave)
+            filas.append({
+                "fecha": fecha, "dni": p.dni_asignado, "mercaderista": p.mercaderista_nombre, "co_li": p.co_li,
+                "nombre_pdv": p.nombre_pdv, "ciudad": p.ciudad, "supervisor": p.supervisor,
+                "estado": "Cumplido" if visita is not None else "Pendiente",
+                "hora_visita": visita["hora_inicio"] if visita is not None else None,
+            })
 
-    for (dni, co_li), r in visitas_hoy.items():
-        if (dni, co_li) in vistos:
+    for (fecha, dni, co_li), r in visitas.items():
+        if (fecha, dni, co_li) in vistos:
             continue
         en_planning = (dni, co_li) in co_lis_en_planning_del_dni
         filas.append({
-            "dni": dni, "mercaderista": r["nombre"], "co_li": co_li,
+            "fecha": fecha, "dni": dni, "mercaderista": r["nombre"], "co_li": co_li,
             "nombre_pdv": r["punto_venta"], "ciudad": r["ciudad"], "supervisor": r.get("supervisor"),
             "estado": "Fuera de lo programado (otro día de su ruta)" if en_planning else "Fuera de planning",
             "hora_visita": r["hora_inicio"],
         })
 
     orden_estado = {"Cumplido": 0, "Pendiente": 1, "Fuera de lo programado (otro día de su ruta)": 2, "Fuera de planning": 3}
-    filas.sort(key=lambda f: ((f["mercaderista"] or "").upper(), orden_estado.get(f["estado"], 9)))
+    filas.sort(key=lambda f: (f["fecha"], (f["mercaderista"] or "").upper(), orden_estado.get(f["estado"], 9)))
     return filas

@@ -195,7 +195,8 @@
 
     <div class="panel filtros-panel">
       <form method="get" class="filtros-fila">
-        <input type="hidden" name="dia" value="{{ dia_str }}">
+        <input type="hidden" name="dia_desde" value="{{ dia_desde_str }}">
+        <input type="hidden" name="dia_hasta" value="{{ dia_hasta_str }}">
         <label class="campo-filtro">Mes
           <input type="month" name="mes" value="{{ periodo_str }}">
         </label>
@@ -326,29 +327,33 @@
         <input type="hidden" name="ciudad" value="{{ ciudad_filtro }}">
         <input type="hidden" name="supervisor" value="{{ supervisor_filtro }}">
         {% for mdo in mercado_filtro %}<input type="hidden" name="mercado" value="{{ mdo }}">{% endfor %}
-        <label style="font-size:12px; color:var(--muted); font-weight:600;">Día
-          <input type="date" name="dia" value="{{ dia_str }}">
+        <label style="font-size:12px; color:var(--muted); font-weight:600;">Desde
+          <input type="date" name="dia_desde" value="{{ dia_desde_str }}">
+        </label>
+        <label style="font-size:12px; color:var(--muted); font-weight:600;">Hasta
+          <input type="date" name="dia_hasta" value="{{ dia_hasta_str }}">
         </label>
         <button class="btn primary" type="submit">Ver</button>
-        <a class="btn ghost" href="{{ url_for('reportes.planning_ruta_dia_exportar', dia=dia_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">↓ Exportar Excel</a>
+        <a class="btn ghost" href="{{ url_for('reportes.planning_ruta_dia_exportar', dia_desde=dia_desde_str, dia_hasta=dia_hasta_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">↓ Exportar Excel</a>
       </form>
       {% if not cumplimiento_dia %}
-        <p class="empty">Sin ruta programada ni visitas para ese día -- si el mes se cargó antes del 15/10, volvé a subir el Excel de Planning para tener el detalle día a día (antes solo se guardaba el total del mes).</p>
+        <p class="empty">Sin ruta programada ni visitas para ese rango de días -- si el mes se cargó antes del 15/10, volvé a subir el Excel de Planning para tener el detalle día a día (antes solo se guardaba el total del mes).</p>
       {% else %}
       {% set n_cumplidos = cumplimiento_dia|selectattr('estado', 'equalto', 'Cumplido')|list|length %}
       {% set n_pendientes = cumplimiento_dia|selectattr('estado', 'equalto', 'Pendiente')|list|length %}
       {% set n_fuera = cumplimiento_dia|rejectattr('estado', 'in', ['Cumplido', 'Pendiente'])|list|length %}
       {% if n_cumplidos == 0 and n_pendientes == 0 %}
-        <p class="empty">Este mes no tiene ruta programada día por día (0 cumplidos y 0 pendientes) -- se cargó antes del 15/10, cuando solo se guardaba el total mensual. Las visitas de abajo sí son reales, pero no se puede saber si les tocaba justo hoy. Volvé a subir el Excel de Planning de {{ periodo_str }} para tener el detalle por día.</p>
+        <p class="empty">Este mes no tiene ruta programada día por día (0 cumplidos y 0 pendientes) -- se cargó antes del 15/10, cuando solo se guardaba el total mensual. Las visitas de abajo sí son reales, pero no se puede saber si les tocaba justo ese día. Volvé a subir el Excel de Planning de {{ periodo_str }} para tener el detalle por día.</p>
       {% endif %}
       <div class="resumen-dia">
         <div><span style="color:var(--ok);">{{ n_cumplidos }}</span> cumplidos</div>
-        <div><span style="color:var(--warn);">{{ n_pendientes }}</span> pendientes del día</div>
+        <div><span style="color:var(--warn);">{{ n_pendientes }}</span> pendientes</div>
         <div><span style="color:var(--bad);">{{ n_fuera }}</span> fuera de lo programado</div>
       </div>
       <div class="table-wrap">
         <table>
           <tr>
+            <th>Fecha</th>
             <th>Mercaderista</th>
             <th>DNI</th>
             <th>CO_LI</th>
@@ -360,6 +365,7 @@
           </tr>
           {% for f in cumplimiento_dia %}
           <tr>
+            <td>{{ f.fecha.strftime('%d/%m/%Y') if f.fecha else '—' }}</td>
             <td>{{ (f.mercaderista or '—')|title }}</td>
             <td>{{ f.dni or '—' }}</td>
             <td>{{ f.co_li }}</td>
@@ -378,7 +384,7 @@
         </table>
       </div>
       {% endif %}
-      <p class="note">"Fuera de lo programado (otro día de su ruta)": el PDV sí es parte de su cartera del mes, pero no le tocaba justo hoy. "Fuera de planning": visitó un PDV que ni siquiera está en su Planning de este mes.</p>
+      <p class="note">"Fuera de lo programado (otro día de su ruta)": el PDV sí es parte de su cartera del mes, pero no le tocaba justo ese día. "Fuera de planning": visitó un PDV que ni siquiera está en su Planning de este mes. "Desde"/"Hasta" iguales = un solo día (máximo 31 días por consulta).</p>
     </div>
 
     <div class="panel">

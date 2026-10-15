@@ -429,6 +429,37 @@ def _dia_foco_desde_query():
         return dt.date.today()
 
 
+MAX_DIAS_RANGO_PLANNING = 31
+
+
+def _rango_dia_planning_desde_query():
+    """Rango de días del panel "Cumplimiento de ruta del día" de Planning
+    (?dia_desde=YYYY-MM-DD&dia_hasta=YYYY-MM-DD) -- default hoy/hoy (mismo
+    comportamiento que el "Día" único de antes, ver abajo). Si faltan, son
+    inválidas o vienen invertidas, se corrige sola en vez de tirar error --
+    esto es para mandar capturas al equipo, no una pantalla crítica. Tope
+    de MAX_DIAS_RANGO_PLANNING días (Davor, 2026-10-16: "adiciona... Fecha,
+    por si deseo descargarme visitas de varios dias") para no colgar el
+    worker con un rango enorme sin querer (ver WORKER TIMEOUT 2026-09-08 en
+    _consolidar_por_pdv())."""
+    hoy = dt.date.today()
+    desde_str = request.args.get("dia_desde") or ""
+    try:
+        desde = dt.date.fromisoformat(desde_str) if desde_str else hoy
+    except ValueError:
+        desde = hoy
+    hasta_str = request.args.get("dia_hasta") or ""
+    try:
+        hasta = dt.date.fromisoformat(hasta_str) if hasta_str else desde
+    except ValueError:
+        hasta = desde
+    if hasta < desde:
+        desde, hasta = hasta, desde
+    if (hasta - desde).days > MAX_DIAS_RANGO_PLANNING - 1:
+        hasta = desde + dt.timedelta(days=MAX_DIAS_RANGO_PLANNING - 1)
+    return desde, hasta
+
+
 def _señal_como_alerta(i):
     """Convierte un insight de insights_equipo() al mismo shape de dict que
     usa alertas_periodo(), para poder mostrarlos en una sola lista (Davor,
@@ -685,25 +716,23 @@ def planning():
     # Cumplimiento de ruta del día (Davor, 2026-10-15: "cuando cargue el
     # planning el mercaderista esta asignado a una ruta... quiero que por
     # día pueda tener PDV visitado y PDVs fuera de lo programado al día,
-    # para poder mandar esas capturas al equipo") -- panel aparte, con su
-    # propio selector de UN solo día (no el mes de arriba), reusando los
-    # mismos filtros de región/ciudad/supervisor ya elegidos. Requiere que
-    # ese mes se haya cargado DESPUÉS de este cambio (ver
-    # planning.py::cumplimiento_ruta_dia()) -- un Planning viejo no tiene
-    # detalle día a día, solo el total mensual de siempre.
-    dia_str = request.args.get("dia") or dt.date.today().isoformat()
-    try:
-        dia = dt.date.fromisoformat(dia_str)
-    except ValueError:
-        dia = dt.date.today()
-        dia_str = dia.isoformat()
-    periodo_dia = dia.replace(day=1)
-    planning_del_dia = (
-        planning_periodo if periodo_dia == periodo
-        else planning_del_periodo(periodo_dia, region_f, ciudad_f, supervisor_f, mercado_f)
-    )
-    v_dia = visitas_tradicional(dia, dia, current_user)
-    cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
+    # para poder mandar esas capturas al equipo"; 2026-10-16: "adiciona una
+    # columna que diga Fecha, por si deseo descargarme visitas de varios
+    # dias") -- panel aparte, con su propio rango de días (no el mes de
+    # arriba), reusando los mismos filtros de región/ciudad/supervisor/
+    # mercado ya elegidos. Requiere que ese mes se haya cargado DESPUÉS de
+    # este cambio (ver planning.py::cumplimiento_ruta_dia()) -- un Planning
+    # viejo no tiene detalle día a día, solo el total mensual de siempre.
+    dia_desde, dia_hasta = _rango_dia_planning_desde_query()
+    periodos_del_rango = {dia_desde.replace(day=1), dia_hasta.replace(day=1)}
+    planning_del_rango = []
+    for per in periodos_del_rango:
+        planning_del_rango.extend(
+            planning_periodo if per == periodo
+            else planning_del_periodo(per, region_f, ciudad_f, supervisor_f, mercado_f)
+        )
+    v_rango = visitas_tradicional(dia_desde, dia_hasta, current_user)
+    cumplimiento_dia = cumplimiento_ruta_dia(dia_desde, dia_hasta, planning_del_rango, v_rango)
 
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
@@ -714,7 +743,7 @@ def planning():
         mercados_disponibles=mercados_disp,
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
         por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
-        dia_str=dia_str, cumplimiento_dia=cumplimiento_dia,
+        dia_desde_str=dia_desde.isoformat(), dia_hasta_str=dia_hasta.isoformat(), cumplimiento_dia=cumplimiento_dia,
     )
 
 
@@ -1001,14 +1030,11 @@ def planning_exportar():
 @bp.get("/planning/ruta-dia/exportar")
 @requiere_pagina("reportes_planning")
 def planning_ruta_dia_exportar():
-    """Excel de un solo día (Davor, 2026-10-15: "puede ser un excel para
-    exportar", mismo panel "Cumplimiento de ruta del día")."""
-    dia_str = request.args.get("dia") or dt.date.today().isoformat()
-    try:
-        dia = dt.date.fromisoformat(dia_str)
-    except ValueError:
-        dia = dt.date.today()
-        dia_str = dia.isoformat()
+    """Excel de un rango de días -- uno o varios (Davor, 2026-10-15: "puede
+    ser un excel para exportar"; 2026-10-16: "adiciona una columna que diga
+    Fecha, por si deseo descargarme visitas de varios dias"), mismo panel
+    "Cumplimiento de ruta del día"."""
+    dia_desde, dia_hasta = _rango_dia_planning_desde_query()
     if current_user.rol == "supervisor":
         region_f = ciudad_f = supervisor_f = None
         mercado_f = []
@@ -1018,29 +1044,33 @@ def planning_ruta_dia_exportar():
         supervisor_f = request.args.get("supervisor") or None
         mercado_f = request.args.getlist("mercado")
 
-    planning_del_dia = planning_del_periodo(dia.replace(day=1), region_f, ciudad_f, supervisor_f, mercado_f)
-    v_dia = visitas_tradicional(dia, dia, current_user)
-    cumplimiento_dia = cumplimiento_ruta_dia(dia, planning_del_dia, v_dia)
+    periodos_del_rango = {dia_desde.replace(day=1), dia_hasta.replace(day=1)}
+    planning_del_rango = []
+    for per in periodos_del_rango:
+        planning_del_rango.extend(planning_del_periodo(per, region_f, ciudad_f, supervisor_f, mercado_f))
+    v_rango = visitas_tradicional(dia_desde, dia_hasta, current_user)
+    cumplimiento_dia = cumplimiento_ruta_dia(dia_desde, dia_hasta, planning_del_rango, v_rango)
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Cumplimiento del día"
-    ws.append(["Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"])
+    ws.append(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"])
     for celda in ws[1]:
         celda.font = Font(bold=True)
     for f in cumplimiento_dia:
         ws.append(fila_segura([
-            f["mercaderista"], f["dni"], f["co_li"], f["nombre_pdv"], f["ciudad"], f["supervisor"],
+            f["fecha"], f["mercaderista"], f["dni"], f["co_li"], f["nombre_pdv"], f["ciudad"], f["supervisor"],
             f["estado"], f["hora_visita"],
         ]))
-    for i, titulo in enumerate(["Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"], start=1):
+    for i, titulo in enumerate(["Fecha", "Mercaderista", "DNI", "CO_LI", "Nombre PDV", "Ciudad", "Supervisor", "Estado", "Hora visita"], start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(14, len(titulo) + 2)
 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
+    nombre_rango = dia_desde.isoformat() if dia_desde == dia_hasta else f"{dia_desde.isoformat()}_a_{dia_hasta.isoformat()}"
     return send_file(
-        buf, as_attachment=True, download_name=f"Cumplimiento_Ruta_{dia_str}.xlsx",
+        buf, as_attachment=True, download_name=f"Cumplimiento_Ruta_{nombre_rango}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
