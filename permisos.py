@@ -48,12 +48,18 @@ PAGINAS_TOP = [
 
 PAGINAS_REPORTES = [
     ("reportes_recomendaciones", "Desempeño"),
-    ("reportes_horas", "Horas semanales"),
+    # Las 3 etiquetas de abajo (Davor, 2026-10-16: "no sale Horas trabajdas
+    # vs horas programadas") quedaban con el nombre interno/histórico del
+    # reporte en vez del texto real de la pestaña en el nav (ver
+    # tiene_acceso(usuario, 'reportes_X') en templates/reportes_*.html) --
+    # confundía al dar permisos, porque el checkbox no decía lo mismo que
+    # la pestaña que realmente habilita.
+    ("reportes_horas", "Horas programadas vs trabajadas"),
     ("reportes_alertas", "Alertas"),
     ("reportes_cobertura", "Cobertura"),
-    ("reportes_marcaciones", "Marcaciones"),
+    ("reportes_marcaciones", "Ruta mercaderista"),
     ("reportes_tareo", "Tareo"),
-    ("reportes_historico", "Histórico diario"),
+    ("reportes_historico", "Histórico de asistencia"),
     ("reportes_perfil", "Perfil mercaderista"),
     ("reportes_proyecciones", "Proyecciones"),
     ("reportes_planning", "Cobertura vs Planning"),
