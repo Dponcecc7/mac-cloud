@@ -360,6 +360,9 @@
 
     <div class="panel">
       <p class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</p>
+      {% if ultima_actualizacion %}
+        <p class="note" style="margin-top:0; margin-bottom:12px;">Datos actualizados hasta las {{ ultima_actualizacion.strftime('%H:%M') }} del {{ ultima_actualizacion.strftime('%d/%m/%Y') }} (hora de la visita más reciente registrada en este rango, con los filtros de arriba aplicados).</p>
+      {% endif %}
       <form method="get" class="dia-form">
         <input type="hidden" name="mes" value="{{ periodo_str }}">
         {% for rv in region_filtro %}<input type="hidden" name="region" value="{{ rv }}">{% endfor %}

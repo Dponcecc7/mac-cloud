@@ -744,6 +744,23 @@ def planning():
     v_rango = visitas_tradicional(dia_desde, dia_hasta, current_user)
     cumplimiento_dia = cumplimiento_ruta_dia(dia_desde, dia_hasta, planning_del_rango, v_rango)
 
+    # Última actualización (Davor, 2026-10-16: "Colocar la hora de ultima
+    # actualización, para saber la ruta del día") -- la visita más reciente
+    # entre las que ya se ven en la tabla (respeta el filtro de región/
+    # ciudad/supervisor/mercado, a diferencia de usar v_rango crudo). Sirve
+    # para saber si lo que se está mirando ya tiene las últimas marcaciones
+    # o todavía está atrasado.
+    ultima_actualizacion = None
+    for f in cumplimiento_dia:
+        if not f["hora_visita"]:
+            continue
+        try:
+            momento = dt.datetime.combine(f["fecha"], dt.time.fromisoformat(f["hora_visita"]))
+        except ValueError:
+            continue
+        if ultima_actualizacion is None or momento > ultima_actualizacion:
+            ultima_actualizacion = momento
+
     return render_template(
         "reportes_planning.html", usuario=current_user, activo="planning",
         periodo_str=periodo_str, periodos_disponibles=periodos_disponibles(),
@@ -754,6 +771,7 @@ def planning():
         resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
         por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
         dia_desde_str=dia_desde.isoformat(), dia_hasta_str=dia_hasta.isoformat(), cumplimiento_dia=cumplimiento_dia,
+        ultima_actualizacion=ultima_actualizacion,
     )
 
 
