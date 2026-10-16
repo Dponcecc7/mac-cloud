@@ -340,10 +340,17 @@ def horas():
     # ya no esté activo hoy.
     solo_activos = request.args.get("solo_activos") == "1"
     estado_filtro = "Activo" if solo_activos else None
+    # "Solo días trabajados en ese canal" (Davor, 2026-10-16: "agregar la
+    # condicional del dashboard") -- mismo checkbox que ya tenía el
+    # Dashboard junto al filtro de Canal, ver horas_semanales.
+    # calcular_detalle_semana(canal_dia_estricto=...).
+    canal_dia_estricto = request.args.get("canal_dia") == "1"
+    filtro_args["canal_dia"] = "1" if canal_dia_estricto else ""
     detalle = calcular_detalle_semana(
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"], estado_filtro=estado_filtro,
+        canal_dia_estricto=canal_dia_estricto,
     )
     resumen = resumen_por_persona(detalle)
     filas = resumen.to_dict("records") if len(resumen) else []
@@ -358,7 +365,7 @@ def horas():
     return render_template(
         "reportes_horas.html", usuario=current_user, activo="horas",
         modo=modo, semana_str=semana_str, mes_str=mes_str, semana_contexto=semana_contexto,
-        desde=desde, hasta=hasta, filas=filas, solo_activos=solo_activos,
+        desde=desde, hasta=hasta, filas=filas, solo_activos=solo_activos, canal_dia_estricto=canal_dia_estricto,
         incluye_hoy=incluye_hoy, excluir_hoy=excluir_hoy,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
@@ -377,6 +384,7 @@ def horas_exportar():
         desde, hasta, current_user,
         rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"], supervisor_filtro=filtro_args["supervisor"],
         ciudad_filtro=filtro_args["ciudad"], canal_filtro=filtro_args["canal"], estado_filtro=estado_filtro,
+        canal_dia_estricto=(request.args.get("canal_dia") == "1"),
     )
     resumen = resumen_por_persona(detalle)
 

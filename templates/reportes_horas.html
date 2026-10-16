@@ -215,8 +215,8 @@
 
     <div class="top-actions">
       <div class="modo-toggle">
-        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Semana</a>
-        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Mes</a>
+        <a class="modo-btn {{ 'activo' if modo == 'semana' else '' }}" href="{{ url_for('reportes.horas', modo='semana', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), canal_dia=('1' if canal_dia_estricto else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Semana</a>
+        <a class="modo-btn {{ 'activo' if modo == 'mes' else '' }}" href="{{ url_for('reportes.horas', modo='mes', semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), canal_dia=('1' if canal_dia_estricto else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">Mes</a>
       </div>
       <form method="get">
         <input type="hidden" name="modo" value="{{ modo }}">
@@ -226,6 +226,7 @@
         <input type="hidden" name="ciudad" value="{{ filtro_args.ciudad }}">
         <input type="hidden" name="canal" value="{{ filtro_args.canal }}">
         <input type="hidden" name="solo_activos" value="{{ '1' if solo_activos else '' }}">
+        <input type="hidden" name="canal_dia" value="{{ '1' if canal_dia_estricto else '' }}">
         {% if modo == 'mes' %}
         <input type="month" name="mes" value="{{ mes_str }}" onchange="this.form.submit()">
         <input type="hidden" name="semana" value="{{ semana_str }}">
@@ -242,7 +243,7 @@
       <span style="color:var(--muted); font-size:12.5px;">
         {% if modo == 'mes' %}{{ desde.strftime('%d/%m/%Y') }} — {{ hasta.strftime('%d/%m/%Y') }} ({{ 'mes hasta ayer' if excluir_hoy and incluye_hoy else 'mes completo' }}){% else %}{{ desde.strftime('%d/%m/%Y') }} (lunes) — {{ hasta.strftime('%d/%m/%Y') }} ({{ 'hasta ayer' if excluir_hoy and incluye_hoy else 'sábado' }}){% endif %}
       </span>
-      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">↓ Exportar Excel</a>
+      <a class="btn ghost" href="{{ url_for('reportes.horas_exportar', modo=modo, semana=semana_str, mes=mes_str, supervisor=filtro_args.supervisor, region=filtro_args.region, rol=filtro_args.rol, ciudad=filtro_args.ciudad, canal=filtro_args.canal, solo_activos=('1' if solo_activos else ''), canal_dia=('1' if canal_dia_estricto else ''), excluir_hoy=('1' if excluir_hoy else '')) }}">↓ Exportar Excel</a>
     </div>
 
     {% if roles_disponibles %}
@@ -273,6 +274,9 @@
           <option value="">Canal: todos</option>
           {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
         </select>
+        <label class="chk-activos" title="Sin esto, el Canal de arriba incluye TODOS los días de cualquiera que alguna vez trabaje ese canal -- con esto marcado, solo cuentan los días que esa persona trabajó realmente ese canal puntual (un Multicanal de Tradicional que un día cubrió Autoservicio no suma ese día a Tradicional).">
+          <input type="checkbox" name="canal_dia" value="1" {{ 'checked' if canal_dia_estricto else '' }}> Solo días trabajados en ese canal
+        </label>
         {% endif %}
         <label class="chk-activos" title="Alguien que estuvo Activo durante este periodo y después se dio de baja sigue teniendo filas reales de ese momento -- tildá esto para no verlo en la tabla.">
           <input type="checkbox" name="solo_activos" value="1" {{ 'checked' if solo_activos else '' }}> Solo activos

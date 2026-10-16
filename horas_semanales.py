@@ -25,7 +25,7 @@ from alertas import _tiene_sustento, SALIDA_ANTICIPADA_MIN
 from dimension_models import Feriado, Persona, get_session
 from fact_models import ClasificacionDiaria
 from patron_recurrente import cargar_patron_recurrente, canal_para_historial, sin_acentos, valor_patron_para_canal, WD_NORM
-from scoping import aplicar_filtros_extra, condicion_scope, overrides_supervisor_canal
+from scoping import aplicar_filtros_extra, canal_del_dia_coincide, canonizar_canal, condicion_scope, overrides_supervisor_canal
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
@@ -105,7 +105,7 @@ def _motivo_falta(estado_base, estado, comentario):
 
 def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
                              rol_filtro=None, region_filtro=None, supervisor_filtro=None, ciudad_filtro=None,
-                             canal_filtro=None, estado_filtro=None):
+                             canal_filtro=None, estado_filtro=None, canal_dia_estricto=False):
     """Detalle día-persona entre [desde, hasta] (inclusive), acotado al
     scope de acceso de `usuario_actual` -- o a un solo `dni_filtro` si se
     pasa (para la ficha individual, donde el acceso ya se validó aparte).
@@ -118,8 +118,22 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     etc.) -- alguien que este mes estuvo Activo y ahora ya no, sigue
     teniendo filas reales de ClasificacionDiaria de cuando sí trabajaba;
     sin filtrar por Persona.estado, ese historial real sigue apareciendo
-    en el reporte aunque la persona ya no esté activa hoy. Devuelve un
-    DataFrame vacío (sin columnas) si no hay filas."""
+    en el reporte aunque la persona ya no esté activa hoy.
+
+    `canal_dia_estricto` (Davor, 2026-10-16, Horas programadas vs
+    trabajadas: "agregar la condicional del dashboard, solo días
+    trabajados en ese canal") -- mismo filtro que ya tenía el Dashboard
+    (ver scoping.canal_del_dia_coincide()): `canal_filtro` de arriba
+    acota PERSONAS (alguien que ALGUNA vez trabaja ese canal), esto acota
+    además a nivel DÍA -- un Multicanal de Tradicional que un día cubrió
+    Autoservicio no suma ese día a las horas de Tradicional. Sin efecto
+    si `canal_filtro` está vacío (no tiene sentido "solo días de ese
+    canal" sin haber elegido un canal). Se aplica al final, después de
+    calcular horas/turnos con el set de filas COMPLETO -- filtrar antes
+    rompería la detección de "día con 2 turnos" (_turnos_hoy) para un
+    Multicanal con un turno en el canal elegido y otro afuera.
+
+    Devuelve un DataFrame vacío (sin columnas) si no hay filas."""
     session = get_session()
     try:
         query = (
@@ -271,6 +285,14 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     # Descanso, y con marcación real. Mismo criterio que _horas_sin_marcacion_dia,
     # pero contando días en vez de horas.
     r["_dia_activo"] = ~ya_excluido_de_base & con_marcacion
+
+    if canal_dia_estricto and canal_filtro:
+        canales_objetivo = {canonizar_canal(canal_filtro)}
+        coincide = r.apply(
+            lambda row: canal_del_dia_coincide(row["canal_esperado"], row["canales_marcados"], canales_objetivo),
+            axis=1,
+        )
+        r = r[coincide]
 
     return r
 

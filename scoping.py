@@ -118,6 +118,41 @@ def canonizar_canal(valor):
     return v
 
 
+def canal_del_dia_coincide(canal_esperado, canales_marcados, canales_objetivo):
+    """¿Esta fila (ClasificacionDiaria, u otro reporte que lea las mismas 2
+    columnas) corresponde a un día realmente trabajado en ALGUNO de
+    `canales_objetivo` (set, ya canonizados -- el filtro de Canal admite
+    selección múltiple en el Dashboard)? -- "Canal: solo días trabajados en
+    ese canal" (Davor, 2026-10-09, Dashboard; 2026-10-16, llevado también a
+    Horas programadas vs trabajadas): el Canal de arriba ya filtra PERSONAS
+    (condicion_canal()/aplicar_filtros_extra() -- alguien que ALGUNA vez
+    trabaja ese canal), pero un Multicanal de Tradicional que cubrió
+    Autoservicio un día puntual seguía sumando ESE día a las stats de
+    Tradicional. Prioriza canales_marcados (canal REAL de la visita GPS,
+    mismo criterio que asistencia.py::_canal_para_mostrar(), con "Otro"
+    descartado) y cae a canal_esperado (lo programado) cuando no hay
+    marcación real (Falta/Vacante/Descanso/Vacaciones).
+
+    Movido acá desde app.py (era `_canal_del_dia_coincide`, uso exclusivo
+    del Dashboard) para poder reusarlo sin import circular desde
+    horas_semanales.py -- `isinstance(..., str)` en vez de solo
+    `if canales_marcados:` (bug real encontrado al reusarlo ahí, 2026-10-16):
+    app.py arma `filas` desde tuplas de SQLAlchemy, donde NULL llega como
+    None (falsy, `if canales_marcados:` alcanzaba); horas_semanales.py arma
+    un DataFrame de pandas con esas mismas filas, y una columna CON ALGÚN
+    valor NULL en el lote puede terminar como NaN (float), no None -- NaN
+    es *truthy* en Python, así que `if canales_marcados:` lo dejaba pasar
+    y `.split(",")` reventaba con AttributeError."""
+    if isinstance(canales_marcados, str) and canales_marcados:
+        marcados = {
+            canonizar_canal(p.strip()) for p in canales_marcados.split(",")
+            if p.strip() and p.strip() != "Otro"
+        }
+        if marcados:
+            return bool(marcados & canales_objetivo)
+    return canonizar_canal(canal_esperado) in canales_objetivo
+
+
 def _como_lista(valor):
     """Normaliza un filtro que puede llegar como un solo valor (string,
     la mayoría de los llamadores existentes) o como varios (lista/tupla,

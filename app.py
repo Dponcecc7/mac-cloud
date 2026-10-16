@@ -33,8 +33,8 @@ from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
 from scoping import (
-    CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_canal, condicion_scope,
-    todos_overrides_supervisor_canal, todos_overrides_zona_canal,
+    CANALES_FILTRABLES, aplicar_filtros_extra, canal_del_dia_coincide, canonizar_canal, condicion_canal,
+    condicion_scope, todos_overrides_supervisor_canal, todos_overrides_zona_canal,
 )
 from vacaciones import calcular_viajes_vacaciones
 
@@ -82,28 +82,6 @@ def _motivo_limpio(comentario):
         "feriado regional": "Feriado",
     }
     return HOMOLOGACIONES.get(texto.lower(), texto)
-
-
-def _canal_del_dia_coincide(canal_esperado, canales_marcados, canales_objetivo):
-    """¿Esta fila de ClasificacionDiaria corresponde a un día realmente
-    trabajado en ALGUNO de `canales_objetivo` (set, ya canonizados -- el
-    filtro de Canal admite selección múltiple)? -- Dashboard, filtro
-    "Canal: solo días trabajados en ese canal" (Davor, 2026-10-09): el
-    Canal de arriba ya filtra PERSONAS (condicion_canal() -- alguien que
-    ALGUNA vez trabaja ese canal), pero un Multicanal de Tradicional que
-    cubrió Autoservicio un día puntual seguía sumando ESE día a las stats
-    de Tradicional. Prioriza canales_marcados (canal REAL de la visita
-    GPS, mismo criterio que asistencia.py::_canal_para_mostrar(), con
-    "Otro" descartado) y cae a canal_esperado (lo programado) cuando no
-    hay marcación real (Falta/Vacante/Descanso/Vacaciones)."""
-    if canales_marcados:
-        marcados = {
-            canonizar_canal(p.strip()) for p in canales_marcados.split(",")
-            if p.strip() and p.strip() != "Otro"
-        }
-        if marcados:
-            return bool(marcados & canales_objetivo)
-    return canonizar_canal(canal_esperado) in canales_objetivo
 
 
 def create_app():
@@ -460,8 +438,8 @@ def create_app():
 
         if canal_dia_estricto:
             canales_objetivo = {canonizar_canal(c) for c in canal_efectivo}
-            filas = [f for f in filas if _canal_del_dia_coincide(f[10], f[11], canales_objetivo)]
-            filas_hoy = [f for f in filas_hoy if _canal_del_dia_coincide(f[1], f[2], canales_objetivo)]
+            filas = [f for f in filas if canal_del_dia_coincide(f[10], f[11], canales_objetivo)]
+            filas_hoy = [f for f in filas_hoy if canal_del_dia_coincide(f[1], f[2], canales_objetivo)]
 
         if not filas:
             return render_template(

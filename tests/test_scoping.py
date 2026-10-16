@@ -6,7 +6,7 @@ Postgres. Se usa el modelo Persona real (dimension_models) en vez de un
 mock -- comparar Persona.dni == "123" ya funciona sin conexión, es
 exactamente lo que hace la app antes de pasarlo a .filter()."""
 from dimension_models import Persona
-from scoping import condicion_canal, condicion_scope
+from scoping import canal_del_dia_coincide, condicion_canal, condicion_scope
 
 
 class UsuarioFalso:
@@ -74,3 +74,47 @@ def test_usuario_sin_nada_asignado_no_tiene_restriccion():
     # puede probar sin base de datos.
     usuario = UsuarioFalso("analista", cliente_id_athena=None)
     assert condicion_scope(Persona, usuario) is None
+
+
+# canal_del_dia_coincide() -- Davor, 2026-10-09 (Dashboard) / 2026-10-16
+# (llevado también a Horas programadas vs trabajadas, "agregar la
+# condicional del dashboard, solo días trabajados en ese canal"). Prioriza
+# canales_marcados (visita GPS real) sobre canal_esperado (lo programado),
+# y descarta "Otro" de canales_marcados.
+def test_canal_del_dia_prioriza_marcado_sobre_esperado():
+    # Multicanal programado en Tradicional, pero la visita GPS real de ese
+    # día fue a un PDV de Autoservicio -- el día cuenta como Autoservicio,
+    # no como lo programado.
+    assert canal_del_dia_coincide("Tradicional", "Autoservicios", {"AUTOSERVICIO"}) is True
+    assert canal_del_dia_coincide("Tradicional", "Autoservicios", {"TRADICIONAL"}) is False
+
+
+def test_canal_del_dia_cae_a_esperado_sin_marcacion_real():
+    # Falta/Vacante/Descanso/Vacaciones -- sin visita GPS, usa lo programado.
+    assert canal_del_dia_coincide("Farmacia", None, {"FARMACIA"}) is True
+    assert canal_del_dia_coincide("Farmacia", "", {"TRADICIONAL"}) is False
+
+
+def test_canal_del_dia_descarta_otro_de_los_marcados():
+    # "Otro" en canales_marcados no cuenta como coincidencia con nada --
+    # si ESE es el único marcado, cae a canal_esperado igual que sin marcación.
+    assert canal_del_dia_coincide("Tradicional", "Otro", {"TRADICIONAL"}) is True
+    assert canal_del_dia_coincide("Autoservicio", "Otro", {"TRADICIONAL"}) is False
+
+
+def test_canal_del_dia_no_revienta_con_nan_de_pandas():
+    # Bug real encontrado contra producción (2026-10-16): un DataFrame de
+    # pandas armado desde filas con canales_marcados=None puede terminar
+    # representando esa columna como NaN (float), no None -- NaN es
+    # *truthy* en Python, así que un "if canales_marcados:" simple dejaba
+    # pasar un float a .split(",") y reventaba con AttributeError.
+    assert canal_del_dia_coincide("Tradicional", float("nan"), {"TRADICIONAL"}) is True
+    assert canal_del_dia_coincide("Tradicional", float("nan"), {"FARMACIA"}) is False
+
+
+def test_canal_del_dia_multicanal_con_2_turnos_coincide_si_cualquiera_matchea():
+    # canales_marcados puede traer varios canales separados por coma (2
+    # turnos reales el mismo día) -- coincide si CUALQUIERA de los
+    # objetivo está entre los marcados.
+    assert canal_del_dia_coincide("Multicanal", "Farmacia, Autoservicios", {"TRADICIONAL"}) is False
+    assert canal_del_dia_coincide("Multicanal", "Farmacia, Autoservicios", {"TRADICIONAL", "FARMACIA"}) is True
