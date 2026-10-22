@@ -14,6 +14,7 @@ import re
 from collections import Counter
 
 import pandas as pd
+from sqlalchemy import insert
 
 from cobertura import _cargar_visitas
 from dimension_models import PlanningPdv, PlanningPdvDia, Persona, get_session
@@ -166,22 +167,34 @@ def guardar_planning(df, periodo, cargado_por):
     try:
         session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo).delete()
         hoy = dt.date.today()
-        pendientes_fechas = []
-        for _, fila in df.iterrows():
-            pdv = PlanningPdv(
-                periodo=periodo, co_li=fila["co_li"], tipo=fila["tipo"],
-                nombre_pdv=fila["nombre_pdv"], ciudad=fila["ciudad"], region=fila["region"],
-                subcanal=fila["subcanal"], mercado=fila["mercado"], dni_asignado=fila["dni_asignado"],
-                mercaderista_nombre=fila["mercaderista_nombre"], supervisor=fila["supervisor"],
-                dias_programados=int(fila["dias_programados"]), cargado_por=cargado_por, cargado_en=hoy,
+        # INSERT en lote (Core, "insertmanyvalues" de SQLAlchemy 2.0) en vez de
+        # un objeto ORM por fila -- 2026-10-22: /planning/cargar devolvía 502
+        # (gunicorn mataba el worker) con el Excel real de ~miles de PDVs x
+        # ~10 días cada uno. RETURNING trae los ids sin un round-trip por
+        # PDV; (co_li, tipo) es único dentro del período (_consolidar_por_pdv
+        # lo garantiza) así que sirve de llave para pegar los días.
+        registros = df.astype(object).where(df.notna(), None).to_dict("records")
+        filas_pdv = [
+            dict(
+                periodo=periodo, co_li=r["co_li"], tipo=r["tipo"], nombre_pdv=r["nombre_pdv"],
+                ciudad=r["ciudad"], region=r["region"], subcanal=r["subcanal"], mercado=r["mercado"],
+                dni_asignado=r["dni_asignado"], mercaderista_nombre=r["mercaderista_nombre"],
+                supervisor=r["supervisor"], dias_programados=int(r["dias_programados"]),
+                cargado_por=cargado_por, cargado_en=hoy,
             )
-            session.add(pdv)
-            if fila["fechas_programadas"]:
-                pendientes_fechas.append((pdv, fila["fechas_programadas"]))
-        session.flush()
-        for pdv, fechas in pendientes_fechas:
-            for f in fechas:
-                session.add(PlanningPdvDia(planning_pdv_id=pdv.id, fecha=f))
+            for r in registros
+        ]
+        if filas_pdv:
+            insertado = session.execute(
+                insert(PlanningPdv).returning(PlanningPdv.id, PlanningPdv.co_li, PlanningPdv.tipo), filas_pdv
+            )
+            id_por_pdv = {(co_li, tipo): pdv_id for pdv_id, co_li, tipo in insertado}
+            filas_dia = [
+                dict(planning_pdv_id=id_por_pdv[(r["co_li"], r["tipo"])], fecha=f)
+                for r in registros for f in (r["fechas_programadas"] or [])
+            ]
+            if filas_dia:
+                session.execute(insert(PlanningPdvDia), filas_dia)
         session.commit()
         return len(df)
     except Exception:
