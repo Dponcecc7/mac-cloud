@@ -51,6 +51,10 @@
     .estado-pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }
     .estado-pill.vacante { background:var(--warn, #d97706); }
     .estado-pill.inactivo { background:var(--line); color:var(--muted); }
+    .destino-opciones { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+    .destino-opciones label { display:flex; align-items:flex-start; gap:8px; font-size:13px; font-weight:400; color:var(--ink); cursor:pointer; }
+    .destino-opciones input[type=radio] { margin-top:3px; }
+    .destino-opciones .explicacion { display:block; font-size:11.5px; color:var(--muted); font-weight:400; }
 
     @media (max-width: 760px) {
       .wrap { padding:0 12px 40px; }
@@ -103,7 +107,7 @@
       {% if usuario.rol in ("analista", "admin") %}<a href="{{ url_for('asistencia.reunion_form') }}">Reunión de trabajo</a>{% endif %}
     </nav>
 
-    <div class="note"><b>Baja de una persona activa</b> — deja la posición en estado <b>Vacante</b>, sin necesidad de tener ya a quien la reemplace. Cuando aparezca el reemplazo, usá "Agregar reemplazo" para cubrir esa vacante.</div>
+    <div class="note"><b>Baja de una persona activa</b> — elegí si la posición queda <b>Vacante</b> (sin necesidad de tener ya a quien la reemplace -- cuando aparezca, usá "Agregar reemplazo" para cubrirla) o si directamente <b>se elimina del headcount</b> (la posición ya no existe, no va a quedar buscando a nadie).</div>
 
     <form method="post" action="{{ url_for('asistencia.dar_de_baja_submit') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -124,6 +128,17 @@
         </div>
         <div class="form-row" style="grid-template-columns:1fr;">
           <label class="field">Motivo (opcional)<input class="ipt" name="motivo_baja" placeholder="ej. renuncia, fin de contrato por días"></label>
+        </div>
+        <div class="field" style="margin-bottom:4px;">¿Qué pasa con la posición?</div>
+        <div class="destino-opciones">
+          <label>
+            <input type="radio" name="destino" value="vacante" checked>
+            <span>Queda <b>Vacante</b> — buscando reemplazo<span class="explicacion">Usá esto si la posición sigue existiendo y en algún momento va a entrar alguien nuevo ("Agregar reemplazo" la cubre cuando aparezca).</span></span>
+          </label>
+          <label>
+            <input type="radio" name="destino" value="eliminar">
+            <span>Se <b>elimina del headcount</b> — no se va a reemplazar<span class="explicacion">Usá esto si directamente te sacaron esa posición (ej. el cliente ya no la aprueba) -- no va a quedar buscando a nadie. Si más adelante se vuelve a aprobar, se carga de nuevo desde "Agregar headcount".</span></span>
+          </label>
         </div>
         <div class="actions"><button class="btn" type="submit">Dar de baja</button></div>
         {% endif %}

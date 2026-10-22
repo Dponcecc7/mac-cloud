@@ -1925,6 +1925,15 @@ def dar_de_baja_submit():
     dni = request.form.get("dni", "").strip()
     fecha_baja_str = request.form.get("fecha_baja", "").strip()
     motivo = request.form.get("motivo_baja", "").strip() or None
+    # "elimina" (Davor, 2026-10-22: "agrega esa opción a dar de baja, como
+    # tener ambas opciones") -- a diferencia de Vacante (posición abierta,
+    # "Agregar reemplazo" la puede cubrir en cualquier momento), esto manda
+    # directo a Inactivo: la posición se dio de baja del headcount entero,
+    # no se va a buscar reemplazo. Mismo estado final que ya le quedaba a
+    # una vacante una vez CUBIERTA por un reemplazo (ver
+    # reemplazos.procesar_reemplazo()) -- acá se llega directo, sin pasar
+    # por Vacante, porque nunca va a haber reemplazo.
+    elimina_headcount = request.form.get("destino") == "eliminar"
 
     if not dni or not fecha_baja_str:
         return render_template(
@@ -1961,16 +1970,23 @@ def dar_de_baja_submit():
             detalle = f"DNI {dni} no está Activo ahora mismo (está en '{persona.estado}')."
         else:
             nombre = persona.nombre_completo
-            persona.estado = "Vacante"
+            persona.estado = "Inactivo" if elimina_headcount else "Vacante"
             persona.fecha_baja = fecha_baja
             persona.motivo_baja = motivo
             persona.dado_de_baja_por = current_user.email
             session.commit()
             titulo, ok = "Baja registrada", True
-            detalle = (
-                f"{(nombre or dni).title()} (DNI {dni}) quedó de baja desde {fecha_baja_str}. "
-                "La posición queda Vacante -- usá \"Agregar reemplazo\" cuando tengas a quien la cubra."
-            )
+            if elimina_headcount:
+                detalle = (
+                    f"{(nombre or dni).title()} (DNI {dni}) quedó de baja desde {fecha_baja_str} y la posición "
+                    "se eliminó del headcount -- no va a quedar buscando reemplazo. Si más adelante se vuelve a "
+                    "aprobar esa posición, se carga de nuevo desde \"Agregar headcount\"."
+                )
+            else:
+                detalle = (
+                    f"{(nombre or dni).title()} (DNI {dni}) quedó de baja desde {fecha_baja_str}. "
+                    "La posición queda Vacante -- usá \"Agregar reemplazo\" cuando tengas a quien la cubra."
+                )
     finally:
         session.close()
 
