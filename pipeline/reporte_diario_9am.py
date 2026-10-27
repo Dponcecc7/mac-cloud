@@ -6,15 +6,16 @@ portabilidad: Athena/Maestro/Patron/Feriados/Tabla3 por los clientes
 portables, imports relativos.
 
 Cambio real de diseno: `escribir_excel()` ahora TAMBIEN sube el reporte por
-Graph (ademas de guardarlo local, que sigue sirviendo para el paso siguiente
-DENTRO de la misma corrida del workflow). Esto es necesario porque, a
-diferencia de la laptop (el mismo disco vive entre corridas), un runner de
-GitHub Actions es efimero -- sin subirlo, la SIGUIENTE corrida (que en el
-ciclo real es aplicar_correcciones.py, buscando lo que el analista corrigio
-a mano) jamas veria el archivo. Mientras dure la validacion en paralelo (ver
-plan Fase 6), sube a una ruta de auditoria aparte, NO al
-Reportes_Diarios/Reporte_Asistencia_*.xlsx real que ya lee/edita el
-analista.
+Graph (ademas de guardarlo local, disco efimero del runner). Así la gente
+lo puede abrir directo en SharePoint como vista diaria de asistencia.
+
+Davor, 2026-10-27: se retiraron las columnas "Hora entrada/salida corregida"
+y el aviso de "corre aplicar_correcciones.py" -- ese script (eliminado)
+detectaba ediciones manuales sobre este mismo Excel, pero confirmado contra
+Postgres que nunca encontró ninguna en 2 meses corriendo cada 10 min (0
+filas de CorreccionWeb con registrado_por="Reporte 9am"). El canal real
+para corregir asistencia es la web (CorreccionWeb vía asistencia.py,
+reflejado acá por correcciones_tabla3()), no editar celdas de este reporte.
 """
 import os
 import re
@@ -417,8 +418,6 @@ def main():
             "Hora salida real anterior": fmt_hora(salida_real_ant),
             "Canal(es) marcado(s) ayer": canal_ant_por_dni.get(dni) or None,
             "Comentario salida": comentario_salida,
-            "Hora entrada corregida": None,
-            "Hora salida corregida": None,
         })
 
     df = pd.DataFrame(filas)
@@ -459,7 +458,7 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
     ws["A2"] = (f"{n_asistio} Asistieron · {n_tardanza} Tardanza · {n_falta} Falta{texto_vacante}"
                 f"{texto_vacaciones}{texto_pendiente}  (Total: {total})")
     ws["A2"].font = Font(name=FUENTE, bold=True, size=11, color="52514E")
-    ws["A3"] = "Si el aplicativo marcó mal, llena \"Hora entrada corregida\" / \"Hora salida corregida\" (columnas amarillas) y corre aplicar_correcciones.py"
+    ws["A3"] = "Las correcciones de asistencia se hacen desde la web (mac_cloud), no editando este archivo"
     ws["A3"].font = Font(name=FUENTE, italic=True, size=9, color="8A6D00")
     ws.merge_cells("A1:D1")
     ws.merge_cells("A2:D2")
@@ -493,7 +492,6 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
     dnis_entrada_corregida = dnis_entrada_corregida or set()
     dnis_salida_corregida = dnis_salida_corregida or set()
     idx_estado = list(df.columns).index("Estado_Entrada") + 1
-    cols_editables = {list(df.columns).index("Hora entrada corregida") + 1, list(df.columns).index("Hora salida corregida") + 1}
     idx_ent_prog = list(df.columns).index("Hora entrada prog")
     idx_ent_real = list(df.columns).index("Hora entrada real")
     idx_sal_prog = list(df.columns).index("Hora salida prog anterior")
@@ -540,8 +538,6 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
                     cell.fill = fill_vacaciones
                 elif v == "Asistió (por confirmar)":
                     cell.fill = fill_editable
-            elif c in cols_editables:
-                cell.fill = fill_editable
             elif c == idx_ent_real + 1:
                 if dni_fila_str in dnis_entrada_corregida:
                     cell.fill = fill_corregido
@@ -565,7 +561,7 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
             letra = get_column_letter(list(df.columns).index(col_oculta) + 1)
             ws.column_dimensions[letra].hidden = True
 
-    anchos = [14, 22, 12, 14, 18, 22, 13, 34, 13, 15, 15, 15, 22, 18, 18, 18, 20, 20, 20]
+    anchos = [14, 22, 12, 14, 18, 22, 13, 34, 13, 15, 15, 15, 22, 18, 18, 18, 20]
     for i, ancho in enumerate(anchos, start=1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
@@ -574,17 +570,14 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
     ws.sheet_view.zoomScale = 80
     wb.save(path)
 
-    # Fase 6: ademas de local (usado por aplicar_correcciones.py DENTRO de la
-    # misma corrida), sube por Graph a la ruta de auditoria -- el runner no
-    # tiene disco entre corridas, y la version real de esto necesita
-    # persistir para que la SIGUIENTE corrida (aplicar_correcciones.py, en
-    # otro job) pueda leerlo.
+    # Ademas de local (disco efimero del runner), sube por Graph para que
+    # se pueda ver como vista diaria de asistencia directo en SharePoint.
     try:
         nombre_archivo = os.path.basename(path)
         subir_creando_si_no_existe(RUTA_GRAPH_MAC + CARPETA_AUDITORIA_GRAPH + nombre_archivo, wb)
-        print(f"Subido a SharePoint (auditoría): {CARPETA_AUDITORIA_GRAPH}{nombre_archivo}")
+        print(f"Subido a SharePoint: {CARPETA_AUDITORIA_GRAPH}{nombre_archivo}")
     except Exception as e:
-        print(f"AVISO: no se pudo subir el reporte a SharePoint (auditoría) -- {e}")
+        print(f"AVISO: no se pudo subir el reporte a SharePoint -- {e}")
 
 
 if __name__ == "__main__":

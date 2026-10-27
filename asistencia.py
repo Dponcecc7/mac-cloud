@@ -6,11 +6,11 @@ personas lo usen en vez de solo desde la laptop de Davor.
 
 Diferencia de diseño clave respecto al original: la app local lee/escribe
 Reportes_Diarios/Reporte_Asistencia_*.xlsx en disco y llama a
-reporte_diario_9am.py/aplicar_correcciones.py como subprocesos -- nada de
-eso existe en Render. Acá se lee directo de Postgres (clasificacion_diaria +
-personas, ya mantenido fresco por el pipeline en la nube, Fase 6) y las
-operaciones largas (Athena) se disparan como workflow de GitHub Actions
-(github_actions.py) en vez de correrlas sincronicas en el request.
+reporte_diario_9am.py como subproceso -- nada de eso existe en Render. Acá
+se lee directo de Postgres (clasificacion_diaria + personas, ya mantenido
+fresco por el pipeline en la nube, Fase 6) y las operaciones largas (Athena)
+se disparan como workflow de GitHub Actions (github_actions.py) en vez de
+correrlas sincronicas en el request.
 
 Guardar una corrección escribe a CorreccionWeb (Postgres) -- hasta
 2026-10-27 escribía DOBLE (decision del usuario, 2026-08-21: también a
@@ -47,11 +47,10 @@ SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que usaba la app local para resaltar 
 
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
-# aplicar_correcciones.py escribe este texto exacto en el comentario cuando
+# reporte_diario_9am.py escribe este texto exacto en el comentario cuando
 # un supervisor reporta "Asistió" desde la app movil pero todavia nadie
-# confirmo la hora real en "Entrada/Salida corregida" -- hay que poder
-# encontrar estos casos facil para no perderlos (ver TEXTO_PENDIENTE_ENTRADA/
-# TEXTO_PENDIENTE_SALIDA en pipeline/aplicar_correcciones.py).
+# confirmo la hora real -- hay que poder encontrar estos casos facil para
+# no perderlos.
 MARCADOR_PENDIENTE = "reportado por supervisor -- confirmar en"
 
 # motor_clasificacion.py escribe este sufijo exacto en el Estado cuando el
@@ -1421,14 +1420,11 @@ def motivos_eliminar():
 def actualizar():
     # Dispara el pipeline COMPLETO (no solo reporte_9am.yml) a proposito:
     # reporte_9am.yml unicamente regenera el reporte con lo YA calculado en
-    # Postgres -- aplicar_correcciones.py (su unico paso relevante) solo
-    # empuja ediciones hechas sobre el snapshot de auditoria Reporte_Asistencia_*.xlsx,
-    # y si no encuentra ninguna ahi (que es el caso normal: tanto el guardado
-    # de mac_cloud como la app movil de supervisores escriben DIRECTO a
-    # Tabla 3) se salta motor_clasificacion.py por completo -- los
-    # comentarios/motivos nuevos en Tabla 3 quedan sin aplicar. pipeline_completo.yml
+    # Postgres, nunca vuelve a correr motor_clasificacion.py -- un comentario/
+    # corrección guardado recién (via web o app movil, directo a CorreccionWeb)
+    # no se reflejaría hasta la próxima corrida programada. pipeline_completo.yml
     # si corre motor_clasificacion.py siempre, asi que es lo unico que
-    # garantiza reflejar comentarios nuevos (via web o app movil).
+    # garantiza reflejar comentarios nuevos ya.
     fecha_str = request.form["fecha"]
     vista = request.form.get("vista") or "reporte"
     ok, mensaje = disparar_workflow("pipeline_completo.yml")
