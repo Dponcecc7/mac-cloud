@@ -12,37 +12,27 @@ personas, ya mantenido fresco por el pipeline en la nube, Fase 6) y las
 operaciones largas (Athena) se disparan como workflow de GitHub Actions
 (github_actions.py) en vez de correrlas sincronicas en el request.
 
-Guardar una corrección escribe DOBLE (decision del usuario, 2026-08-21):
-Tabla 3 en SharePoint via Graph (la fuente REAL que lee el motor de
-clasificacion, local y nube -- cero riesgo de romper el flujo que ya
-funciona) y ademas una copia en Postgres (correcciones_web, solo auditoria).
+Guardar una corrección escribe a CorreccionWeb (Postgres) -- hasta
+2026-10-27 escribía DOBLE (decision del usuario, 2026-08-21: también a
+Tabla 3 en SharePoint via Graph, que hasta ese día era la fuente REAL que
+leía el motor de clasificación); ese día CorreccionWeb pasó a ser la única
+fuente (ver pipeline/correcciones_motor.py) y se sacó la escritura a Tabla 3.
 """
 import datetime as dt
-import io
-import os
 import re
-import sys
 from zoneinfo import ZoneInfo
 
-import openpyxl
-import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, ReunionRegistrada, VacacionRegistrada, Visita, get_session
-from excel_safety import texto_seguro_excel
 from fact_models import ClasificacionDiaria
-from graph_client import descargar, subir_in_place
 from github_actions import disparar_workflow, estado_ultima_corrida
 from patron_recurrente import dnis_con_domingo
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from sqlalchemy import func
 from sqlalchemy.orm import aliased
-
-_AQUI = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
-from db_lock import adquirir_lock, liberar_lock  # noqa: E402
 
 bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
 
@@ -53,8 +43,6 @@ bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
 _analista_requerido = requiere_analista_admin(redirigir_a="asistencia.reporte")
 
 
-RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
-TABLA3_RUTA_GRAPH = f"{RUTA_GRAPH_MAC}3_Registro_Diario_Supervisor.xlsx"
 SALIDA_ANTICIPADA_MIN = 10  # mismo umbral que usaba la app local para resaltar "salida temprana"
 
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
@@ -1000,68 +988,19 @@ def cliente():
     return _vista_reporte(fecha_str, "cliente")
 
 
-def _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, hora_ent=None, hora_sal=None, estado_reportado=None):
-    """Mismo formato/columnas que aplicar_correcciones.py::_agregar_fila_t3()
-    -- no cambiar sin revisar ese archivo primero, el motor de clasificacion
-    (local y nube) depende de este layout exacto.
-
-    `estado_reportado` (columna 3, "Estado reportado") es la MISMA columna
-    que llena la app Power Apps de los supervisores para "Asistió"/"Apoyo
-    zona"/"Vacante" -- ver GUIA_POWER_APPS_SUPERVISOR.md sección 3/4. Hasta
-    ahora esta función nunca la llenaba (solo Comentario), asi que esas 3
-    acciones no tenian forma de reportarse desde la web. "Falta" sigue
-    usando el Comentario con el prefijo "Falta - {motivo}" (columna 3 vacía),
-    igual que ya hace el resto del flujo -- motor_clasificacion.py lee
-    "Estado reportado" solo como respaldo cuando NO hay un comentario que
-    empiece con "FALTA"/tenga "VACANTE"/"VACACIONES".
-    """
-    ws.cell(row=fila_libre, column=1, value=str(dni))
-    ws.cell(row=fila_libre, column=2, value=str(fecha))
-    if estado_reportado:
-        ws.cell(row=fila_libre, column=3, value=estado_reportado)
-    # texto_seguro_excel(): comentario es texto libre tipeado por el usuario
-    # (o un motivo agregado por otro usuario) -- sin esto, un valor que
-    # empiece con =/+/-/@ se interpretaria como formula al abrir la Tabla 3
-    # en Excel (CSV/Excel Injection).
-    ws.cell(row=fila_libre, column=4, value=texto_seguro_excel(comentario))
-    ws.cell(row=fila_libre, column=5, value="Web mac_cloud")
-    ws.cell(row=fila_libre, column=6, value=dt.datetime.now().strftime("%H:%M"))
-    if hora_ent:
-        ws.cell(row=fila_libre, column=7, value=str(hora_ent))
-    if hora_sal:
-        ws.cell(row=fila_libre, column=8, value=str(hora_sal))
 
 
-def _escribir_rango_vacaciones(ws, fila_libre, dni, fecha_inicio, fecha_fin, motivo="Vacaciones"):
-    """Una fila "Falta - {motivo}" por día CALENDARIO del rango -- el motor
+def _rango_fechas(fecha_inicio, fecha_fin):
+    """Lista de fechas CALENDARIO del rango, una por día -- el motor
     (motor_clasificacion.py) ya descarta solo lo que no corresponda (feriados,
     días sin fila de Patrón Recurrente ese weekday), así que no hace falta
-    filtrar acá cuáles días "sí trabaja". Devuelve la lista de fechas
-    escritas, para armar los CorreccionWeb en el mismo orden.
-
-    `motivo` (Davor, 2026-10-12) -- generalizado para "Licencia" además de
-    "Vacaciones" (ver MOTIVOS_CON_RANGO), mismo nombre de función por no
-    duplicar código, default "Vacaciones" para no tocar a los llamadores
-    existentes (la página dedicada de Vacaciones)."""
-    fila = fila_libre
+    filtrar acá cuáles días "sí trabaja"."""
     fechas = []
     d = fecha_inicio
     while d <= fecha_fin:
-        _agregar_fila_tabla3(ws, fila, dni, d, f"Falta - {motivo}")
         fechas.append(d)
-        fila += 1
         d += dt.timedelta(days=1)
     return fechas
-
-
-def _borrar_fechas_tabla3(ws, fila_libre, dni, fechas):
-    """Mismo mecanismo que ya usa MARCADOR_BORRADO en el resto del archivo
-    (Tabla 3 es append-only, no se puede "borrar" una fila vieja) -- se usa
-    para los días que salen de un rango de vacaciones editado (acortado)."""
-    fila = fila_libre
-    for f in fechas:
-        _agregar_fila_tabla3(ws, fila, dni, f, MARCADOR_BORRADO)
-        fila += 1
 
 
 @bp.post("/guardar")
@@ -1187,105 +1126,72 @@ def guardar():
     if not ediciones:
         return redirect(volver)
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo=vista,
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=volver,
-        )
+    correcciones_web = []
+    vacaciones_nuevas = []
+    for e in ediciones:
+        if e.get("fecha_fin_vacaciones"):
+            motivo_rango = e.get("motivo_rango") or "Vacaciones"
+            fechas_rango = _rango_fechas(fecha, e["fecha_fin_vacaciones"])
+            for f in fechas_rango:
+                correcciones_web.append(CorreccionWeb(
+                    dni=e["dni"], fecha=f, comentario_entrada=f"Falta - {motivo_rango}",
+                    registrado_por=current_user.email,
+                ))
+            # VacacionRegistrada es solo para el seguimiento/edición de
+            # la página dedicada de Vacaciones -- Licencia no tiene esa
+            # pantalla (Davor, 2026-10-12).
+            if motivo_rango == "Vacaciones":
+                vacaciones_nuevas.append(VacacionRegistrada(
+                    dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
+                    registrado_por=current_user.email,
+                ))
+        elif e.get("estado_reportado"):
+            correcciones_web.append(CorreccionWeb(
+                dni=e["dni"], fecha=fecha, estado_reportado=e["estado_reportado"],
+                registrado_por=current_user.email,
+            ))
+        elif e["comentario_entrada"] or e["entrada_corr"]:
+            correcciones_web.append(CorreccionWeb(
+                dni=e["dni"], fecha=fecha,
+                comentario_entrada=e["comentario_entrada"] or None,
+                hora_entrada_corregida=e["entrada_corr"] or None,
+                registrado_por=current_user.email,
+            ))
+        if e["comentario_salida"] or e["salida_corr"]:
+            # ayer_de(dni), no `ayer` a secas -- Davor, 2026-09-14: para
+            # Autoservicio (trabaja domingo), corregir "salida" un lunes
+            # debe escribir sobre el domingo real, no sobre el sábado.
+            ayer_de_esta_persona = ayer_de(e["dni"])
+            correcciones_web.append(CorreccionWeb(
+                dni=e["dni"], fecha=ayer_de_esta_persona,
+                comentario_salida=e["comentario_salida"] or None,
+                hora_salida_corregida=e["salida_corr"] or None,
+                registrado_por=current_user.email,
+            ))
+        if e.get("salida_corr_hoy"):
+            # Comentario fijo "Marcación manual" (Davor, 2026-09-01: "le
+            # coloco su marcación del día manual, que diga se colocó
+            # marcación manual por algún lado") -- antes se guardaba sin
+            # ningún comentario, así que en Reporte diario no quedaba
+            # ninguna señal de que esa hora de salida vino tipeada a mano
+            # (via "Pendientes de marcación real -- seguimiento") y no de
+            # una visita real del aplicativo.
+            correcciones_web.append(CorreccionWeb(
+                dni=e["dni"], fecha=fecha,
+                comentario_salida="Marcación manual",
+                hora_salida_corregida=e["salida_corr_hoy"],
+                registrado_por=current_user.email,
+            ))
+
+    session = get_session()
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-        ws = wb["Registro diario supervisor"]
-        fila_libre = ws.max_row + 1
-
-        # Se arma todo en memoria y se sube a SharePoint (T3, la fuente
-        # real que lee el motor) ANTES de comitear a Postgres -- igual que
-        # marcar() y el cierre de Falta por reemplazo. Al revés (comitear
-        # primero) era el único lugar que lo hacía así: si subir_in_place
-        # fallaba después del commit, la fila CorreccionWeb ya existía y
-        # sacaba a la persona de "Pendientes de marcar" aunque la
-        # corrección nunca hubiera llegado a T3 -- se perdía en silencio.
-        correcciones_web = []
-        vacaciones_nuevas = []
-        for e in ediciones:
-            if e.get("fecha_fin_vacaciones"):
-                motivo_rango = e.get("motivo_rango") or "Vacaciones"
-                fechas_rango = _escribir_rango_vacaciones(ws, fila_libre, e["dni"], fecha, e["fecha_fin_vacaciones"], motivo=motivo_rango)
-                fila_libre += len(fechas_rango)
-                for f in fechas_rango:
-                    correcciones_web.append(CorreccionWeb(
-                        dni=e["dni"], fecha=f, comentario_entrada=f"Falta - {motivo_rango}",
-                        registrado_por=current_user.email,
-                    ))
-                # VacacionRegistrada es solo para el seguimiento/edición de
-                # la página dedicada de Vacaciones -- Licencia no tiene esa
-                # pantalla (Davor, 2026-10-12).
-                if motivo_rango == "Vacaciones":
-                    vacaciones_nuevas.append(VacacionRegistrada(
-                        dni=e["dni"], fecha_inicio=fecha, fecha_fin=e["fecha_fin_vacaciones"],
-                        registrado_por=current_user.email,
-                    ))
-            elif e.get("estado_reportado"):
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, estado_reportado=e["estado_reportado"])
-                fila_libre += 1
-                correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=fecha, estado_reportado=e["estado_reportado"],
-                    registrado_por=current_user.email,
-                ))
-            elif e["comentario_entrada"] or e["entrada_corr"]:
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, e["comentario_entrada"], hora_ent=e["entrada_corr"])
-                fila_libre += 1
-                correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=fecha,
-                    comentario_entrada=e["comentario_entrada"] or None,
-                    hora_entrada_corregida=e["entrada_corr"] or None,
-                    registrado_por=current_user.email,
-                ))
-            if e["comentario_salida"] or e["salida_corr"]:
-                # ayer_de(dni), no `ayer` a secas -- Davor, 2026-09-14: para
-                # Autoservicio (trabaja domingo), corregir "salida" un lunes
-                # debe escribir sobre el domingo real, no sobre el sábado.
-                ayer_de_esta_persona = ayer_de(e["dni"])
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], ayer_de_esta_persona, e["comentario_salida"], hora_sal=e["salida_corr"])
-                fila_libre += 1
-                correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=ayer_de_esta_persona,
-                    comentario_salida=e["comentario_salida"] or None,
-                    hora_salida_corregida=e["salida_corr"] or None,
-                    registrado_por=current_user.email,
-                ))
-            if e.get("salida_corr_hoy"):
-                # Comentario fijo "Marcación manual" (Davor, 2026-09-01: "le
-                # coloco su marcación del día manual, que diga se colocó
-                # marcación manual por algún lado") -- antes se guardaba sin
-                # ningún comentario, así que en Reporte diario no quedaba
-                # ninguna señal de que esa hora de salida vino tipeada a mano
-                # (via "Pendientes de marcación real -- seguimiento") y no de
-                # una visita real del aplicativo.
-                _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, "Marcación manual", hora_sal=e["salida_corr_hoy"])
-                fila_libre += 1
-                correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=fecha,
-                    comentario_salida="Marcación manual",
-                    hora_salida_corregida=e["salida_corr_hoy"],
-                    registrado_por=current_user.email,
-                ))
-
-        subir_in_place(TABLA3_RUTA_GRAPH, wb)
-
-        session = get_session()
-        try:
-            for c in correcciones_web:
-                session.add(c)
-            for v in vacaciones_nuevas:
-                session.add(v)
-            session.commit()
-        finally:
-            session.close()
+        for c in correcciones_web:
+            session.add(c)
+        for v in vacaciones_nuevas:
+            session.add(v)
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     plural = "personas" if len(ediciones) != 1 else "persona"
     return render_template(
@@ -1314,7 +1220,7 @@ ACCIONES_CON_MOTIVO = ("Falta", "Descanso")
 # (Davor, 2026-10-12: "cuando colocó licencia que tambien salga fecha
 # inicio y fecha fin asi como sale de vacaciones") -- mismo mecanismo que
 # ya existía solo para "Vacaciones" desde 2026-09-14 (dlg-vacaciones en
-# asistencia_marcar.html + _escribir_rango_vacaciones() de abajo), ahora
+# asistencia_marcar.html + _rango_fechas() de abajo), ahora
 # generalizado para incluir "Licencia" también.
 MOTIVOS_CON_RANGO = ("Vacaciones", "Licencia")
 
@@ -1322,13 +1228,11 @@ MOTIVOS_CON_RANGO = ("Vacaciones", "Licencia")
 @bp.post("/marcar")
 @requiere_pagina("asistencia")
 def marcar():
-    """Version web de los botones Asistió/Día de descanso/Vacante/Falta de
-    la Power App (galPendientes -- ver GUIA_POWER_APPS_SUPERVISOR.md
-    secciones 3/4). Escribe a la MISMA Tabla 3 que la app móvil, con el
-    mismo criterio que usa motor_clasificacion.py para interpretarlo --
-    "Falta"/"Descanso" via Comentario="{Accion} - {motivo}" (mismo patron
-    que ya usan las correcciones web y la app), las otras 2 via la columna
-    "Estado reportado"."""
+    """Botones Asistió/Día de descanso/Vacante/Falta de "Marcar asistencia".
+    Escribe a CorreccionWeb (Postgres), con el mismo criterio que usa
+    motor_clasificacion.py para interpretarlo -- "Falta"/"Descanso" via
+    comentario_entrada="{Accion} - {motivo}", las otras 2 (Asistió/Vacante)
+    via estado_reportado."""
     dni = request.form["dni"].strip()
     fecha_str = request.form["fecha"]
     fecha = dt.date.fromisoformat(fecha_str)
@@ -1390,72 +1294,36 @@ def marcar():
     if comentario_extra:
         comentario_con_motivo += f" ({comentario_extra})"
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="marcar",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
-        )
-    fechas_rango_escritas = None
-    try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fila_libre = ws.max_row + 1
-            if fecha_fin_vacaciones:
-                fechas_rango_escritas = _escribir_rango_vacaciones(ws, fila_libre, dni, fecha, fecha_fin_vacaciones, motivo=motivo)
-            elif accion in ACCIONES_CON_MOTIVO:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario_con_motivo)
-            else:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, None, hora_ent=(hora_ingreso or None), estado_reportado=accion)
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            # Sin esto, si SharePoint/Graph no responde (timeout, red caida,
-            # throttle) la excepcion volaba sin capturar y el navegador
-            # quedaba con el boton "cargando" pegado -- ahora corta y avisa
-            # (Davor, 2026-08-31: "sale cargando nomas y no se guarda").
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="marcar",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
-            )
+    fechas_rango = _rango_fechas(fecha, fecha_fin_vacaciones) if fecha_fin_vacaciones else None
 
-        # Ademas de Tabla 3 (lo que lee el motor), se guarda en correcciones_web
-        # -- asi "Pendientes de marcar" puede sacar a esta persona de la
-        # lista de una, sin esperar a que el motor vuelva a correr.
-        session = get_session()
-        try:
-            if fechas_rango_escritas:
-                for f in fechas_rango_escritas:
-                    session.add(CorreccionWeb(
-                        dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
-                        registrado_por=current_user.email,
-                    ))
-                # VacacionRegistrada es solo para el seguimiento/edición de
-                # la página dedicada de Vacaciones -- Licencia no tiene esa
-                # pantalla, así que no corresponde una fila ahí (Davor,
-                # 2026-10-12).
-                if motivo == "Vacaciones":
-                    session.add(VacacionRegistrada(
-                        dni=dni, fecha_inicio=fecha, fecha_fin=fecha_fin_vacaciones,
-                        registrado_por=current_user.email,
-                    ))
-            else:
+    session = get_session()
+    try:
+        if fechas_rango:
+            for f in fechas_rango:
                 session.add(CorreccionWeb(
-                    dni=dni, fecha=fecha,
-                    comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else None),
-                    estado_reportado=(accion if accion not in ACCIONES_CON_MOTIVO else None),
-                    hora_entrada_corregida=hora_ingreso or None,
+                    dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
                     registrado_por=current_user.email,
                 ))
-            session.commit()
-        finally:
-            session.close()
+            # VacacionRegistrada es solo para el seguimiento/edición de
+            # la página dedicada de Vacaciones -- Licencia no tiene esa
+            # pantalla, así que no corresponde una fila ahí (Davor,
+            # 2026-10-12).
+            if motivo == "Vacaciones":
+                session.add(VacacionRegistrada(
+                    dni=dni, fecha_inicio=fecha, fecha_fin=fecha_fin_vacaciones,
+                    registrado_por=current_user.email,
+                ))
+        else:
+            session.add(CorreccionWeb(
+                dni=dni, fecha=fecha,
+                comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else None),
+                estado_reportado=(accion if accion not in ACCIONES_CON_MOTIVO else None),
+                hora_entrada_corregida=hora_ingreso or None,
+                registrado_por=current_user.email,
+            ))
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok", **filtros_volver))
 
@@ -1466,8 +1334,7 @@ def marcar_descanso_masivo():
     """Mismo "Descanso" de marcar(), pero para varios DNIs de una sola vez
     (Davor, 2026-09-21: "en Autoservicio descansan varios en unos días" --
     marcar uno por uno era muy repetitivo). Un solo motivo para todo el
-    grupo, una sola descarga/subida de Tabla 3 (mismo patrón ya usado en
-    reunion_registrar())."""
+    grupo."""
     dnis = request.form.getlist("dnis")
     fecha_str = request.form["fecha"]
     fecha = dt.date.fromisoformat(fecha_str)
@@ -1491,40 +1358,13 @@ def marcar_descanso_masivo():
 
     comentario = f"Descanso - {motivo}"
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="marcar",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
-        )
+    session = get_session()
     try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fila_libre = ws.max_row + 1
-            for dni in dnis:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario)
-                fila_libre += 1
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="marcar",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.marcar_vista", fecha=fecha_str, **filtros_volver),
-            )
-
-        session = get_session()
-        try:
-            for dni in dnis:
-                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
-            session.commit()
-        finally:
-            session.close()
+        for dni in dnis:
+            session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     return redirect(url_for("asistencia.marcar_vista", fecha=fecha_str, marcado="ok", **filtros_volver))
 
@@ -1695,24 +1535,15 @@ def reemplazo_submit():
         # de cuando el reemplazo YA se procesó).
         try:
             hoy = dt.date.today()
-            ok_lock, _ = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-            if ok_lock:
-                try:
-                    wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-                    ws = wb["Registro diario supervisor"]
-                    _agregar_fila_tabla3(ws, ws.max_row + 1, dni_vacante, hoy, f"Falta - Cese: {motivo_baja or 'Reemplazo'}")
-                    subir_in_place(TABLA3_RUTA_GRAPH, wb)
-                    session = get_session()
-                    try:
-                        session.add(CorreccionWeb(
-                            dni=dni_vacante, fecha=hoy, comentario_entrada=f"Falta - Cese: {motivo_baja or 'Reemplazo'}",
-                            registrado_por=current_user.email,
-                        ))
-                        session.commit()
-                    finally:
-                        session.close()
-                finally:
-                    liberar_lock("tabla3_web")
+            session = get_session()
+            try:
+                session.add(CorreccionWeb(
+                    dni=dni_vacante, fecha=hoy, comentario_entrada=f"Falta - Cese: {motivo_baja or 'Reemplazo'}",
+                    registrado_por=current_user.email,
+                ))
+                session.commit()
+            finally:
+                session.close()
         except Exception:
             pass  # el reemplazo en si ya se guardo bien -- esto es solo prolijidad, no bloquea el flujo principal
 
@@ -2084,44 +1915,22 @@ def vacaciones_registrar():
             volver=url_for("asistencia.vacaciones_form"),
         )
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.vacaciones_form"),
-        )
-    try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fechas = _escribir_rango_vacaciones(ws, ws.max_row + 1, dni, fecha_inicio, fecha_fin, motivo=motivo)
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.vacaciones_form"),
-            )
+    fechas = _rango_fechas(fecha_inicio, fecha_fin)
 
-        session = get_session()
-        try:
-            for f in fechas:
-                session.add(CorreccionWeb(
-                    dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
-                    registrado_por=current_user.email,
-                ))
-            session.add(VacacionRegistrada(
-                dni=dni, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, motivo=motivo,
+    session = get_session()
+    try:
+        for f in fechas:
+            session.add(CorreccionWeb(
+                dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}",
                 registrado_por=current_user.email,
             ))
-            session.commit()
-        finally:
-            session.close()
+        session.add(VacacionRegistrada(
+            dni=dni, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, motivo=motivo,
+            registrado_por=current_user.email,
+        ))
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
@@ -2137,8 +1946,8 @@ def vacaciones_editar(vacacion_id):
     """Extiende o acorta un rango ya registrado -- calcula el diff contra
     lo guardado (fechas que salen del rango vs. fechas que entran) y
     escribe/"borra" solo esas, sin tocar de nuevo los días que ya estaban
-    en ambos rangos (Tabla 3 es append-only, así que "borrar" es escribir
-    MARCADOR_BORRADO -- ver _borrar_fechas_tabla3())."""
+    en ambos rangos (CorreccionWeb es append-only, así que "borrar" es
+    escribir MARCADOR_BORRADO)."""
     nueva_inicio, nueva_fin, error = _validar_rango_vacaciones(
         request.form.get("fecha_inicio", "").strip(), request.form.get("fecha_fin", "").strip(),
     )
@@ -2175,48 +1984,19 @@ def vacaciones_editar(vacacion_id):
     if not fechas_agregadas and not fechas_quitadas:
         return redirect(url_for("asistencia.vacaciones_form"))
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.vacaciones_form"),
-        )
+    session = get_session()
     try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fila_libre = ws.max_row + 1
-            for f in fechas_agregadas:
-                _agregar_fila_tabla3(ws, fila_libre, dni, f, f"Falta - {motivo}")
-                fila_libre += 1
-            _borrar_fechas_tabla3(ws, fila_libre, dni, fechas_quitadas)
-            fila_libre += len(fechas_quitadas)
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.vacaciones_form"),
-            )
-
-        session = get_session()
-        try:
-            for f in fechas_agregadas:
-                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}", registrado_por=current_user.email))
-            for f in fechas_quitadas:
-                session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
-            registro = session.get(VacacionRegistrada, vacacion_id)
-            registro.fecha_inicio, registro.fecha_fin = nueva_inicio, nueva_fin
-            registro.actualizado_por = current_user.email
-            registro.fecha_actualizacion = dt.datetime.now()
-            session.commit()
-        finally:
-            session.close()
+        for f in fechas_agregadas:
+            session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=f"Falta - {motivo}", registrado_por=current_user.email))
+        for f in fechas_quitadas:
+            session.add(CorreccionWeb(dni=dni, fecha=f, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
+        registro = session.get(VacacionRegistrada, vacacion_id)
+        registro.fecha_inicio, registro.fecha_fin = nueva_inicio, nueva_fin
+        registro.actualizado_por = current_user.email
+        registro.fecha_actualizacion = dt.datetime.now()
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     return render_template(
         "asistencia_resultado.html", usuario=current_user, activo="vacaciones",
@@ -2398,47 +2178,20 @@ def reunion_registrar():
     if nota:
         comentario += f" - {nota}"
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="reunion",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.reunion_form"),
-        )
+    session = get_session()
     try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fila_libre = ws.max_row + 1
-            for dni in dnis:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, estado_reportado="Asistió")
-                fila_libre += 1
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="reunion",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.reunion_form"),
-            )
-
-        session = get_session()
-        try:
-            for dni in dnis:
-                session.add(CorreccionWeb(
-                    dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
-                    registrado_por=current_user.email,
-                ))
-                session.add(ReunionRegistrada(
-                    dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
-                    nota=nota or None, registrado_por=current_user.email,
-                ))
-            session.commit()
-        finally:
-            session.close()
+        for dni in dnis:
+            session.add(CorreccionWeb(
+                dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
+                registrado_por=current_user.email,
+            ))
+            session.add(ReunionRegistrada(
+                dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
+                nota=nota or None, registrado_por=current_user.email,
+            ))
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     plural = "personas" if len(dnis) != 1 else "persona"
     return render_template(
@@ -2457,11 +2210,11 @@ def reunion_registrar():
 def reunion_editar_personas():
     """Agregar o sacar gente de una reunión ya registrada (Davor,
     2026-09-17: "coloca una opción para editar a las personas") -- mismo
-    mecanismo de "borrado" que ya usa el resto del archivo (Tabla 3 es
-    append-only, ver MARCADOR_BORRADO/_borrar_fechas_tabla3): a quien se
-    saca se le escribe MARCADOR_BORRADO ese día (deshace el "Asistió"
-    asumido) y se borra su ReunionRegistrada de este grupo puntual; a quien
-    se agrega se le escribe la misma fila que ya hace reunion_registrar()."""
+    mecanismo de "borrado" que ya usa el resto del archivo (CorreccionWeb es
+    append-only, ver MARCADOR_BORRADO): a quien se saca se le escribe
+    MARCADOR_BORRADO ese día (deshace el "Asistió" asumido) y se borra su
+    ReunionRegistrada de este grupo puntual; a quien se agrega se le
+    escribe la misma fila que ya hace reunion_registrar()."""
     fecha_str = request.form.get("fecha", "").strip()
     hora_inicio = request.form.get("hora_inicio", "").strip()
     hora_fin = request.form.get("hora_fin", "").strip()
@@ -2518,62 +2271,32 @@ def reunion_editar_personas():
     if nota:
         comentario += f" - {nota}"
 
-    ok_lock, motivo_lock = adquirir_lock("tabla3_web", f"web:{current_user.email}", max_minutos=2)
-    if not ok_lock:
-        return render_template(
-            "asistencia_resultado.html", usuario=current_user, activo="reunion",
-            titulo="No se pudo guardar", ok=False,
-            detalle=f"{motivo_lock} -- probá de nuevo en un minuto.",
-            volver=url_for("asistencia.reunion_form"),
-        )
+    session = get_session()
     try:
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-            ws = wb["Registro diario supervisor"]
-            fila_libre = ws.max_row + 1
-            for dni in agregados:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, comentario, estado_reportado="Asistió")
-                fila_libre += 1
-            for dni in quitados:
-                _agregar_fila_tabla3(ws, fila_libre, dni, fecha, MARCADOR_BORRADO)
-                fila_libre += 1
-            subir_in_place(TABLA3_RUTA_GRAPH, wb)
-        except requests.exceptions.RequestException as e:
-            return render_template(
-                "asistencia_resultado.html", usuario=current_user, activo="reunion",
-                titulo="No se pudo guardar", ok=False,
-                detalle=f"Fallo la conexión con SharePoint/Graph ({e}) -- probá de nuevo en un minuto.",
-                volver=url_for("asistencia.reunion_form"),
-            )
-
-        session = get_session()
-        try:
-            for dni in agregados:
-                session.add(CorreccionWeb(
-                    dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
-                    registrado_por=current_user.email,
-                ))
-                session.add(ReunionRegistrada(
-                    dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
-                    nota=nota, registrado_por=registrado_por,
-                ))
-            for dni in quitados:
-                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
-            if quitados:
-                (
-                    session.query(ReunionRegistrada)
-                    .filter(
-                        ReunionRegistrada.fecha == fecha, ReunionRegistrada.hora_inicio == hora_inicio,
-                        ReunionRegistrada.hora_fin == hora_fin, ReunionRegistrada.nota == nota,
-                        ReunionRegistrada.registrado_por == registrado_por, ReunionRegistrada.dni.in_(quitados),
-                    )
-                    .delete(synchronize_session=False)
+        for dni in agregados:
+            session.add(CorreccionWeb(
+                dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
+                registrado_por=current_user.email,
+            ))
+            session.add(ReunionRegistrada(
+                dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
+                nota=nota, registrado_por=registrado_por,
+            ))
+        for dni in quitados:
+            session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=MARCADOR_BORRADO, registrado_por=current_user.email))
+        if quitados:
+            (
+                session.query(ReunionRegistrada)
+                .filter(
+                    ReunionRegistrada.fecha == fecha, ReunionRegistrada.hora_inicio == hora_inicio,
+                    ReunionRegistrada.hora_fin == hora_fin, ReunionRegistrada.nota == nota,
+                    ReunionRegistrada.registrado_por == registrado_por, ReunionRegistrada.dni.in_(quitados),
                 )
-            session.commit()
-        finally:
-            session.close()
+                .delete(synchronize_session=False)
+            )
+        session.commit()
     finally:
-        liberar_lock("tabla3_web")
+        session.close()
 
     partes = []
     if agregados:

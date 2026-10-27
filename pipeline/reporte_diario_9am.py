@@ -27,7 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dimension_models import get_session  # noqa: E402
+from dimension_models import CorreccionWeb, get_session  # noqa: E402
 from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
 from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
@@ -176,20 +176,33 @@ def dnis_asistio_anterior(fecha_anterior):
 
 
 def correcciones_tabla3(hoy, anterior):
-    t3 = leer_excel("ASISTENCIA/MAC/3_Registro_Diario_Supervisor.xlsx", sheet_name="Registro diario supervisor", header=3).dropna(how="all")
-    t3.columns = [str(c).strip() for c in t3.columns]
-    t3 = t3.rename(columns={t3.columns[0]: "DNI"})
-    # Mismo gotcha que parseo_headcount.py -- ver comentario en cargar_maestro().
-    dni_num = pd.to_numeric(t3["DNI"], errors="coerce")
-    t3 = t3[dni_num.notna()].copy()
-    t3["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str)
-    t3["Fecha_dt"] = pd.to_datetime(t3["Fecha"], errors="coerce").dt.date
-
-    ent_hoy = t3[(t3["Fecha_dt"] == hoy.date()) & t3["Hora entrada corregida"].notna()]
-    sal_ant = t3[(t3["Fecha_dt"] == anterior.date()) & t3["Hora salida corregida"].notna()]
+    """Reemplaza la lectura de 3_Registro_Diario_Supervisor.xlsx -- lee de
+    CorreccionWeb (Postgres). DNI SIN zfill a propósito (str(int(...)), no
+    .zfill(8)) -- el resto de este archivo (cargar_maestro(), etc.) tampoco
+    rellena ceros a la izquierda, así que las claves de estos dos dict
+    tienen que matchear ese mismo formato para que `dni in correcciones_*`
+    funcione más abajo."""
+    session = get_session()
+    try:
+        filas_ent = (
+            session.query(CorreccionWeb.dni, CorreccionWeb.hora_entrada_corregida)
+            .filter(CorreccionWeb.fecha == hoy.date(), CorreccionWeb.hora_entrada_corregida.isnot(None))
+            .order_by(CorreccionWeb.fecha_registro)
+            .all()
+        )
+        filas_sal = (
+            session.query(CorreccionWeb.dni, CorreccionWeb.hora_salida_corregida)
+            .filter(CorreccionWeb.fecha == anterior.date(), CorreccionWeb.hora_salida_corregida.isnot(None))
+            .order_by(CorreccionWeb.fecha_registro)
+            .all()
+        )
+    finally:
+        session.close()
+    # El orden ascendente + reconstruir el dict se queda con el ÚLTIMO DNI
+    # repetido -- mismo efecto que el dict(zip(...)) original.
     return (
-        dict(zip(ent_hoy["DNI"], ent_hoy["Hora entrada corregida"])),
-        dict(zip(sal_ant["DNI"], sal_ant["Hora salida corregida"])),
+        {str(int(dni)): hora for dni, hora in filas_ent},
+        {str(int(dni)): hora for dni, hora in filas_sal},
     )
 
 

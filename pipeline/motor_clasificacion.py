@@ -39,6 +39,7 @@ from fact_models import ClasificacionDiaria, crear_tablas  # noqa: E402
 from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from correcciones_motor import cargar_correcciones_web  # noqa: E402
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 from patron_recurrente import sin_acentos  # noqa: E402
 
@@ -695,26 +696,13 @@ def main():
     feriados = leer_excel("ASISTENCIA/MAC/5_Feriados_2026.xlsx", sheet_name="Feriados 2026", header=3)
     feriados_set = set(pd.to_datetime(feriados["Fecha"], format="%d/%m/%Y", dayfirst=True).dt.date)
 
-    sup = leer_excel("ASISTENCIA/MAC/3_Registro_Diario_Supervisor.xlsx", sheet_name="Registro diario supervisor", header=3).dropna(how="all")
-    sup.columns = [str(c).strip() for c in sup.columns]
-    sup = sup.rename(columns={sup.columns[0]: "DNI"})
-    # Mismo gotcha que parseo_headcount.py -- ver comentario más arriba,
-    # incluido el .str.zfill(8).
-    dni_num_sup = pd.to_numeric(sup["DNI"], errors="coerce")
-    sup = sup[dni_num_sup.notna()].copy()
-    sup["DNI"] = dni_num_sup[dni_num_sup.notna()].astype("int64").astype(str).str.zfill(8)
-    sup["Fecha_dt"] = pd.to_datetime(sup["Fecha"], errors="coerce").dt.date
-    sup_idx = {}
-    for (dni_sup, fecha_sup), grupo in sup.groupby(["DNI", "Fecha_dt"]):
-        if len(grupo) == 1:
-            sup_idx[(dni_sup, fecha_sup)] = grupo.iloc[0]
-            continue
-        fusion = grupo.iloc[-1].copy()
-        for col in grupo.columns:
-            no_nulos = grupo[col].dropna()
-            if len(no_nulos):
-                fusion[col] = no_nulos.iloc[-1]
-        sup_idx[(dni_sup, fecha_sup)] = fusion
+    # Davor, 2026-10-27: "no deben haber excel" -- las correcciones de
+    # supervisor/analista ya no se leen de 3_Registro_Diario_Supervisor.xlsx,
+    # se leen de CorreccionWeb (Postgres). Mismo algoritmo de fusión que
+    # antes (ver pipeline/correcciones_motor.py), validado contra el Excel
+    # antes del corte (0 diferencias en la ventana de reproceso de
+    # DIAS_REPROCESO días).
+    sup_idx = cargar_correcciones_web()
 
     idx_historial = cargar_historial()
     rangos_por_dni = {}
