@@ -115,8 +115,8 @@ CREATE TABLE visitas (
 	hora_fin VARCHAR(10), 
 	distancia_metros_inicio FLOAT, 
 	motivo_visita VARCHAR(100), 
-	PRIMARY KEY (id), 
-	CONSTRAINT uq_visita_dedup UNIQUE (dni, punto_venta_id, fecha_inicio, hora_inicio, fecha_fin, hora_fin)
+	PRIMARY KEY (id),
+	CONSTRAINT uq_visita_dedup UNIQUE (dni, punto_venta_id, fecha_inicio, hora_inicio)
 );
 
 CREATE TABLE clasificacion_diaria (
