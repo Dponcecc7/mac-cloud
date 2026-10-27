@@ -43,7 +43,6 @@ from sqlalchemy.orm import aliased
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_AQUI, "pipeline"))
 from db_lock import adquirir_lock, liberar_lock  # noqa: E402
-import reporte_diario_9am as r9am  # noqa: E402 -- reusa reemplazos_pendientes()/dnis_alguna_vez_en_maestro(), no se duplica
 
 bp = Blueprint("asistencia", __name__, url_prefix="/asistencia")
 
@@ -1645,12 +1644,6 @@ def disparar_siguiente():
 @_analista_requerido
 def reemplazo_form():
     hoy = dt.date.today().isoformat()
-    try:
-        pendientes = r9am.reemplazos_pendientes(r9am.dnis_alguna_vez_en_maestro())
-        error_pendientes = None
-    except Exception as e:
-        pendientes = []
-        error_pendientes = str(e)
 
     dni_prellenado = request.args.get("dni_vacante", "").strip()
     nombre_prellenado = None
@@ -1666,8 +1659,7 @@ def reemplazo_form():
 
     return render_template(
         "asistencia_reemplazo.html", usuario=current_user, activo="reemplazo",
-        hoy=hoy, pendientes=pendientes, error_pendientes=error_pendientes,
-        dni_prellenado=dni_prellenado, nombre_prellenado=nombre_prellenado,
+        hoy=hoy, dni_prellenado=dni_prellenado, nombre_prellenado=nombre_prellenado,
         historico=historico,
     )
 

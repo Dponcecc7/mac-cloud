@@ -36,7 +36,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from athena_client import traer_visitas  # noqa: E402
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 from motor_clasificacion import TIPO_NEGOCIO_A_CANAL, _parse_hora_corregida  # noqa: E402
-import graph_lists  # noqa: E402
 
 RUTA_GRAPH_MAC = "ASISTENCIA/MAC/"
 CARPETA_AUDITORIA_GRAPH = "_nube_Reportes_Diarios/"
@@ -192,62 +191,6 @@ def correcciones_tabla3(hoy, anterior):
         dict(zip(ent_hoy["DNI"], ent_hoy["Hora entrada corregida"])),
         dict(zip(sal_ant["DNI"], sal_ant["Hora salida corregida"])),
     )
-
-
-def dnis_alguna_vez_en_maestro():
-    m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
-    m.columns = [str(c).strip() for c in m.columns]
-    m = m.rename(columns={m.columns[0]: "DNI"})
-    # Mismo gotcha que parseo_headcount.py -- ver comentario en cargar_maestro().
-    dni_num = pd.to_numeric(m["DNI"], errors="coerce")
-    m = m[dni_num.notna()].copy()
-    return set(dni_num[dni_num.notna()].astype("int64").astype(str))
-
-
-def _leer_registro_supervisor():
-    try:
-        items = graph_lists.listar_items("RegistroSupervisor")
-    except Exception as e:
-        print(f"Aviso: no se pudo leer la Lista 'RegistroSupervisor' por Graph ({e}) -- se sigue sin reportes de supervisor por ahora.")
-        return pd.DataFrame()
-    r = pd.DataFrame(items)
-    if r.empty or "DNI" not in r.columns:
-        return pd.DataFrame()
-    for col in ("EstadoReportado", "Motivo", "MotivoCese", "DNIReemplazo",
-                "NombreReemplazo", "Comentario", "RegistradoPor", "FechaRegistro"):
-        if col not in r.columns:
-            r[col] = pd.NA
-    r = r.dropna(subset=["DNI"]).copy()
-    r["Fecha_dt"] = pd.to_datetime(r["Fecha"], utc=True, errors="coerce").dt.date
-    return r
-
-
-def reemplazos_pendientes(dnis_ya_en_maestro):
-    r = _leer_registro_supervisor()
-    if r.empty:
-        return []
-    r = r[r["EstadoReportado"] == "Tiene reemplazo"]
-    r = r[r["DNIReemplazo"].notna()]
-    if r.empty:
-        return []
-    r["DNIReemplazo"] = r["DNIReemplazo"].astype(float).astype(int).astype(str)
-    r["DNI"] = r["DNI"].astype(float).astype(int).astype(str)
-
-    pendientes = []
-    vistos = set()
-    for _, row in r.iterrows():
-        dni_reemplazo = row["DNIReemplazo"]
-        if dni_reemplazo in dnis_ya_en_maestro or dni_reemplazo in vistos:
-            continue
-        vistos.add(dni_reemplazo)
-        pendientes.append({
-            "dni_vacante": row["DNI"],
-            "dni_reemplazo": dni_reemplazo,
-            "nombre_reemplazo": row.get("NombreReemplazo"),
-            "motivo_cese": row.get("MotivoCese"),
-            "fecha": row.get("Fecha"),
-        })
-    return pendientes
 
 
 def comentarios_supervisor_dia(fecha):
@@ -507,20 +450,16 @@ def main():
     n_vacaciones = (df["Estado_Entrada"] == "Vacaciones").sum()
     n_pendiente = (df["Estado_Entrada"] == "Asistió (por confirmar)").sum()
 
-    pendientes = reemplazos_pendientes(dnis_alguna_vez_en_maestro())
-    if pendientes:
-        print(f"⚠ {len(pendientes)} reemplazo(s) pendiente(s) de procesar con ventana_reemplazos.py")
-
     os.makedirs(CARPETA_SALIDA, exist_ok=True)
     destino = os.path.join(CARPETA_SALIDA, f"Reporte_Asistencia_{hoy.date()}.xlsx")
-    escribir_excel(df, destino, hoy, n_asistio, n_tardanza, n_falta, n_vacante, n_vacaciones, n_pendiente, pendientes,
+    escribir_excel(df, destino, hoy, n_asistio, n_tardanza, n_falta, n_vacante, n_vacaciones, n_pendiente,
                     dnis_entrada_corregida, dnis_salida_corregida, ultima_carga_athena)
     print(f"Guardado: {destino} ({len(df)} filas -- Asistió={n_asistio}, Tardanza={n_tardanza}, Falta={n_falta}, "
           f"Vacante={n_vacante}, Vacaciones={n_vacaciones}, Por_confirmar={n_pendiente})")
 
 
 def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n_vacaciones=0, n_pendiente=0,
-                    pendientes=None, dnis_entrada_corregida=None, dnis_salida_corregida=None, ultima_carga_athena=None):
+                    dnis_entrada_corregida=None, dnis_salida_corregida=None, ultima_carga_athena=None):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Asistencia"
@@ -552,13 +491,6 @@ def escribir_excel(df, path, hoy, n_asistio, n_tardanza, n_falta, n_vacante=0, n
     ws["F2"] = texto_atraso
     ws["F2"].font = Font(name=FUENTE, italic=True, size=9, color=color_atraso)
     ws.merge_cells("F2:H2")
-
-    if pendientes:
-        nombres = ", ".join(f"{p['nombre_reemplazo']} (DNI {p['dni_reemplazo']}, reemplaza a {p['dni_vacante']})" for p in pendientes)
-        ws["A4"] = f"⚠ {len(pendientes)} REEMPLAZO(S) PENDIENTE(S) DE PROCESAR con ventana_reemplazos.py: {nombres}"
-        ws["A4"].font = Font(name=FUENTE, bold=True, size=10, color="9C0006")
-        ws["A4"].fill = PatternFill("solid", fgColor="FFC7CE")
-        ws.merge_cells("A4:H4")
 
     fila_header = 5
     for c, col_name in enumerate(df.columns, start=1):
