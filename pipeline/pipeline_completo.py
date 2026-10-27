@@ -25,25 +25,23 @@ LOCK_MAX_MINUTOS = 25
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
 PASOS = [
-    ("1/7 Trayendo visitas desde Athena", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
-    # Sincroniza SOLO los últimos 10 días a Postgres (tabla `visitas`) --
-    # las visitas más viejas ya quedaron guardadas en corridas anteriores y
-    # no cambian (ver sync_visitas_postgres.py). Antes de esto, el
-    # historial completo que trae el paso 1 se descartaba al terminar cada
-    # corrida (disco efímero del runner) -- ahora alimenta Cobertura Diaria
-    # y las alertas de Visita larga/Punto Censo en mac_cloud.
-    ("1b/7 Sincronizando visitas a Postgres (ventana de 10 días)", ["sync_visitas_postgres.py"]),
-    ("2/7 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
-    ("3/7 Regenerando resumen por persona", ["resumen_por_persona.py"]),
-    ("4/7 Corriendo compensación e indicador", ["motor_compensacion_indicador.py"]),
-    ("5/7 Corriendo alerta de visita larga / Punto Censo", ["alerta_visita_larga.py"]),
-    ("6/7 Exportando data para el dashboard", ["export_dashboard_data.py"]),
-    # Paso "Publicando snapshot de auditoría (Power Apps)" retirado (Davor,
-    # 2026-10-27) -- Power Apps ya no existe, export_sharepoint.py solo
-    # existía para alimentar la Lista de SharePoint que leía. Quedaba
-    # corriendo cada ~5 min sin ningún consumidor, y si fallaba (raise
-    # RuntimeError en export_sharepoint.py) tumbaba la corrida entera del
-    # pipeline por un paso que ya no servía para nada.
+    # Davor, 2026-10-27: "¿no puede ser directa a Postgres?" -- hasta hoy
+    # este paso escribía Visitas/*.xlsx y un paso aparte (sync_visitas_
+    # postgres.py, retirado) lo releía para upsertear a Postgres. Confirmado
+    # que Postgres ya tenía el histórico completo (138,263 filas desde
+    # 2026-07-01) -- el Excel intermedio era 100% redundante. Ahora
+    # traer_visitas_historico.py hace el upsert directo (ventana de los
+    # últimos 10 días -- las visitas más viejas que trae Athena en esta
+    # misma corrida ya están sincronizadas y son inmutables, ver ese
+    # archivo), y motor_clasificacion.py / alerta_visita_larga.py / motor_
+    # compensacion_indicador.py leen la tabla `visitas` directo (pipeline/
+    # visitas_motor.py), no un archivo local.
+    ("1/6 Trayendo visitas desde Athena y sincronizando a Postgres", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
+    ("2/6 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
+    ("3/6 Regenerando resumen por persona", ["resumen_por_persona.py"]),
+    ("4/6 Corriendo compensación e indicador", ["motor_compensacion_indicador.py"]),
+    ("5/6 Corriendo alerta de visita larga / Punto Censo", ["alerta_visita_larga.py"]),
+    ("6/6 Exportando data para el dashboard", ["export_dashboard_data.py"]),
 ]
 
 

@@ -21,12 +21,18 @@ runner de GitHub Actions (sin disco persistente entre corridas):
    todavía lo leía por ruta local/OneDrive y llevaba desde el 21/08 sin
    datos nuevos porque la tarea local que lo escribía se había desactivado).
 
-Visitas/*.xlsx se sigue leyendo del directorio de trabajo actual, igual que
-el original -- en la nube, un paso previo del pipeline (usa
-pipeline/athena_client.py) los deja ahi antes de correr este script.
+Davor, 2026-10-27: Visitas/*.xlsx (snapshot fresco de Athena, escrito por
+un paso previo del pipeline) se reemplazó por pipeline/visitas_motor.py::
+cargar_visitas(), que consulta la tabla Postgres `visitas` directo --
+confirmado que ya tenía el histórico completo (traer_visitas_historico.py
+hace el upsert ahí mismo, sin pasar por Excel). Esto también corrigió un
+bug real de la UNIQUE constraint vieja (dni+punto_venta_id+fecha_inicio+
+hora_inicio+fecha_fin+hora_fin): cuando Athena corregía la hora de salida
+de una visita, quedaba como fila nueva en vez de actualizarse, dejando
+duplicados con horas de salida en conflicto (ver dimension_models.py::
+Visita).
 """
 import datetime as dt
-import glob
 import os
 import sys
 
@@ -41,6 +47,7 @@ from graph_client import subir_creando_si_no_existe  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from correcciones_motor import cargar_correcciones_web  # noqa: E402
 from dimensiones_motor import cargar_feriados, cargar_maestro_headcount, cargar_patron_recurrente  # noqa: E402
+from visitas_motor import cargar_visitas  # noqa: E402
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 from patron_recurrente import sin_acentos  # noqa: E402
 
@@ -627,26 +634,11 @@ def _escribir_snapshot_auditoria(res):
 
 
 def main():
-    dfs = []
-    for f in sorted(glob.glob("Visitas/*.xlsx")):
-        d = pd.read_excel(f)
-        d["_archivo"] = f.split("\\")[-1].split("/")[-1]
-        dfs.append(d)
-    v = pd.concat(dfs, ignore_index=True)
-    # .str.zfill(8) (Davor, 2026-09-24) -- mismo gotcha de siempre, un
-    # tramo mas: athena_client.py ya deja "nro_documento" zero-padded a 8
-    # digitos en memoria, pero pd.read_excel() de un Excel escrito con
-    # to_excel() vuelve a inferir la columna como numero si TODOS los
-    # valores se ven numericos, comiendose el cero inicial de nuevo (mismo
-    # round-trip que ya rompia Maestro/Patron/Tabla 3). Sin esto, Bracamonte/
-    # Jimenez/Pitko/Vergara/Becerra/Edith Camacho seguian sin ninguna visita
-    # matcheada aunque el fix de athena_client.py ya estuviera desplegado.
+    v = cargar_visitas()
+    # .str.zfill(8) (Davor, 2026-09-24) -- defensa barata por si "dni" en
+    # Postgres tuviera algún valor sin zfillear (mismo gotcha de siempre,
+    # ver dimensiones_motor.py).
     v["nro_documento"] = v["nro_documento"].astype(str).str.strip().str.zfill(8)
-
-    dedup_keys = ["nro_documento", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin"]
-    before = len(v)
-    v = v.drop_duplicates(subset=dedup_keys, keep="first")
-    print(f"Visitas: {before} -> {len(v)} tras deduplicar ({before - len(v)} duplicados exactos removidos)")
 
     v["fecha_inicio_dt"] = pd.to_datetime(v["fecha_inicio"], format="%d-%m-%Y", errors="coerce")
     v["hora_inicio_td"] = pd.to_timedelta(v["hora_inicio"].astype(str), errors="coerce")

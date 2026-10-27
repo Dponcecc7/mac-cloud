@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Reportes -- Cobertura Diaria (visitas a PDV), 2026-08-23. Lee de la
 tabla Postgres `visitas` (dimension_models.Visita), sincronizada por
-pipeline/sync_visitas_postgres.py -- ya NO hace falta Excel/Graph para esto.
+pipeline/traer_visitas_historico.py -- ya NO hace falta Excel/Graph para esto.
 
 Mismo criterio que ya usaba MAC/Planning/analisis_visitas_planning.py y
 pipeline/alerta_visita_larga.py (geofence_ok = distancia ≤ 200m, Punto

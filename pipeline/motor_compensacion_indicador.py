@@ -5,13 +5,16 @@ logica de negocio (delta diario, ventana de compensacion de 3 dias,
 indicador de asistencia), ya migrada a leer Postgres desde la Fase 3 de hoy
 (sin cambios ahi). Cambios de portabilidad: Maestro por Graph (graph_client)
 en vez de disco local, imports relativos a este archivo en vez de ruta
-absoluta de Windows. Visitas/*.xlsx y los 2 Excel de salida
-(12_Compensacion.xlsx, 13_Indicador_Asistencia.xlsx) siguen siendo archivos
-de trabajo LOCALES al runner -- son solo estado intermedio dentro de la
-misma corrida del pipeline (los lee export_dashboard_data.py despues, en el
-mismo job), igual que ya funcionaba antes.
+absoluta de Windows. Los 2 Excel de salida (12_Compensacion.xlsx,
+13_Indicador_Asistencia.xlsx) siguen siendo archivos de trabajo LOCALES al
+runner -- son solo estado intermedio dentro de la misma corrida del
+pipeline (los lee export_dashboard_data.py despues, en el mismo job), igual
+que ya funcionaba antes.
+
+Davor, 2026-10-27: Visitas/*.xlsx se reemplazó por pipeline/visitas_motor.py
+::cargar_visitas() (consulta Postgres directo, ver motor_clasificacion.py
+para el detalle del porqué).
 """
-import glob
 import os
 import sys
 
@@ -24,16 +27,11 @@ from fact_models import ClasificacionDiaria  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from anon import pseudonimo  # noqa: E402
 from dimensiones_motor import cargar_maestro_headcount  # noqa: E402
+from visitas_motor import cargar_visitas  # noqa: E402
 
-_dfs = []
-for f in sorted(glob.glob("Visitas/*.xlsx")):
-    _d = pd.read_excel(f)
-    _dfs.append(_d)
-v = pd.concat(_dfs, ignore_index=True)
-# .str.zfill(8) (Davor, 2026-09-24) -- pd.read_excel() de un Excel escrito
-# con to_excel() vuelve a comerse el cero inicial del DNI si toda la
-# columna se ve numerica (mismo round-trip que ya rompia Maestro/Patron/
-# Tabla 3), aunque athena_client.py ya lo deje zero-padded en memoria.
+v = cargar_visitas()
+# .str.zfill(8) (Davor, 2026-09-24) -- defensa barata, ver
+# motor_clasificacion.py.
 v["nro_documento"] = v["nro_documento"].astype(str).str.strip().str.zfill(8)
 v = v.drop_duplicates(subset=["nro_documento", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin"], keep="first")
 v["fecha_inicio_dt"] = pd.to_datetime(v["fecha_inicio"], format="%d-%m-%Y", errors="coerce")

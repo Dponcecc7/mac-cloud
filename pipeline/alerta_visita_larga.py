@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Fase 6: version portable de MAC/alerta_visita_larga.py -- misma logica,
-Maestro/Patron por Graph (graph_client) en vez de disco local. Visitas/*.xlsx
-y los 2 Excel de salida siguen siendo archivos de trabajo locales al runner.
+Maestro/Patron por Graph (graph_client) en vez de disco local. Los 2 Excel
+de salida siguen siendo archivos de trabajo locales al runner.
+
+Davor, 2026-10-27: Visitas/*.xlsx se reemplazó por pipeline/visitas_motor.py
+::cargar_visitas() (consulta Postgres directo, ver motor_clasificacion.py
+para el detalle del porqué).
 """
-import glob
 import os
 import sys
 
@@ -15,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from anon import pseudonimo  # noqa: E402
 from dimensiones_motor import cargar_maestro_headcount, cargar_patron_recurrente  # noqa: E402
+from visitas_motor import cargar_visitas  # noqa: E402
 
 
 def fmt_hora(td):
@@ -28,15 +32,9 @@ def fmt_hora(td):
 
 UMBRAL_MIN = 60
 
-dfs = []
-for f in sorted(glob.glob("Visitas/*.xlsx")):
-    d = pd.read_excel(f)
-    dfs.append(d)
-v = pd.concat(dfs, ignore_index=True)
-# .str.zfill(8) (Davor, 2026-09-24) -- pd.read_excel() de un Excel escrito
-# con to_excel() vuelve a comerse el cero inicial del DNI si toda la
-# columna se ve numerica (mismo round-trip que ya rompia Maestro/Patron/
-# Tabla 3), aunque athena_client.py ya lo deje zero-padded en memoria.
+v = cargar_visitas()
+# .str.zfill(8) (Davor, 2026-09-24) -- defensa barata, ver
+# motor_clasificacion.py.
 v["nro_documento"] = v["nro_documento"].astype(str).str.strip().str.zfill(8)
 v = v.drop_duplicates(subset=["nro_documento", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin"], keep="first")
 v["fecha_inicio_dt"] = pd.to_datetime(v["fecha_inicio"], format="%d-%m-%Y", errors="coerce")

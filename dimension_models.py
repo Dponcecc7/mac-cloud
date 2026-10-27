@@ -333,7 +333,19 @@ class Visita(Base):
     `personas` (personal de otros clientes/roles no migrados) -- una FK
     estricta haría fallar el upsert masivo por esas filas. Los reportes que
     sí necesitan cruzar con Persona lo hacen con un JOIN normal, que
-    descarta solas las filas sin match."""
+    descarta solas las filas sin match.
+
+    Davor, 2026-10-27: la UNIQUE constraint ANTES incluía fecha_fin/hora_fin
+    -- cuando Athena corregía la hora de salida de una visita (de un cierre
+    automático a la hora real de GPS), eso contaba como una fila NUEVA en
+    vez de una actualización, dejando duplicados con horas de salida en
+    conflicto para siempre (hallazgo real: 811 visitas de ~138k, validando
+    el cutover de motor_clasificacion.py/alerta_visita_larga.py/motor_
+    compensacion_indicador.py de Visitas/*.xlsx a esta tabla, ver pipeline/
+    visitas_motor.py). Ahora la identidad de una visita es solo
+    dni+punto_venta_id+fecha_inicio+hora_inicio -- fecha_fin/hora_fin son
+    datos que SÍ se actualizan (ver COLUMNAS_ACTUALIZABLES en
+    traer_visitas_historico.py)."""
     __tablename__ = "visitas"
 
     id = Column(Integer, primary_key=True)
@@ -350,7 +362,7 @@ class Visita(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "dni", "punto_venta_id", "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin",
+            "dni", "punto_venta_id", "fecha_inicio", "hora_inicio",
             name="uq_visita_dedup",
         ),
     )
