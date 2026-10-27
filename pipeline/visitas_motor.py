@@ -1,18 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-Reemplazo de la lectura de Visitas/*.xlsx para motor_clasificacion.py /
-alerta_visita_larga.py / motor_compensacion_indicador.py -- Davor,
-2026-10-27: "¿no puede ser directa a Postgres?". Confirmado que la tabla
-Postgres `visitas` ya tiene el histórico completo (138,263 filas desde
+Reemplazo de la lectura de Visitas/*.xlsx para motor_clasificacion.py --
+Davor, 2026-10-27: "¿no puede ser directa a Postgres?". Confirmado que la
+tabla Postgres `visitas` ya tiene el histórico completo (138,263 filas desde
 2026-07-01, backfill + sync incremental de cada corrida -- ver
 traer_visitas_historico.py), así que releer el Excel que ese mismo paso
 escribía en el disco efímero del runner era 100% redundante.
 
+(Hasta el mismo día también usaban esto alerta_visita_larga.py y
+motor_compensacion_indicador.py, retirados del pipeline poco después --
+generaban Excel que nadie leía en la nube, ver pipeline_completo.py.)
+
 cargar_visitas() devuelve EXACTAMENTE las mismas columnas (mismo nombre,
 mismo formato de texto "%d-%m-%Y" para las fechas) que ya devolvía
 pd.read_excel(Visitas/*.xlsx) -- para que el código que ya consume ese
-DataFrame (parseo de hora_inicio_td/fecha_inicio_dt, geofence, etc. en los 3
-scripts de arriba) no necesite cambiar, solo el call-site.
+DataFrame (parseo de hora_inicio_td/fecha_inicio_dt, geofence, etc.) no
+necesite cambiar, solo el call-site.
 """
 import os
 import sys

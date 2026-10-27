@@ -33,15 +33,18 @@ PASOS = [
     # traer_visitas_historico.py hace el upsert directo (ventana de los
     # últimos 10 días -- las visitas más viejas que trae Athena en esta
     # misma corrida ya están sincronizadas y son inmutables, ver ese
-    # archivo), y motor_clasificacion.py / alerta_visita_larga.py / motor_
-    # compensacion_indicador.py leen la tabla `visitas` directo (pipeline/
-    # visitas_motor.py), no un archivo local.
-    ("1/6 Trayendo visitas desde Athena y sincronizando a Postgres", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
-    ("2/6 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
-    ("3/6 Regenerando resumen por persona", ["resumen_por_persona.py"]),
-    ("4/6 Corriendo compensación e indicador", ["motor_compensacion_indicador.py"]),
-    ("5/6 Corriendo alerta de visita larga / Punto Censo", ["alerta_visita_larga.py"]),
-    ("6/6 Exportando data para el dashboard", ["export_dashboard_data.py"]),
+    # archivo), y motor_clasificacion.py lee la tabla `visitas` directo
+    # (pipeline/visitas_motor.py), no un archivo local.
+    ("1/2 Trayendo visitas desde Athena y sincronizando a Postgres", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
+    ("2/2 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
+    # Pasos retirados (Davor, 2026-10-27): resumen_por_persona.py / motor_
+    # compensacion_indicador.py / alerta_visita_larga.py / export_dashboard_
+    # data.py generaban Excel que NADIE leía en la nube -- ninguno sube a
+    # SharePoint, y dashboard_data.json (el output final) ya no lo usa el
+    # dashboard real (app.py consulta Postgres en vivo, ver ese comentario).
+    # Visita larga/Punto Censo ya tiene reemplazo real y en vivo (ver
+    # alertas.py::alertas_cobertura, que sí vive en Postgres). Corrían cada
+    # 5 min calculando algo que se descartaba al terminar la corrida.
 ]
 
 
