@@ -12,6 +12,12 @@ SharePoint -- este script no necesita saber nada de eso, solo lee la copia
 de SharePoint) -- ver reporte_diario_9am.py (Fase 6) para el lado que sube
 esa copia.
 
+Davor, 2026-10-27: las correcciones que este script detecta ya NO se
+escriben a 3_Registro_Diario_Supervisor.xlsx -- van directo a CorreccionWeb
+(Postgres), que es lo que ahora lee motor_clasificacion.py (ver
+pipeline/correcciones_motor.py). El reporte de 9am en sí sigue siendo un
+Excel en SharePoint (eso no cambia, lo edita el analista a mano).
+
 Uso: python aplicar_correcciones.py [YYYY-MM-DD]
 """
 import io
@@ -23,16 +29,14 @@ import openpyxl
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from graph_client import descargar, leer_excel, subir_creando_si_no_existe, subir_in_place  # noqa: E402
+from dimension_models import CorreccionWeb, get_session  # noqa: E402
+from graph_client import descargar, leer_excel, subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from reporte_diario_9am import (  # noqa: E402
     dia_habil_anterior, cargar_feriados, comentario_historico_dia, CARPETA_SALIDA,
     limpiar_motivo, RUTA_GRAPH_MAC, CARPETA_AUDITORIA_GRAPH,
 )
-
-TABLA3_PATH = "3_Registro_Diario_Supervisor.xlsx"
-TABLA3_RUTA_GRAPH = f"{RUTA_GRAPH_MAC}{TABLA3_PATH}"
 
 TEXTO_PENDIENTE_ENTRADA = "Asistió (reportado por supervisor -- confirmar en \"Hora entrada corregida\")"
 TEXTO_PENDIENTE_SALIDA = "Asistió (reportado por supervisor -- confirmar en \"Hora salida corregida\")"
@@ -74,18 +78,6 @@ def _valor_auto_salida_resuelto(comentario_crudo):
 FILA_HEADER_REPORTE = 5
 
 
-def _agregar_fila_t3(ws_t3, fila_libre, dni, fecha, comentario, hora_ent=None, hora_sal=None):
-    ws_t3.cell(row=fila_libre, column=1, value=str(dni))
-    ws_t3.cell(row=fila_libre, column=2, value=str(fecha))
-    ws_t3.cell(row=fila_libre, column=4, value=comentario)
-    ws_t3.cell(row=fila_libre, column=5, value="Reporte 9am")
-    ws_t3.cell(row=fila_libre, column=6, value=str(pd.Timestamp.now().strftime("%H:%M")))
-    if hora_ent:
-        ws_t3.cell(row=fila_libre, column=7, value=str(hora_ent))
-    if hora_sal:
-        ws_t3.cell(row=fila_libre, column=8, value=str(hora_sal))
-
-
 def main():
     hoy = pd.Timestamp.today().normalize()
     if len(sys.argv) > 1:
@@ -122,28 +114,35 @@ def main():
     headers = [c.value for c in ws_rep[FILA_HEADER_REPORTE]]
     idx = {h: i + 1 for i, h in enumerate(headers) if h}
 
-    wb_t3 = openpyxl.load_workbook(io.BytesIO(descargar(TABLA3_RUTA_GRAPH)))
-    ws_t3 = wb_t3["Registro diario supervisor"]
-    fila_libre = ws_t3.max_row + 1
+    correcciones_nuevas = []
+
+    session_dedup = get_session()
+    try:
+        filas_existentes = (
+            session_dedup.query(CorreccionWeb)
+            .filter(CorreccionWeb.fecha.in_([hoy.date(), anterior.date()]))
+            .all()
+        )
+    finally:
+        session_dedup.close()
 
     filas_t3_existentes = set()
     # Dedup de correcciones de SOLO hora (sin comentario) -- el guard de
     # arriba (filas_t3_existentes, por texto de comentario) no cubre este
-    # caso. Si subir_in_place(T3) sale bien pero la subida del reporte
-    # falla justo después, la próxima corrida no se entera de que la hora
-    # ya se aplicó (el reporte sigue con la celda sin limpiar) y la
-    # reagrega duplicada a T3.
+    # caso. Si el commit sale bien pero la subida del reporte falla justo
+    # después, la próxima corrida no se entera de que la hora ya se aplicó
+    # (el reporte sigue con la celda sin limpiar) y la reagrega duplicada.
     filas_t3_horas_ent = set()
     filas_t3_horas_sal = set()
-    for row in ws_t3.iter_rows(min_row=2, values_only=True):
-        if row[0] is None:
-            continue
-        row_dni = str(int(row[0])) if isinstance(row[0], (int, float)) else str(row[0]).strip()
-        filas_t3_existentes.add((row_dni, str(row[1]), row[3]))
-        if len(row) > 6 and row[6]:
-            filas_t3_horas_ent.add((row_dni, str(row[1]), str(row[6])))
-        if len(row) > 7 and row[7]:
-            filas_t3_horas_sal.add((row_dni, str(row[1]), str(row[7])))
+    for f in filas_existentes:
+        fecha_str = str(f.fecha)
+        comentario = f.comentario_entrada if f.comentario_entrada is not None else f.comentario_salida
+        if comentario is not None:
+            filas_t3_existentes.add((f.dni, fecha_str, comentario))
+        if f.hora_entrada_corregida:
+            filas_t3_horas_ent.add((f.dni, fecha_str, str(f.hora_entrada_corregida)))
+        if f.hora_salida_corregida:
+            filas_t3_horas_sal.add((f.dni, fecha_str, str(f.hora_salida_corregida)))
 
     n_aplicadas = 0
     for r in range(FILA_HEADER_REPORTE + 1, ws_rep.max_row + 1):
@@ -158,6 +157,13 @@ def main():
         tiene_salida_real = ws_rep.cell(row=r, column=idx["Hora salida real anterior"]).value is not None
 
         dni_str = str(int(dni)) if isinstance(dni, float) else str(dni)
+        # dni_pg, NO dni_str, para todo lo que lea/escriba CorreccionWeb --
+        # dni_str sin zfill es el que ya usan dnis_vacante/comentarios_auto
+        # (ambos salen del mismo Maestro Headcount sin zfill, consistentes
+        # entre sí) pero CorreccionWeb siempre tiene el DNI con cero a la
+        # izquierda (ver pipeline/correcciones_motor.py) -- zfillear SOLO
+        # dni_str rompería ese match contra dnis_vacante.
+        dni_pg = dni_str.zfill(8)
         es_vacante = dni_str in dnis_vacante
         if es_vacante:
             auto_ent = None
@@ -172,11 +178,11 @@ def main():
             auto_sal = _valor_auto_salida_resuelto(crudo_sal)
         else:
             auto_sal = _valor_auto_salida(crudo_sal)
-        if comentario_ent == auto_ent and (dni_str, str(hoy.date()), comentario_ent) in filas_t3_existentes:
+        if comentario_ent == auto_ent and (dni_pg, str(hoy.date()), comentario_ent) in filas_t3_existentes:
             comentario_ent = None
         if comentario_sal == "Faltó (sin motivo registrado)":
             comentario_sal = None
-        elif comentario_sal == auto_sal and (dni_str, str(anterior.date()), comentario_sal) in filas_t3_existentes:
+        elif comentario_sal == auto_sal and (dni_pg, str(anterior.date()), comentario_sal) in filas_t3_existentes:
             comentario_sal = None
 
         motivo_vac_vacac = None
@@ -191,29 +197,37 @@ def main():
         if hora_ent_corr or comentario_ent:
             ya_en_t3 = (
                 hora_ent_corr and not comentario_ent
-                and (dni_str, str(hoy.date()), str(hora_ent_corr)) in filas_t3_horas_ent
+                and (dni_pg, str(hoy.date()), str(hora_ent_corr)) in filas_t3_horas_ent
             )
             if not ya_en_t3:
                 texto = comentario_ent or "Corrección desde reporte diario 9am (entrada)"
-                _agregar_fila_t3(ws_t3, fila_libre, dni, hoy.date(), texto, hora_ent=hora_ent_corr)
-                fila_libre += 1
+                correcciones_nuevas.append(CorreccionWeb(
+                    dni=dni_pg, fecha=hoy.date(), comentario_entrada=texto,
+                    hora_entrada_corregida=str(hora_ent_corr) if hora_ent_corr else None,
+                    registrado_por="Reporte 9am",
+                ))
                 n_aplicadas += 1
             ws_rep.cell(row=r, column=idx["Hora entrada corregida"]).value = None
             ws_rep.cell(row=r, column=idx["Comentario Entrada"]).value = None
-        elif motivo_vac_vacac and (dni_str, str(hoy.date()), motivo_vac_vacac) not in filas_t3_existentes:
-            _agregar_fila_t3(ws_t3, fila_libre, dni, hoy.date(), motivo_vac_vacac)
-            fila_libre += 1
+        elif motivo_vac_vacac and (dni_pg, str(hoy.date()), motivo_vac_vacac) not in filas_t3_existentes:
+            correcciones_nuevas.append(CorreccionWeb(
+                dni=dni_pg, fecha=hoy.date(), comentario_entrada=motivo_vac_vacac,
+                registrado_por="Reporte 9am",
+            ))
             n_aplicadas += 1
 
         if hora_sal_corr or comentario_sal:
             ya_en_t3_sal = (
                 hora_sal_corr and not comentario_sal
-                and (dni_str, str(anterior.date()), str(hora_sal_corr)) in filas_t3_horas_sal
+                and (dni_pg, str(anterior.date()), str(hora_sal_corr)) in filas_t3_horas_sal
             )
             if not ya_en_t3_sal:
                 texto = comentario_sal or "Corrección desde reporte diario 9am (salida día anterior)"
-                _agregar_fila_t3(ws_t3, fila_libre, dni, anterior.date(), texto, hora_sal=hora_sal_corr)
-                fila_libre += 1
+                correcciones_nuevas.append(CorreccionWeb(
+                    dni=dni_pg, fecha=anterior.date(), comentario_salida=texto,
+                    hora_salida_corregida=str(hora_sal_corr) if hora_sal_corr else None,
+                    registrado_por="Reporte 9am",
+                ))
                 n_aplicadas += 1
             ws_rep.cell(row=r, column=idx["Hora salida corregida"]).value = None
             ws_rep.cell(row=r, column=idx["Comentario salida"]).value = None
@@ -222,15 +236,25 @@ def main():
         print("No había correcciones/comentarios nuevos que aplicar.")
         return
 
-    subir_in_place(TABLA3_RUTA_GRAPH, wb_t3)
+    # CorreccionWeb (la fuente real que lee el motor) ANTES de subir el
+    # reporte con las celdas ya limpiadas -- mismo criterio que asistencia.py
+    # (escribir la fuente real primero): si el commit fallara, el reporte
+    # todavía tiene las celdas sin limpiar y la próxima corrida reintenta,
+    # en vez de limpiar la celda y perder la corrección en silencio.
+    session_commit = get_session()
+    try:
+        session_commit.add_all(correcciones_nuevas)
+        session_commit.commit()
+    finally:
+        session_commit.close()
     subir_creando_si_no_existe(RUTA_GRAPH_MAC + CARPETA_AUDITORIA_GRAPH + nombre_archivo, wb_rep)
-    print(f"{n_aplicadas} fila(s) agregada(s) a {TABLA3_PATH}.")
+    print(f"{n_aplicadas} corrección(es) aplicada(s) a CorreccionWeb (Postgres).")
 
     aqui = os.path.dirname(os.path.abspath(__file__))
     print("\nCorriendo motor_clasificacion.py para aplicar al histórico...")
     r1 = subprocess.run([sys.executable, os.path.join(aqui, "motor_clasificacion.py")])
     if r1.returncode != 0:
-        print("\nAviso: motor_clasificacion.py falló -- la corrección ya quedó en Tabla 3, "
+        print("\nAviso: motor_clasificacion.py falló -- la corrección ya quedó en CorreccionWeb (Postgres), "
               "pero no se aplicó al histórico ni se regeneró el reporte. Revisa el error de arriba.")
         return
 
