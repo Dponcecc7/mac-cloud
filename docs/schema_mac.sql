@@ -145,16 +145,17 @@ CREATE TABLE clasificacion_diaria (
 );
 
 CREATE TABLE correcciones_web (
-	id SERIAL NOT NULL, 
-	dni VARCHAR(15) NOT NULL, 
-	fecha DATE NOT NULL, 
-	comentario_entrada TEXT, 
-	comentario_salida TEXT, 
-	hora_entrada_corregida VARCHAR(10), 
-	hora_salida_corregida VARCHAR(10), 
-	registrado_por VARCHAR(150), 
-	fecha_registro TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	PRIMARY KEY (id), 
+	id SERIAL NOT NULL,
+	dni VARCHAR(15) NOT NULL,
+	fecha DATE NOT NULL,
+	comentario_entrada TEXT,
+	comentario_salida TEXT,
+	hora_entrada_corregida VARCHAR(10),
+	hora_salida_corregida VARCHAR(10),
+	estado_reportado VARCHAR(30),
+	registrado_por VARCHAR(150),
+	fecha_registro TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+	PRIMARY KEY (id),
 	FOREIGN KEY(dni) REFERENCES personas (dni) ON DELETE CASCADE
 );
 

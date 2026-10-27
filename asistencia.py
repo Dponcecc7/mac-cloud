@@ -1231,7 +1231,7 @@ def guardar():
                 _agregar_fila_tabla3(ws, fila_libre, e["dni"], fecha, None, estado_reportado=e["estado_reportado"])
                 fila_libre += 1
                 correcciones_web.append(CorreccionWeb(
-                    dni=e["dni"], fecha=fecha, comentario_entrada=e["estado_reportado"],
+                    dni=e["dni"], fecha=fecha, estado_reportado=e["estado_reportado"],
                     registrado_por=current_user.email,
                 ))
             elif e["comentario_entrada"] or e["entrada_corr"]:
@@ -1446,7 +1446,8 @@ def marcar():
             else:
                 session.add(CorreccionWeb(
                     dni=dni, fecha=fecha,
-                    comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else accion),
+                    comentario_entrada=(comentario_con_motivo if accion in ACCIONES_CON_MOTIVO else None),
+                    estado_reportado=(accion if accion not in ACCIONES_CON_MOTIVO else None),
                     hora_entrada_corregida=hora_ingreso or None,
                     registrado_por=current_user.email,
                 ))
@@ -2425,7 +2426,10 @@ def reunion_registrar():
         session = get_session()
         try:
             for dni in dnis:
-                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+                session.add(CorreccionWeb(
+                    dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
+                    registrado_por=current_user.email,
+                ))
                 session.add(ReunionRegistrada(
                     dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
                     nota=nota or None, registrado_por=current_user.email,
@@ -2545,7 +2549,10 @@ def reunion_editar_personas():
         session = get_session()
         try:
             for dni in agregados:
-                session.add(CorreccionWeb(dni=dni, fecha=fecha, comentario_entrada=comentario, registrado_por=current_user.email))
+                session.add(CorreccionWeb(
+                    dni=dni, fecha=fecha, comentario_entrada=comentario, estado_reportado="Asistió",
+                    registrado_por=current_user.email,
+                ))
                 session.add(ReunionRegistrada(
                     dni=dni, fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin,
                     nota=nota, registrado_por=registrado_por,

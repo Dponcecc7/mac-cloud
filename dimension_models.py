@@ -236,11 +236,24 @@ class PipelineLock(Base):
 
 class CorreccionWeb(Base):
     """Correccion diaria de asistencia (comentario/hora corregida) hecha
-    desde el panel web de mac_cloud/asistencia.py. Escritura DOBLE a
-    proposito (decision del usuario, 2026-08-21): la Tabla 3 en SharePoint
-    (via Graph) sigue siendo la fuente REAL que lee el motor de
-    clasificacion -- esto es solo una copia para auditoria/consulta en
-    Postgres, ningun motor la lee todavia."""
+    desde el panel web de mac_cloud/asistencia.py.
+
+    Hasta 2026-10-27 esto era solo una copia de auditoria/consulta (la
+    Tabla 3 en SharePoint via Graph era la unica fuente real que leia el
+    motor de clasificacion, decision del usuario 2026-08-21) -- a partir de
+    ese dia pasa a ser la fuente REAL (ver pipeline/correcciones_motor.py),
+    reemplazando a la Tabla 3.
+
+    estado_reportado (Davor, 2026-10-27): equivalente a la columna "Estado
+    reportado" de Tabla 3 -- "Asistio"/"Vacante" reportados SIN hora
+    corregida (boton Asistio/Vacante de Marcar asistencia, o confirmacion
+    de Reunion de trabajo). Column separada de comentario_entrada a
+    proposito -- motor_clasificacion.py necesita distinguir "esto es un
+    estado reportado, respaldo cuando no hay Falta/Vacante/Vacaciones en el
+    comentario" de "esto es un comentario libre", y antes de esta columna
+    algunos call-sites de asistencia.py escribian el estado adentro de
+    comentario_entrada por error (ambiguo, indistinguible de un comentario
+    real)."""
     __tablename__ = "correcciones_web"
 
     id = Column(Integer, primary_key=True)
@@ -250,6 +263,7 @@ class CorreccionWeb(Base):
     comentario_salida = Column(Text)
     hora_entrada_corregida = Column(String(10))
     hora_salida_corregida = Column(String(10))
+    estado_reportado = Column(String(30))
     registrado_por = Column(String(150))
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
 
