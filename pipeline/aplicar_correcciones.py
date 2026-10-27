@@ -27,7 +27,7 @@ from graph_client import descargar, leer_excel, subir_creando_si_no_existe, subi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from reporte_diario_9am import (  # noqa: E402
-    dia_habil_anterior, cargar_feriados, comentarios_supervisor_dia, comentario_historico_dia, CARPETA_SALIDA,
+    dia_habil_anterior, cargar_feriados, comentario_historico_dia, CARPETA_SALIDA,
     limpiar_motivo, RUTA_GRAPH_MAC, CARPETA_AUDITORIA_GRAPH,
 )
 
@@ -91,8 +91,12 @@ def main():
     if len(sys.argv) > 1:
         hoy = pd.Timestamp(sys.argv[1])
     anterior = dia_habil_anterior(hoy, cargar_feriados())
-    comentarios_ent_auto = comentarios_supervisor_dia(hoy)
-    comentarios_sal_auto = comentarios_supervisor_dia(anterior)
+    # comentarios_ent_auto/comentarios_sal_auto (Davor, 2026-10-27): venían
+    # de la Lista 'RegistroSupervisor' de SharePoint (Power App de
+    # supervisores, retirada -- ver project_mac_cloud_powerapps_retirado).
+    # Quedan en {} a propósito.
+    comentarios_ent_auto = {}
+    comentarios_sal_auto = {}
     comentario_hist_auto = comentario_historico_dia(anterior)
 
     m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")

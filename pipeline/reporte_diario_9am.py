@@ -193,45 +193,6 @@ def correcciones_tabla3(hoy, anterior):
     )
 
 
-def comentarios_supervisor_dia(fecha):
-    r = _leer_registro_supervisor()
-    if r.empty:
-        return {}
-    r_dia = r[r["Fecha_dt"] == fecha.date()]
-    if r_dia.empty:
-        return {}
-    r_dia = r_dia.copy()
-    r_dia["DNI"] = r_dia["DNI"].astype(float).astype(int).astype(str)
-    # Si un supervisor manda 2 filas para el mismo DNI+día (corrección
-    # tardía), sin ordenar por fecha de registro ganaba lo último que
-    # devolviera la API -- no necesariamente lo último enviado. Se ordena
-    # ascendente y el dict se queda con el último (el más reciente).
-    r_dia["_FechaRegistro_dt"] = pd.to_datetime(r_dia["FechaRegistro"], utc=True, errors="coerce")
-    r_dia = r_dia.sort_values("_FechaRegistro_dt", na_position="first")
-
-    comentarios = {}
-    for _, row in r_dia.iterrows():
-        motivo = row.get("Motivo")
-        estado = row.get("EstadoReportado")
-        motivo_cese = row.get("MotivoCese")
-        comentario_libre = row.get("Comentario")
-        if pd.notna(motivo):
-            texto = f"{estado} - {motivo}" if pd.notna(estado) else str(motivo)
-        elif pd.notna(motivo_cese):
-            texto = f"{estado} - {motivo_cese}" if pd.notna(estado) else str(motivo_cese)
-        else:
-            texto = str(estado) if pd.notna(estado) else None
-        if pd.notna(comentario_libre) and str(comentario_libre).strip():
-            texto = f"{texto} ({comentario_libre})" if texto else str(comentario_libre)
-        if texto:
-            comentarios[row["DNI"]] = texto
-    return comentarios
-
-
-def comentarios_supervisor_hoy(hoy):
-    return comentarios_supervisor_dia(hoy)
-
-
 def comentario_historico_dia(fecha):
     session = get_session()
     try:
@@ -293,8 +254,14 @@ def main():
     salida_ant_por_dni = salida_anterior_por_persona(anterior)
     canal_ant_por_dni = canal_anterior_por_persona(anterior)
     dnis_asistio_ant = dnis_asistio_anterior(anterior)
-    comentarios_hoy = comentarios_supervisor_hoy(hoy)
-    comentarios_ayer = comentarios_supervisor_dia(anterior)
+    # comentarios_hoy/comentarios_ayer (Davor, 2026-10-27): venían de la
+    # Lista 'RegistroSupervisor' de SharePoint, que alimentaba la Power App
+    # de supervisores -- ya no existe (sin ítems nuevos desde 2026-08-22,
+    # ver project_mac_cloud_powerapps_retirado). Quedan en {} a propósito:
+    # comentario_hist_hoy/ayer (ClasificacionDiaria, abajo) sigue siendo la
+    # fuente real de comentarios.
+    comentarios_hoy = {}
+    comentarios_ayer = {}
     comentario_hist_hoy = comentario_historico_dia(hoy)
     comentario_hist_ayer = comentario_historico_dia(anterior)
     correcciones_entrada, correcciones_salida = correcciones_tabla3(hoy, anterior)
