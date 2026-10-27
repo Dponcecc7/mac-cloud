@@ -36,10 +36,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
 from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria, crear_tablas  # noqa: E402
-from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
+from graph_client import subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from correcciones_motor import cargar_correcciones_web  # noqa: E402
+from dimensiones_motor import cargar_feriados, cargar_maestro_headcount, cargar_patron_recurrente  # noqa: E402
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 from patron_recurrente import sin_acentos  # noqa: E402
 
@@ -661,7 +662,7 @@ def main():
     if len(sin_mapear):
         print(f"Aviso: {len(sin_mapear)} visitas con tipo_negocio sin mapear a canal: {sin_mapear['tipo_negocio'].unique()}")
 
-    m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+    m = cargar_maestro_headcount()
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
     # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
@@ -677,7 +678,7 @@ def main():
     m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str).str.zfill(8)
     activos = m[m["Estado"].astype(str).str.strip() == "Activo"].copy()
 
-    p = leer_excel("ASISTENCIA/MAC/2A_Patron_Recurrente.xlsx", sheet_name="Patrón recurrente", header=3).dropna(how="all")
+    p = cargar_patron_recurrente()
     p.columns = [str(c).strip() for c in p.columns]
     p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
     # .str.zfill(8) (Davor, 2026-09-21) -- resguardo por si esta columna
@@ -693,7 +694,7 @@ def main():
     col_canal_dia = [c for c in p.columns if "canal" in c.lower()][0]
     p_idx = p.set_index(["DNI", "weekday"])
 
-    feriados = leer_excel("ASISTENCIA/MAC/5_Feriados_2026.xlsx", sheet_name="Feriados 2026", header=3)
+    feriados = cargar_feriados()
     feriados_set = set(pd.to_datetime(feriados["Fecha"], format="%d/%m/%Y", dayfirst=True).dt.date)
 
     # Davor, 2026-10-27: "no deben haber excel" -- las correcciones de

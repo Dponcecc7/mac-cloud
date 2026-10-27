@@ -17,7 +17,9 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
-from graph_client import leer_excel  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dimensiones_motor import cargar_maestro_headcount  # noqa: E402
 
 _session = get_session()
 try:
@@ -40,7 +42,7 @@ r["Alerta para analista"] = r["Alerta para analista"].map({True: "SÍ", False: "
 r["Estado_base"] = r["Estado"].apply(lambda s: s.split(" (")[0])
 r["Fecha"] = pd.to_datetime(r["Fecha"])
 
-m_reg = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+m_reg = cargar_maestro_headcount()
 m_reg.columns = [str(c).strip() for c in m_reg.columns]
 m_reg = m_reg.rename(columns={m_reg.columns[0]: "DNI"})
 # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene

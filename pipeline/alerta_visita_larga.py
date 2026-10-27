@@ -11,10 +11,10 @@ import sys
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from graph_client import leer_excel  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from anon import pseudonimo  # noqa: E402
+from dimensiones_motor import cargar_maestro_headcount, cargar_patron_recurrente  # noqa: E402
 
 
 def fmt_hora(td):
@@ -52,7 +52,7 @@ PUNTOS_EXCLUIDOS = ["AMOF", "OVERALL", "PUNTO CENSO"]
 patron_excluido = "|".join(PUNTOS_EXCLUIDOS)
 v_ok = v_ok[~v_ok["punto_venta"].astype(str).str.upper().str.contains(patron_excluido, na=False)].copy()
 
-p = leer_excel("ASISTENCIA/MAC/2A_Patron_Recurrente.xlsx", sheet_name="Patrón recurrente", header=3).dropna(how="all")
+p = cargar_patron_recurrente()
 p.columns = [str(c).strip() for c in p.columns]
 p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
 p["DNI"] = p["DNI"].astype(str).str.strip()
@@ -62,7 +62,7 @@ p["weekday"] = p["Dia"].map(dia_map)
 col_sal = [c for c in p.columns if "salida" in c.lower()][0]
 p_idx = p.set_index(["DNI", "weekday"])
 
-m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+m = cargar_maestro_headcount()
 m.columns = [str(c).strip() for c in m.columns]
 m = m.rename(columns={m.columns[0]: "DNI"})
 # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene

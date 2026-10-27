@@ -20,10 +20,10 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Persona, get_session  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
-from graph_client import leer_excel  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from anon import pseudonimo  # noqa: E402
+from dimensiones_motor import cargar_maestro_headcount  # noqa: E402
 
 _dfs = []
 for f in sorted(glob.glob("Visitas/*.xlsx")):
@@ -70,7 +70,7 @@ r = pd.DataFrame(_filas, columns=[
 r["Fecha"] = pd.to_datetime(r["Fecha"])
 r["Estado_base"] = r["Estado"].apply(lambda s: s.split(" (")[0])
 
-_m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+_m = cargar_maestro_headcount()
 _m.columns = [str(c).strip() for c in _m.columns]
 _m = _m.rename(columns={_m.columns[0]: "DNI"})
 # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene

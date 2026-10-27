@@ -30,9 +30,10 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import CorreccionWeb, get_session  # noqa: E402
-from graph_client import descargar, leer_excel, subir_creando_si_no_existe  # noqa: E402
+from graph_client import descargar, subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dimensiones_motor import cargar_maestro_headcount  # noqa: E402
 from reporte_diario_9am import (  # noqa: E402
     dia_habil_anterior, cargar_feriados, comentario_historico_dia, CARPETA_SALIDA,
     limpiar_motivo, RUTA_GRAPH_MAC, CARPETA_AUDITORIA_GRAPH,
@@ -91,7 +92,7 @@ def main():
     comentarios_sal_auto = {}
     comentario_hist_auto = comentario_historico_dia(anterior)
 
-    m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+    m = cargar_maestro_headcount()
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
     # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene

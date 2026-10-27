@@ -30,10 +30,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import CorreccionWeb, get_session  # noqa: E402
 from excel_safety import texto_seguro_excel  # noqa: E402
 from fact_models import ClasificacionDiaria  # noqa: E402
-from graph_client import leer_excel, subir_creando_si_no_existe  # noqa: E402
+from graph_client import subir_creando_si_no_existe  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from athena_client import traer_visitas  # noqa: E402
+from dimensiones_motor import (  # noqa: E402
+    cargar_feriados as cargar_feriados_pg, cargar_maestro_headcount as cargar_maestro_headcount_pg,
+    cargar_patron_recurrente as cargar_patron_recurrente_pg,
+)
 from historial_cambios import cargar_historial, valor_efectivo  # noqa: E402
 from motor_clasificacion import TIPO_NEGOCIO_A_CANAL, _parse_hora_corregida  # noqa: E402
 
@@ -90,7 +94,7 @@ def dia_habil_anterior(fecha, feriados_set=None):
 
 
 def cargar_maestro(fecha=None):
-    m = leer_excel("ASISTENCIA/MAC/1_Maestro_Headcount.xlsx", sheet_name="Maestro Headcount", header=3).dropna(how="all")
+    m = cargar_maestro_headcount_pg()
     m.columns = [str(c).strip() for c in m.columns]
     m = m.rename(columns={m.columns[0]: "DNI"})
     # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
@@ -114,7 +118,7 @@ def cargar_maestro(fecha=None):
 
 
 def cargar_patron():
-    p = leer_excel("ASISTENCIA/MAC/2A_Patron_Recurrente.xlsx", sheet_name="Patrón recurrente", header=3).dropna(how="all")
+    p = cargar_patron_recurrente_pg()
     p.columns = [str(c).strip() for c in p.columns]
     p = p.rename(columns={p.columns[0]: "DNI", p.columns[1]: "Dia"})
     p["DNI"] = p["DNI"].astype(str).str.strip()
@@ -127,7 +131,7 @@ def cargar_patron():
 
 
 def cargar_feriados():
-    feriados = leer_excel("ASISTENCIA/MAC/5_Feriados_2026.xlsx", sheet_name="Feriados 2026", header=3)
+    feriados = cargar_feriados_pg()
     return set(pd.to_datetime(feriados["Fecha"], format="%d/%m/%Y", dayfirst=True).dt.date)
 
 
