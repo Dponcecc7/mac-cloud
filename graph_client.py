@@ -109,25 +109,6 @@ def descargar(ruta_relativa):
     return r.content
 
 
-def leer_excel(ruta_relativa, ruta_local=None, **kwargs_read_excel):
-    """Fase 6: version portable de graph_excel.leer_excel() -- misma firma y
-    mismo comportamiento (Graph primero, archivo local como respaldo SI
-    existe), pero un runner de GitHub Actions nunca tiene ese respaldo local,
-    asi que en la practica siempre lee por Graph o falla con
-    FileNotFoundError (igual que el original en ese caso)."""
-    import io
-
-    import pandas as pd
-    try:
-        contenido = descargar(ruta_relativa)
-        return pd.read_excel(io.BytesIO(contenido), **kwargs_read_excel)
-    except Exception as e:
-        if ruta_local and os.path.exists(ruta_local):
-            print(f"Aviso: fallo la lectura por Graph de '{ruta_relativa}' ({e}) -- usando archivo local de respaldo.")
-            return pd.read_excel(ruta_local, **kwargs_read_excel)
-        raise FileNotFoundError(f"No se pudo leer '{ruta_relativa}' por Graph ni existe respaldo local en '{ruta_local}': {e}") from e
-
-
 def subir_creando_si_no_existe(ruta_relativa, wb_o_bytes):
     """Como subir_in_place(), pero si el archivo TODAVIA no existe en
     SharePoint (primera corrida contra una ruta nueva -- ej. el snapshot de
