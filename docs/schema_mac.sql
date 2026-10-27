@@ -244,10 +244,20 @@ CREATE TABLE vacaciones_registradas (
 );
 
 CREATE TABLE vacante_seguimiento (
-	dni VARCHAR(15) NOT NULL, 
-	prioridad_cobertura VARCHAR(10), 
-	estado_cobertura VARCHAR(20), 
-	actualizado_en TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	PRIMARY KEY (dni), 
+	dni VARCHAR(15) NOT NULL,
+	prioridad_cobertura VARCHAR(10),
+	estado_cobertura VARCHAR(20),
+	actualizado_en TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+	PRIMARY KEY (dni),
 	FOREIGN KEY(dni) REFERENCES personas (dni) ON DELETE CASCADE
 );
+
+-- Vista (dimension_models.py::VACANTES_VIEW_SQL, no es un CREATE TABLE de un modelo)
+CREATE OR REPLACE VIEW vacantes AS
+SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,
+       p.fecha_baja, p.motivo_baja,
+       vs.prioridad_cobertura,
+       COALESCE(vs.estado_cobertura, 'Abierta') AS estado_cobertura
+FROM personas p
+LEFT JOIN vacante_seguimiento vs ON vs.dni = p.dni
+WHERE p.estado = 'Vacante';
