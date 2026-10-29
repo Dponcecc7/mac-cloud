@@ -66,12 +66,16 @@
     .table-wrap::-webkit-scrollbar-track { background:var(--bg); border-radius:999px; }
     .table-wrap::-webkit-scrollbar-thumb { background:var(--line); border-radius:999px; border:2px solid var(--bg); }
     .table-wrap::-webkit-scrollbar-thumb:hover { background:var(--muted); }
-    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12.5px; }
-    th { text-align:left; padding:8px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); z-index:1; }
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
+    th { text-align:left; padding:8px 7px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); z-index:1; }
     th:hover { color:var(--brand); }
     th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
     th.num, td.num { text-align:right; }
-    td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    /* Sin white-space:nowrap acá a propósito (Davor: "que todo se vea de
+       una sola vista") -- texto largo (nombre + DNI) se parte en 2 líneas
+       en vez de forzar la columna a lo ancho que haga falta, para que la
+       tabla entera entre sin scroll horizontal en pantallas normales. */
+    td { padding:5px 7px; border-bottom:1px solid var(--line); }
     tr:last-child td { border-bottom:none; }
     td.num { text-align:right; font-variant-numeric:tabular-nums; }
     .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
