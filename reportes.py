@@ -20,6 +20,7 @@ from sqlalchemy.orm import aliased
 from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN, UMBRAL_CUMPLIMIENTO_BAJO
 from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_descanso, _motivos_falta, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
+from cobertura_posiciones import tiempo_cobertura_posiciones
 from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
 from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
@@ -669,6 +670,26 @@ def cobertura():
         "reportes_cobertura.html", usuario=current_user, activo="cobertura",
         desde=desde, hasta=hasta, personas=personas, fechas=fechas, celdas=celdas,
         categorias=categorias, promedios=promedios,
+        filtro_args=filtro_args, roles_disponibles=roles_disp,
+        regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
+        ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,
+    )
+
+
+@bp.get("/cobertura-posiciones")
+@requiere_pagina("reportes_cobertura_posiciones")
+def cobertura_posiciones():
+    filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
+    cubiertas, aun_vacantes = tiempo_cobertura_posiciones(
+        current_user, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
+        supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"],
+        canal_filtro=filtro_args["canal"],
+    )
+    dias_validos = [f["dias_para_cubrir"] for f in cubiertas if f["dias_para_cubrir"] is not None]
+    promedio_dias = round(sum(dias_validos) / len(dias_validos), 1) if dias_validos else None
+    return render_template(
+        "reportes_cobertura_posiciones.html", usuario=current_user, activo="cobertura_posiciones",
+        cubiertas=cubiertas, aun_vacantes=aun_vacantes, promedio_dias=promedio_dias,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <script>(function(){try{var t=localStorage.getItem('mac_theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAC — Reportes</title>
+  <style>
+    :root {
+      --bg:#eef4fa; --card:#ffffff; --ink:#1e2a3a; --muted:#5b7186; --line:#d7e3ef;
+      --brand:#2f6fb0; --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+    }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+    .wrap { max-width:1400px; margin:0 auto; padding:0 24px 60px; }
+    header.top { background:linear-gradient(135deg, #3a6ea5 0%, #5590c4 100%); color:#fff; padding:18px 28px; margin-bottom:22px; }
+    header.top .inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    header.top .brand { font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px; }
+    header.top .brand .dot { width:9px; height:9px; border-radius:50%; background:#e8a15c; }
+    nav.links { display:flex; align-items:center; gap:16px; font-size:13px; flex-wrap:wrap; }
+    .nav-pages { display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
+    .nav-pages a { color:#e0ecf8; text-decoration:none; font-weight:600; opacity:.8; padding:6px 11px; border-radius:7px; transition:background .15s, opacity .15s; }
+    .nav-pages a:hover { opacity:1; background:rgba(255,255,255,.08); }
+    .nav-pages a.active { opacity:1; color:#fff; background:rgba(255,255,255,.14); }
+    .nav-user { display:flex; align-items:center; gap:10px; padding-left:14px; border-left:1px solid rgba(255,255,255,.16); }
+    .nav-user .correo { color:#a8c3dc; font-size:12px; }
+    .nav-user button.salir { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#e0ecf8; font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-user button.salir:hover { background:rgba(255,255,255,.2); color:#fff; }
+    .pill { background:rgba(255,255,255,.12); color:#eaf3fb; padding:4px 11px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+
+    h1.title { font-size:20px; margin:0 0 14px; }
+    nav.tabs { display:flex; gap:6px; font-size:12.5px; margin-bottom:18px; flex-wrap:wrap; }
+    nav.tabs a { text-decoration:none; color:var(--muted); font-weight:600; padding:7px 13px; border-radius:999px; background:var(--card); border:1px solid var(--line); white-space:nowrap; }
+    nav.tabs a:hover { color:var(--ink); border-color:var(--brand); }
+    nav.tabs a.active { color:#fff; background:var(--brand); border-color:var(--brand); font-weight:700; }
+
+    .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
+    .btn.primary { background:var(--brand); color:#fff; }
+
+    .resumen { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+    .stat { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); min-width:180px; }
+    .stat .num { font-size:24px; font-weight:800; color:var(--brand); }
+    .stat .lbl { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.02em; margin-top:2px; }
+
+    .panel { background:var(--card); border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(35,25,10,.06); margin-bottom:20px; }
+    .panel h2 { font-size:15px; margin:0 0 12px; }
+    .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:14px; }
+
+    .table-wrap { overflow-x:auto; }
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12.5px; }
+    th { text-align:left; padding:8px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
+    td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+    .badge.ok { background:var(--ok-bg); color:var(--ok); }
+    .badge.warn { background:var(--warn-bg); color:var(--warn); }
+    .badge.bad { background:var(--bad-bg); color:var(--bad); }
+    .badge.muted { background:var(--bg); color:var(--muted); }
+    .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+
+    @media (max-width: 700px) {
+      .wrap { padding:0 12px 40px; }
+      header.top { padding:14px 16px; }
+      nav.links { display:contents; font-size:12.5px; }
+      .brand { order:1; }
+      .nav-user { order:2; padding-left:0; border-left:none; }
+      .nav-pages { order:3; flex-basis:100%; width:100%; }
+      .nav-pages a { padding:5px 9px; }
+      nav.tabs { gap:6px; margin-bottom:14px; }
+      nav.tabs a { padding:8px 12px; font-size:12.5px; }
+      .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
+      .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
+      .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
+      .panel { padding:12px !important; border-radius:12px; }
+      .resumen { flex-direction:column; }
+    }
+  </style>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="inner">
+      <div class="brand"><span class="dot"></span> Proyecto MAC</div>
+      <nav class="links">
+        <div class="nav-pages">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          {% if tiene_acceso(usuario, 'personal') %}<a href="{{ url_for('personal') }}">Personal</a>{% endif %}
+          {% if tiene_acceso(usuario, 'asistencia') %}<a href="{{ url_for('asistencia.reporte') }}">Asistencia diaria</a>{% endif %}
+          {% if tiene_acceso(usuario, 'reportes') %}<a href="{{ url_for('reportes.recomendaciones') }}" class="active">Reportes</a>{% endif %}
+          {% if tiene_acceso(usuario, 'cargar_headcount') %}<a href="{{ url_for('cargas.headcount_form') }}">Cargar Headcount</a>{% endif %}
+          {% if tiene_acceso(usuario, 'historial') %}<a href="{{ url_for('historial.listar') }}">Historial de cambios</a>{% endif %}
+          {% if usuario.rol == "admin" %}<a href="{{ url_for('admin.usuarios') }}">Usuarios</a>{% endif %}
+        </div>
+        <div class="nav-user">
+          <button type="button" class="theme-toggle">🌙</button>
+          <span class="correo" title="{{ usuario.email }}">{{ usuario.email.split('@')[0] }}</span>
+          <span class="pill">{{ usuario.rol }}</span>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="salir" type="submit">Salir</button></form>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h1 class="title">Reportes</h1>
+    <nav class="tabs">
+      {% if tiene_acceso(usuario, 'reportes_alertas') %}<a href="{{ url_for('reportes.alertas') }}">Alertas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_recomendaciones') %}<a href="{{ url_for('reportes.recomendaciones') }}">Desempeño</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_perfil') %}<a href="{{ url_for('reportes.perfil') }}">Perfil mercaderista</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_historico') %}<a href="{{ url_for('reportes.historico') }}">Histórico de asistencia</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_cobertura') %}<a href="{{ url_for('reportes.cobertura') }}">Cobertura</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_marcaciones') %}<a href="{{ url_for('reportes.marcaciones') }}">Ruta mercaderista</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_tareo') %}<a href="{{ url_for('reportes.tareo') }}">Tareo</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_horas') %}<a href="{{ url_for('reportes.horas') }}">Horas programadas vs trabajadas</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_proyecciones') %}<a href="{{ url_for('reportes.proyecciones') }}">Proyecciones</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
+      {% if tiene_acceso(usuario, 'reportes_cobertura_posiciones') %}<a href="{{ url_for('reportes.cobertura_posiciones') }}" class="active">Cubrir posiciones</a>{% endif %}
+    </nav>
+
+    {% if roles_disponibles %}
+    <div class="filtros-admin">
+      <form method="get" style="display:contents;">
+        <select name="supervisor">
+          <option value="">Supervisor: todos</option>
+          {% for dni, nombre in supervisores_disponibles %}<option value="{{ dni }}" {{ 'selected' if filtro_args.supervisor == dni else '' }}>{{ nombre|title }}</option>{% endfor %}
+        </select>
+        <select name="region">
+          <option value="">Región: todas</option>
+          {% for r in regiones_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.region == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="rol">
+          <option value="">Rol: todos</option>
+          {% for r in roles_disponibles %}<option value="{{ r }}" {{ 'selected' if filtro_args.rol == r else '' }}>{{ r|title }}</option>{% endfor %}
+        </select>
+        <select name="ciudad">
+          <option value="">Ciudad: todas</option>
+          {% for c in ciudades_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.ciudad == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        {% if canales_disponibles %}
+        <select name="canal" title="Solo admin -- ver Tradicional, Farmacia o Autoservicio">
+          <option value="">Canal: todos</option>
+          {% for c in canales_disponibles %}<option value="{{ c }}" {{ 'selected' if filtro_args.canal == c else '' }}>{{ c|title }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <button class="btn primary" type="submit">Aplicar filtros</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="note">
+      Una posición queda "vacante" desde el último día que esa persona realmente vino a trabajar (marcación real,
+      no la fecha administrativa de baja) hasta el primer día que su reemplazo realmente empieza a trabajar.
+    </div>
+
+    <div class="resumen">
+      <div class="stat">
+        <div class="num">{{ promedio_dias if promedio_dias is not none else "—" }}</div>
+        <div class="lbl">Días promedio para cubrir</div>
+      </div>
+      <div class="stat">
+        <div class="num">{{ aun_vacantes|length }}</div>
+        <div class="lbl">Posiciones vacantes ahora</div>
+      </div>
+      <div class="stat">
+        <div class="num">{{ cubiertas|length }}</div>
+        <div class="lbl">Posiciones cubiertas (histórico)</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Vacantes abiertas ahora mismo</h2>
+      {% if not aun_vacantes %}
+        <div class="empty">No hay posiciones vacantes con los filtros elegidos.</div>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Posición (persona que faltó)</th>
+            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
+            <th>Último día que vino</th><th>Días vacante</th>
+          </tr>
+          {% for f in aun_vacantes %}
+          <tr>
+            <td>{{ (f.nombre or '')|title }} <span style="color:var(--muted);">({{ f.dni }})</span></td>
+            <td>{{ (f.rol or '—')|title }}</td>
+            <td>{{ (f.canal or '—')|title }}</td>
+            <td>{{ (f.region or '—')|title }}</td>
+            <td>{{ (f.ciudad or '—')|title }}</td>
+            <td>{{ (f.zona or '—')|title }}</td>
+            <td>{{ (f.supervisor or '—')|title }}</td>
+            <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else 'Sin marcación registrada' }}</td>
+            <td>
+              {% if f.dias_vacante is none %}
+                <span class="badge muted">Sin datos</span>
+              {% elif f.dias_vacante > 30 %}
+                <span class="badge bad">{{ f.dias_vacante }} días</span>
+              {% elif f.dias_vacante > 10 %}
+                <span class="badge warn">{{ f.dias_vacante }} días</span>
+              {% else %}
+                <span class="badge ok">{{ f.dias_vacante }} días</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Posiciones ya cubiertas</h2>
+      {% if not cubiertas %}
+        <div class="empty">No hay reemplazos registrados con los filtros elegidos.</div>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Salió</th><th>Entró</th>
+            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
+            <th>Último día (saliente)</th><th>Primer día (entrante)</th><th>Días para cubrir</th>
+          </tr>
+          {% for f in cubiertas %}
+          <tr>
+            <td>{{ (f.nombre_vacante or '')|title }} <span style="color:var(--muted);">({{ f.dni_vacante }})</span></td>
+            <td>{{ (f.nombre_nuevo or '')|title }} <span style="color:var(--muted);">({{ f.dni_nuevo }})</span></td>
+            <td>{{ (f.rol or '—')|title }}</td>
+            <td>{{ (f.canal or '—')|title }}</td>
+            <td>{{ (f.region or '—')|title }}</td>
+            <td>{{ (f.ciudad or '—')|title }}</td>
+            <td>{{ (f.zona or '—')|title }}</td>
+            <td>{{ (f.supervisor or '—')|title }}</td>
+            <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else '—' }}</td>
+            <td>{{ f.primer_dia_real.strftime('%d/%m/%Y') if f.primer_dia_real else '—' }}</td>
+            <td>
+              {% if f.dias_para_cubrir is none %}
+                <span class="badge muted">Sin marcación aún</span>
+              {% elif f.dias_para_cubrir > 30 %}
+                <span class="badge bad">{{ f.dias_para_cubrir }} días</span>
+              {% elif f.dias_para_cubrir > 10 %}
+                <span class="badge warn">{{ f.dias_para_cubrir }} días</span>
+              {% else %}
+                <span class="badge ok">{{ f.dias_para_cubrir }} días</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

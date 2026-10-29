@@ -63,6 +63,7 @@ PAGINAS_REPORTES = [
     ("reportes_perfil", "Perfil mercaderista"),
     ("reportes_proyecciones", "Proyecciones"),
     ("reportes_planning", "Cobertura vs Planning"),
+    ("reportes_cobertura_posiciones", "Cubrir posiciones"),
 ]
 
 TODAS_LAS_CLAVES = [c for c, _ in PAGINAS_TOP] + [c for c, _ in PAGINAS_REPORTES]
