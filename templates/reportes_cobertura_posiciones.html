@@ -54,7 +54,13 @@
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:14px; }
 
     .table-wrap { overflow-x:auto; }
-    .table-wrap table { min-width:1300px; }
+    /* width:max-content (no 100%) -- si no, la tabla se estira a ocupar
+       TODO el panel aunque le sobre aire, y con pantallas anchas nunca
+       llega a desbordar (el min-width de abajo no alcanza a forzarlo
+       porque 100% del contenedor ya es mayor). max-content mide lo que
+       el contenido realmente necesita (columnas con white-space:nowrap),
+       así que recién ahí aparece el scroll cuando no entra. */
+    .table-wrap table { width:max-content; min-width:100%; }
     .table-wrap::-webkit-scrollbar { height:12px; }
     .table-wrap::-webkit-scrollbar-track { background:var(--bg); border-radius:999px; }
     .table-wrap::-webkit-scrollbar-thumb { background:var(--line); border-radius:999px; border:2px solid var(--bg); }
