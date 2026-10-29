@@ -184,7 +184,19 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
                     estados_ultima_fecha[dni] = estado
                 elif estado.upper().startswith("DESCANSO") and "medic" in sin_acentos(str(comentario or "")):
                     dnis_descanso_medico[dni] = estado
-        activos_reportados_vacante = [p for p in activos if p.dni in estados_ultima_fecha]
+        # Davor, 2026-10-29 (caso real Jahirziño Solis Mamani): hay DNIs que
+        # se quedaron en estado "Vacante" en Postgres aunque YA tienen un
+        # reemplazo confirmado (reemplaza_a_dni de otra persona apunta a
+        # ellos) -- dato administrativo que nunca se actualizó a Inactivo
+        # (viene de antes de reemplazos.py::procesar_reemplazo(), que sí lo
+        # hace bien para los reemplazos nuevos). Consulta SIN filtrar por
+        # los filtro_args actuales a propósito -- si alguien reemplazó esa
+        # posición, no importa si el reemplazo cae fuera del filtro de
+        # pantalla elegido, la posición YA no está vacante.
+        dnis_con_reemplazo = {
+            dni for (dni,) in session.query(Persona.reemplaza_a_dni).filter(Persona.reemplaza_a_dni.isnot(None)).distinct()
+        }
+        activos_reportados_vacante = [p for p in activos if p.dni in estados_ultima_fecha and p.dni not in dnis_con_reemplazo]
         ultimo_real_dm = _ultimo_real_por_dni(session, set(dnis_descanso_medico))
 
         q_vacantes = session.query(Persona).filter(Persona.estado == "Vacante")
@@ -194,7 +206,7 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
             q_vacantes, Persona, rol_filtro=rol_filtro, region_filtro=region_filtro,
             supervisor_filtro=supervisor_filtro, ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
         )
-        abiertas = q_vacantes.all() + activos_reportados_vacante
+        abiertas = [p for p in q_vacantes.all() if p.dni not in dnis_con_reemplazo] + activos_reportados_vacante
         ultimo_real_abiertas = _ultimo_real_por_dni(session, {p.dni for p in abiertas})
         inicio_vacante_abiertas = _inicio_vacante_por_dni(session, ultimo_real_abiertas)
 
