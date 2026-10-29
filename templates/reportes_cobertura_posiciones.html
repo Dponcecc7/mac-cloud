@@ -201,8 +201,6 @@
             <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
             <th data-tipo="texto">Región <span class="flecha">↕</span></th>
             <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
             <th data-tipo="texto">Fecha de ingreso <span class="flecha">↕</span></th>
             <th data-tipo="texto">Estado ahora <span class="flecha">↕</span></th>
             <th data-tipo="texto">Cubrió una vacante <span class="flecha">↕</span></th>
@@ -216,8 +214,6 @@
             <td>{{ (f.canal or '—')|title }}</td>
             <td>{{ (f.region or '—')|title }}</td>
             <td>{{ (f.ciudad or '—')|title }}</td>
-            <td>{{ (f.zona or '—')|title }}</td>
-            <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.fecha_ingreso.strftime('%d/%m/%Y') if f.fecha_ingreso else '—' }}</td>
             <td>
               {% if f.vacante_ahora %}
@@ -270,8 +266,6 @@
             <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
             <th data-tipo="texto">Región <span class="flecha">↕</span></th>
             <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
             <th data-tipo="texto">Último día que vino <span class="flecha">↕</span></th>
             <th data-tipo="texto">Estado en el sistema <span class="flecha">↕</span></th>
             <th class="num" data-tipo="num">Días vacante <span class="flecha">↕</span></th>
@@ -285,8 +279,6 @@
             <td>{{ (f.canal or '—')|title }}</td>
             <td>{{ (f.region or '—')|title }}</td>
             <td>{{ (f.ciudad or '—')|title }}</td>
-            <td>{{ (f.zona or '—')|title }}</td>
-            <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else 'Sin marcación registrada' }}</td>
             <td>
               {% if f.pendiente_dar_de_baja %}
@@ -329,8 +321,6 @@
             <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
             <th data-tipo="texto">Región <span class="flecha">↕</span></th>
             <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
-            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
             <th data-tipo="texto">Último día (saliente) <span class="flecha">↕</span></th>
             <th data-tipo="texto">Primer día (entrante) <span class="flecha">↕</span></th>
             <th class="num" data-tipo="num">Días para cubrir <span class="flecha">↕</span></th>
@@ -345,8 +335,6 @@
             <td>{{ (f.canal or '—')|title }}</td>
             <td>{{ (f.region or '—')|title }}</td>
             <td>{{ (f.ciudad or '—')|title }}</td>
-            <td>{{ (f.zona or '—')|title }}</td>
-            <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else '—' }}</td>
             <td>{{ f.primer_dia_real.strftime('%d/%m/%Y') if f.primer_dia_real else '—' }}</td>
             <td class="num">

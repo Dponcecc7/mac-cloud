@@ -713,7 +713,7 @@ def cobertura_posiciones_exportar():
 
     ws = wb.active
     ws.title = "Personal activo"
-    ws.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad", "Zona", "Supervisor",
+    ws.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad",
                "Fecha de ingreso", "Estado ahora", "Días", "Reemplazó a", "Días para cubrir"])
     for celda in ws[1]:
         celda.font = Font(bold=True)
@@ -725,32 +725,32 @@ def cobertura_posiciones_exportar():
         else:
             estado, dias_estado = "Activo", ""
         ws.append(fila_segura([
-            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"],
             _fecha(f["fecha_ingreso"]), estado, dias_estado if dias_estado != "" else "",
             f["reemplazo_de"] or "", f["dias_para_cubrir"] if f["dias_para_cubrir"] is not None else "",
         ]))
 
     ws2 = wb.create_sheet("Vacantes abiertas")
-    ws2.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad", "Zona", "Supervisor",
+    ws2.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad",
                 "Último día que vino", "Estado en el sistema", "Días vacante"])
     for celda in ws2[1]:
         celda.font = Font(bold=True)
     for f in aun_vacantes:
         ws2.append(fila_segura([
-            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"],
             _fecha(f["ultimo_dia_real"]), "Falta procesar baja" if f["pendiente_dar_de_baja"] else "Vacante",
             f["dias_vacante"] if f["dias_vacante"] is not None else "",
         ]))
 
     ws3 = wb.create_sheet("Posiciones cubiertas")
-    ws3.append(["DNI saliente", "Salió", "DNI entrante", "Entró", "Rol", "Canal", "Región", "Ciudad", "Zona",
-                "Supervisor", "Último día (saliente)", "Primer día (entrante)", "Días para cubrir"])
+    ws3.append(["DNI saliente", "Salió", "DNI entrante", "Entró", "Rol", "Canal", "Región", "Ciudad",
+                "Último día (saliente)", "Primer día (entrante)", "Días para cubrir"])
     for celda in ws3[1]:
         celda.font = Font(bold=True)
     for f in cubiertas:
         ws3.append(fila_segura([
             f["dni_vacante"], f["nombre_vacante"], f["dni_nuevo"], f["nombre_nuevo"],
-            f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            f["rol"], f["canal"], f["region"], f["ciudad"],
             _fecha(f["ultimo_dia_real"]), _fecha(f["primer_dia_real"]),
             f["dias_para_cubrir"] if f["dias_para_cubrir"] is not None else "",
         ]))
