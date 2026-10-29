@@ -345,6 +345,14 @@ def _procesar(zip_bytes, personas, canales_dia_por_dni):
     max_fila = max(int(m.group(1)) for m in _RE_FILA.finditer(xml_texto))
     filas_nuevas_xml = []
     actualizados = pasados_a_inactivo = nuevos = 0
+    # Estilos de la última fila REAL, capturados una sola vez ANTES de
+    # agregar ninguna fila nueva -- hallazgo real (Davor, 2026-10-29, 18
+    # personas nuevas acumuladas sin poder entrar al Excel): pedir el
+    # estilo de "max_fila - 1" DENTRO del loop rompía con 2+ altas en la
+    # misma corrida, porque la fila nueva anterior vive en filas_nuevas_xml
+    # (una lista aparte) hasta el final de la función, no en xml_texto
+    # todavía -- _estilos_de_fila() buscaba una fila que no existía ahí.
+    estilos_fila_nueva = _estilos_de_fila(xml_texto, max_fila)
 
     for persona in personas:
         fila_num = dni_a_fila.get(persona.dni)
@@ -374,7 +382,6 @@ def _procesar(zip_bytes, personas, canales_dia_por_dni):
             continue  # nuevo pero no Activo -- no hace falta agregarlo
 
         max_fila += 1
-        estilos = _estilos_de_fila(xml_texto, max_fila - 1) if filas_nuevas_xml or max_fila > 1 else {}
         valores = {
             "CIUDAD": persona.ciudad, "REGION": persona.region,
             "SUPERVISOR": _nombre_supervisor(personas_por_dni, persona.supervisor_dni),
@@ -384,7 +391,7 @@ def _procesar(zip_bytes, personas, canales_dia_por_dni):
             "ESTADO": "ACTIVO", "FECHA INGRESO": persona.fecha_ingreso,
             "Status": "NUEVO -- revisar Canal",
         }
-        filas_nuevas_xml.append(_construir_fila_nueva(max_fila, estilos, valores))
+        filas_nuevas_xml.append(_construir_fila_nueva(max_fila, estilos_fila_nueva, valores))
         dni_a_fila[persona.dni] = max_fila
         nuevos += 1
 
