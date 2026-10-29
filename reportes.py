@@ -37,7 +37,7 @@ from planning import (
 )
 from proyecciones import estacionalidad_faltas, filas_dni_dia_semana_estado, necesidad_contratacion, ranking_proxima_falta, score_riesgo_rotacion, tasa_rotacion_por_ciudad, tasa_rotacion_por_supervisor
 from recomendaciones import insights_equipo, resumen_perfil_equipo
-from scoping import CANALES_FILTRABLES, canonizar_canal, condicion_scope, overrides_supervisor_canal
+from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from vacaciones import calcular_viajes_vacaciones
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -232,7 +232,15 @@ def _filtros_admin():
     analista de canal ya está acotado a su canal_asignado por
     condicion_scope(), no tiene sentido que además elija -- por eso
     `canales_disponibles` viene vacío para cualquiera que no sea admin
-    (mismo criterio que ya oculta la barra entera para supervisor)."""
+    (mismo criterio que ya oculta la barra entera para supervisor).
+
+    Davor, 2026-10-29 ("que los filtros sean cruzados"): cada desplegable
+    se acota además por los OTROS filtros ya elegidos -- si Región=Sur está
+    seleccionado, Ciudad/Supervisor/Rol solo muestran valores que de verdad
+    existen en el Sur, no todo el universo. Canal queda afuera a propósito
+    (sigue siendo la lista fija CANALES_FILTRABLES, ver arriba -- no tiene
+    sentido "cruzarlo" contra sí mismo ni ocultar un canal real solo porque
+    0 personas lo tienen con el resto de filtros puestos)."""
     if current_user.rol == "supervisor":
         return {"rol": "", "region": "", "supervisor": "", "ciudad": "", "canal": ""}, [], [], [], [], []
 
@@ -248,24 +256,37 @@ def _filtros_admin():
     try:
         cond_scope = condicion_scope(Persona, current_user)
 
-        def _valores(columna):
-            q = session.query(columna).filter(columna.isnot(None))
+        def _query_otros_filtros(excluir):
+            """Query de Persona con el scope del usuario + todos los
+            filtro_args YA elegidos, EXCEPTO `excluir` -- así el propio
+            desplegable no se acota contra su propia selección."""
+            q = session.query(Persona)
             if cond_scope is not None:
                 q = q.filter(cond_scope)
+            return aplicar_filtros_extra(
+                q, Persona,
+                rol_filtro=filtro_args["rol"] if excluir != "rol" else None,
+                region_filtro=filtro_args["region"] if excluir != "region" else None,
+                supervisor_filtro=filtro_args["supervisor"] if excluir != "supervisor" else None,
+                ciudad_filtro=filtro_args["ciudad"] if excluir != "ciudad" else None,
+                canal_filtro=filtro_args["canal"] if excluir != "canal" else None,
+            )
+
+        def _valores(columna, excluir):
+            q = _query_otros_filtros(excluir).with_entities(columna).filter(columna.isnot(None))
             return sorted({v for (v,) in q.distinct().all() if v})
 
-        roles_disponibles = _valores(Persona.rol)
-        regiones_disponibles = _valores(Persona.region)
-        ciudades_disponibles = _valores(Persona.ciudad)
+        roles_disponibles = _valores(Persona.rol, "rol")
+        regiones_disponibles = _valores(Persona.region, "region")
+        ciudades_disponibles = _valores(Persona.ciudad, "ciudad")
 
         SupervisorPersona = aliased(Persona)
         q_sup = (
-            session.query(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
+            _query_otros_filtros("supervisor")
             .join(SupervisorPersona, SupervisorPersona.dni == Persona.supervisor_dni)
             .filter(Persona.supervisor_dni.isnot(None))
+            .with_entities(Persona.supervisor_dni, SupervisorPersona.nombre_completo)
         )
-        if cond_scope is not None:
-            q_sup = q_sup.filter(cond_scope)
         supervisores_disponibles = sorted(set(q_sup.distinct().all()), key=lambda t: (t[1] or "").title())
     finally:
         session.close()
