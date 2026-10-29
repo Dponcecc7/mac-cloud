@@ -216,6 +216,10 @@
                 <span class="badge bad" title="Reportado Vacante en Marcar asistencia -- falta procesar &quot;Dar de baja&quot;">
                   Vacante{% if f.dias_vacante_ahora is not none %} ({{ f.dias_vacante_ahora }} días){% endif %}
                 </span>
+              {% elif f.en_descanso_medico %}
+                <span class="badge warn" title="Último día clasificado: Descanso médico">
+                  Descanso médico{% if f.dias_descanso_medico is not none %} ({{ f.dias_descanso_medico }} días){% endif %}
+                </span>
               {% else %}
                 <span class="badge ok">Activo</span>
               {% endif %}

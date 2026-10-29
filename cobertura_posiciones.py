@@ -31,6 +31,7 @@ from sqlalchemy.orm import aliased
 
 from dimension_models import Persona, get_session
 from fact_models import ClasificacionDiaria
+from patron_recurrente import sin_acentos
 from scoping import aplicar_filtros_extra, condicion_scope
 
 
@@ -123,16 +124,30 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         ) if activos else {}
         pares_fecha_dni = [(dni, fecha) for dni, fecha in ultima_fecha_clasif.items()]
         estados_ultima_fecha = {}
+        # Davor, 2026-10-29: "tengo actualmente también 2 personas con DM
+        # [Descanso médico], colocame también eso como detalle" -- mismo
+        # criterio que reportes.py::_codigo_tareo() (estado "DESCANSO" +
+        # "medic" en el comentario, sin_acentos() porque "médico" con tilde
+        # nunca contiene la subcadena sin tilde).
+        dnis_descanso_medico = {}
         if pares_fecha_dni:
             filas_estado = (
-                session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha, ClasificacionDiaria.estado)
+                session.query(
+                    ClasificacionDiaria.dni, ClasificacionDiaria.fecha,
+                    ClasificacionDiaria.estado, ClasificacionDiaria.comentario_supervisor,
+                )
                 .filter(ClasificacionDiaria.dni.in_([d for d, _ in pares_fecha_dni]))
                 .all()
             )
-            for dni, fecha, estado in filas_estado:
-                if ultima_fecha_clasif.get(dni) == fecha and estado.upper().startswith("VACANTE"):
+            for dni, fecha, estado, comentario in filas_estado:
+                if ultima_fecha_clasif.get(dni) != fecha:
+                    continue
+                if estado.upper().startswith("VACANTE"):
                     estados_ultima_fecha[dni] = estado
+                elif estado.upper().startswith("DESCANSO") and "medic" in sin_acentos(str(comentario or "")):
+                    dnis_descanso_medico[dni] = estado
         activos_reportados_vacante = [p for p in activos if p.dni in estados_ultima_fecha]
+        ultimo_real_dm = _ultimo_real_por_dni(session, set(dnis_descanso_medico))
 
         q_vacantes = session.query(Persona).filter(Persona.estado == "Vacante")
         if cond_scope is not None:
@@ -175,10 +190,12 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         # siga "Activo" en el sistema, ya está reportada como vacante ahora
         # -- no solo si alguna vez cubrió una vacante ajena.
         vacante_por_dni = {f["dni"]: f for f in aun_vacantes}
+        hoy_dm = dt.date.today()
         activos_roster = []
         for p in activos:
             info = cubiertas_por_dni_nuevo.get(p.dni)
             vac = vacante_por_dni.get(p.dni)
+            ult_dm = ultimo_real_dm.get(p.dni)
             activos_roster.append({
                 "dni": p.dni, "nombre": p.nombre_completo,
                 "rol": p.rol, "canal": p.canal, "region": p.region, "ciudad": p.ciudad, "zona": p.zona,
@@ -188,6 +205,8 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
                 "dias_para_cubrir": info["dias_para_cubrir"] if info else None,
                 "vacante_ahora": vac is not None,
                 "dias_vacante_ahora": vac["dias_vacante"] if vac else None,
+                "en_descanso_medico": p.dni in dnis_descanso_medico,
+                "dias_descanso_medico": (hoy_dm - ult_dm).days if ult_dm else None,
             })
         activos_roster.sort(key=lambda f: (f["nombre"] or "").upper())
 
