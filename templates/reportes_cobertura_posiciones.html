@@ -53,21 +53,19 @@
     .panel h2 { font-size:15px; margin:0 0 12px; }
     .note { font-size:12px; color:var(--muted); background:var(--card); border-left:3px solid var(--brand); border-radius:0 8px 8px 0; padding:10px 14px; margin-bottom:14px; }
 
-    .table-wrap { overflow-x:auto; overflow-y:auto; max-height:420px; }
+    .table-wrap { overflow-y:auto; max-height:420px; }
     .table-wrap::-webkit-scrollbar { width:12px; }
-    /* width:max-content (no 100%) -- si no, la tabla se estira a ocupar
-       TODO el panel aunque le sobre aire, y con pantallas anchas nunca
-       llega a desbordar (el min-width de abajo no alcanza a forzarlo
-       porque 100% del contenedor ya es mayor). max-content mide lo que
-       el contenido realmente necesita (columnas con white-space:nowrap),
-       así que recién ahí aparece el scroll cuando no entra. */
-    .table-wrap table { width:max-content; min-width:100%; }
-    .table-wrap::-webkit-scrollbar { height:12px; }
     .table-wrap::-webkit-scrollbar-track { background:var(--bg); border-radius:999px; }
     .table-wrap::-webkit-scrollbar-thumb { background:var(--line); border-radius:999px; border:2px solid var(--bg); }
     .table-wrap::-webkit-scrollbar-thumb:hover { background:var(--muted); }
-    table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
-    th { text-align:left; padding:8px 7px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); z-index:1; }
+    /* table-layout:fixed + width:100% (Davor: "igual, no se ve" -- ni
+       siquiera recortando texto/padding alcanzaba) -- esto SÍ garantiza
+       que la tabla nunca se salga del panel: todas las columnas se
+       reparten el 100% disponible y el texto de cada celda se parte en
+       líneas si hace falta, en vez de que una columna larga empuje a la
+       tabla entera a desbordar. */
+    table { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; font-size:12px; }
+    th { text-align:left; padding:8px 7px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:normal; word-break:break-word; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--card); z-index:1; }
     th:hover { color:var(--brand); }
     th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
     th.num, td.num { text-align:right; }
@@ -75,7 +73,7 @@
        una sola vista") -- texto largo (nombre + DNI) se parte en 2 líneas
        en vez de forzar la columna a lo ancho que haga falta, para que la
        tabla entera entre sin scroll horizontal en pantallas normales. */
-    td { padding:5px 7px; border-bottom:1px solid var(--line); }
+    td { padding:5px 7px; border-bottom:1px solid var(--line); word-break:break-word; }
     tr:last-child td { border-bottom:none; }
     td.num { text-align:right; font-variant-numeric:tabular-nums; }
     .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
