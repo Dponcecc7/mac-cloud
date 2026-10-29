@@ -680,7 +680,7 @@ def cobertura():
 @requiere_pagina("reportes_cobertura_posiciones")
 def cobertura_posiciones():
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
-    cubiertas, aun_vacantes = tiempo_cobertura_posiciones(
+    cubiertas, aun_vacantes, activos_roster = tiempo_cobertura_posiciones(
         current_user, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
         supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"],
         canal_filtro=filtro_args["canal"],
@@ -689,7 +689,7 @@ def cobertura_posiciones():
     promedio_dias = round(sum(dias_validos) / len(dias_validos), 1) if dias_validos else None
     return render_template(
         "reportes_cobertura_posiciones.html", usuario=current_user, activo="cobertura_posiciones",
-        cubiertas=cubiertas, aun_vacantes=aun_vacantes, promedio_dias=promedio_dias,
+        cubiertas=cubiertas, aun_vacantes=aun_vacantes, activos_roster=activos_roster, promedio_dias=promedio_dias,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
         regiones_disponibles=regiones_disp, supervisores_disponibles=supervisores_disp,
         ciudades_disponibles=ciudades_disp, canales_disponibles=canales_disp,

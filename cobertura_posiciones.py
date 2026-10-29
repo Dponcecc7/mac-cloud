@@ -3,7 +3,11 @@
 para saber cuándo ingresa su reemplazo... quiero saber cuánto me demoro en
 cubrir una posición").
 
-Dos listas:
+Tres listas:
+- Personal activo (roster completo, Davor 2026-10-29: "que aparezca todo
+  el personal activo y si hay alguna vacante, que sí aparezca ese detalle
+  con los días") -- cada Activo que matchea los filtros, con el dato de
+  "cubiertas" pegado si esa persona reemplazó una vacante.
 - Posiciones YA cubiertas: toda Persona con reemplaza_a_dni (ver
   reemplazos.py::procesar_reemplazo()) -- el "día que empezó la vacante" es
   el ÚLTIMO día con marcación real (entrada_real no nula) de quien se fue,
@@ -56,8 +60,7 @@ def _primer_real_por_dni(session, dnis):
 
 def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None,
                                  ciudad_filtro=None, canal_filtro=None):
-    """Devuelve (cubiertas, aun_vacantes), ambas listas de dicts ordenadas
-    de más reciente a más antigua."""
+    """Devuelve (cubiertas, aun_vacantes, activos_roster)."""
     session = get_session()
     try:
         cond_scope = condicion_scope(Persona, usuario_actual)
@@ -141,7 +144,7 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         abiertas = q_vacantes.all() + activos_reportados_vacante
         ultimo_real_abiertas = _ultimo_real_por_dni(session, {p.dni for p in abiertas})
 
-        supervisores_dni = {p.supervisor_dni for p in abiertas if p.supervisor_dni}
+        supervisores_dni = {p.supervisor_dni for p in abiertas + activos if p.supervisor_dni}
         nombres_supervisores = dict(
             session.query(Persona.dni, Persona.nombre_completo).filter(Persona.dni.in_(supervisores_dni)).all()
         ) if supervisores_dni else {}
@@ -160,6 +163,26 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
             })
         aun_vacantes.sort(key=lambda f: f["dias_vacante"] if f["dias_vacante"] is not None else -1, reverse=True)
 
-        return cubiertas, aun_vacantes
+        # Davor, 2026-10-29: "que aparezca todo el personal activo y si hay
+        # alguna vacante, que sí aparezca ese detalle con los días" -- el
+        # roster completo (todos los Activos que matchean los filtros), no
+        # solo las posiciones que tuvieron movimiento. Si la persona cubrió
+        # una vacante (reemplaza_a_dni), se le pega el mismo dato de
+        # "cubiertas" de arriba en vez de recalcularlo.
+        cubiertas_por_dni_nuevo = {f["dni_nuevo"]: f for f in cubiertas}
+        activos_roster = []
+        for p in activos:
+            info = cubiertas_por_dni_nuevo.get(p.dni)
+            activos_roster.append({
+                "dni": p.dni, "nombre": p.nombre_completo,
+                "rol": p.rol, "canal": p.canal, "region": p.region, "ciudad": p.ciudad, "zona": p.zona,
+                "supervisor": nombres_supervisores.get(p.supervisor_dni),
+                "fecha_ingreso": p.fecha_ingreso,
+                "reemplazo_de": info["nombre_vacante"] if info else None,
+                "dias_para_cubrir": info["dias_para_cubrir"] if info else None,
+            })
+        activos_roster.sort(key=lambda f: (f["nombre"] or "").upper())
+
+        return cubiertas, aun_vacantes, activos_roster
     finally:
         session.close()

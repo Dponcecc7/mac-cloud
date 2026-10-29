@@ -170,6 +170,55 @@
         <div class="num">{{ cubiertas|length }}</div>
         <div class="lbl">Posiciones cubiertas (histórico)</div>
       </div>
+      <div class="stat">
+        <div class="num">{{ activos_roster|length }}</div>
+        <div class="lbl">Personal activo</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Personal activo</h2>
+      {% if not activos_roster %}
+        <div class="empty">No hay personal activo con los filtros elegidos.</div>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Nombre</th>
+            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
+            <th>Fecha de ingreso</th><th>Cubrió una vacante</th>
+          </tr>
+          {% for f in activos_roster %}
+          <tr>
+            <td>{{ (f.nombre or '')|title }} <span style="color:var(--muted);">({{ f.dni }})</span></td>
+            <td>{{ (f.rol or '—')|title }}</td>
+            <td>{{ (f.canal or '—')|title }}</td>
+            <td>{{ (f.region or '—')|title }}</td>
+            <td>{{ (f.ciudad or '—')|title }}</td>
+            <td>{{ (f.zona or '—')|title }}</td>
+            <td>{{ (f.supervisor or '—')|title }}</td>
+            <td>{{ f.fecha_ingreso.strftime('%d/%m/%Y') if f.fecha_ingreso else '—' }}</td>
+            <td>
+              {% if f.reemplazo_de %}
+                Reemplazó a {{ f.reemplazo_de|title }} —
+                {% if f.dias_para_cubrir is none %}
+                  <span class="badge muted">Sin marcación aún</span>
+                {% elif f.dias_para_cubrir > 30 %}
+                  <span class="badge bad">{{ f.dias_para_cubrir }} días</span>
+                {% elif f.dias_para_cubrir > 10 %}
+                  <span class="badge warn">{{ f.dias_para_cubrir }} días</span>
+                {% else %}
+                  <span class="badge ok">{{ f.dias_para_cubrir }} días</span>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
     </div>
 
     <div class="panel">
