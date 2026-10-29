@@ -40,7 +40,9 @@ completo del archivo:
   actualiza SOLO su ESTADO a "INACTIVO" (el resto de sus datos queda como
   estaba) -- así el headcount no sigue mostrando como activo a alguien que
   ya se fue. Nunca toca una fila que YA era histórica/Inactiva en el Excel.
-- Alguien Activo en Postgres que NUNCA estuvo en el Excel (nuevo ingreso):
+- Alguien Activo O Inactivo en Postgres que NUNCA estuvo en el Excel (los
+  Inactivos se agregan con ESTADO "INACTIVO", pedido de Davor 2026-10-29;
+  las Vacantes no):
   fila nueva al final, con TIPO DE MERCADERISMO/Canal completados con la
   mejor traducción posible (best-effort, ver _tipo_mercaderismo_heuristico()/
   _canal_columna_heuristico()) y "Status" marcado "NUEVO -- revisar Canal"
@@ -378,8 +380,11 @@ def _procesar(zip_bytes, personas, canales_dia_por_dni):
             # estado == "Vacante": no es una persona real, se ignora.
             continue
 
-        if persona.estado != "Activo":
-            continue  # nuevo pero no Activo -- no hace falta agregarlo
+        if persona.estado not in ("Activo", "Inactivo"):
+            continue  # Vacante: no es una persona real
+        # Davor, 2026-10-29: los Inactivos que nunca estuvieron en el Excel
+        # (ej. 70309690) tambien se agregan, con ESTADO "INACTIVO" -- el
+        # headcount tiene que listar a todos los que estuvieron en la MAC.
 
         max_fila += 1
         valores = {
@@ -388,7 +393,8 @@ def _procesar(zip_bytes, personas, canales_dia_por_dni):
             "MERCADERISTA": persona.nombre_completo, "DNI": persona.dni,
             "TIPO DE MERCADERISMO": _tipo_mercaderismo_heuristico(persona, canales_dia_por_dni),
             "Mercado": persona.zona, "Canal": _canal_columna_heuristico(persona),
-            "ESTADO": "ACTIVO", "FECHA INGRESO": persona.fecha_ingreso,
+            "ESTADO": "ACTIVO" if persona.estado == "Activo" else "INACTIVO",
+            "FECHA INGRESO": persona.fecha_ingreso,
             "Status": "NUEVO -- revisar Canal",
         }
         filas_nuevas_xml.append(_construir_fila_nueva(max_fila, estilos_fila_nueva, valores))
