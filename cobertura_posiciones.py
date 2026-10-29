@@ -170,9 +170,15 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         # una vacante (reemplaza_a_dni), se le pega el mismo dato de
         # "cubiertas" de arriba en vez de recalcularlo.
         cubiertas_por_dni_nuevo = {f["dni_nuevo"]: f for f in cubiertas}
+        # Davor, 2026-10-29 (caso real Alexandra Sayuri Malasquez): el
+        # roster tiene que mostrar en la MISMA fila si esa persona, aunque
+        # siga "Activo" en el sistema, ya está reportada como vacante ahora
+        # -- no solo si alguna vez cubrió una vacante ajena.
+        vacante_por_dni = {f["dni"]: f for f in aun_vacantes}
         activos_roster = []
         for p in activos:
             info = cubiertas_por_dni_nuevo.get(p.dni)
+            vac = vacante_por_dni.get(p.dni)
             activos_roster.append({
                 "dni": p.dni, "nombre": p.nombre_completo,
                 "rol": p.rol, "canal": p.canal, "region": p.region, "ciudad": p.ciudad, "zona": p.zona,
@@ -180,6 +186,8 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
                 "fecha_ingreso": p.fecha_ingreso,
                 "reemplazo_de": info["nombre_vacante"] if info else None,
                 "dias_para_cubrir": info["dias_para_cubrir"] if info else None,
+                "vacante_ahora": vac is not None,
+                "dias_vacante_ahora": vac["dias_vacante"] if vac else None,
             })
         activos_roster.sort(key=lambda f: (f["nombre"] or "").upper())
 

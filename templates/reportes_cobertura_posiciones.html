@@ -52,7 +52,10 @@
 
     .table-wrap { overflow-x:auto; }
     table { border-collapse:separate; border-spacing:0; width:100%; font-size:12.5px; }
-    th { text-align:left; padding:8px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; }
+    th { text-align:left; padding:8px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); font-weight:700; border-bottom:2px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none; }
+    th:hover { color:var(--brand); }
+    th .flecha { opacity:.4; font-size:9px; margin-left:3px; }
+    th.num, td.num { text-align:right; }
     td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
     tr:last-child td { border-bottom:none; }
     td.num { text-align:right; font-variant-numeric:tabular-nums; }
@@ -182,12 +185,22 @@
         <div class="empty">No hay personal activo con los filtros elegidos.</div>
       {% else %}
       <div class="table-wrap">
-        <table>
+        <table id="tabla-activos">
+          <thead>
           <tr>
-            <th>Nombre</th>
-            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
-            <th>Fecha de ingreso</th><th>Cubrió una vacante</th>
+            <th data-tipo="texto">Nombre <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Rol <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Región <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Fecha de ingreso <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Estado ahora <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Cubrió una vacante <span class="flecha">↕</span></th>
           </tr>
+          </thead>
+          <tbody>
           {% for f in activos_roster %}
           <tr>
             <td>{{ (f.nombre or '')|title }} <span style="color:var(--muted);">({{ f.dni }})</span></td>
@@ -198,6 +211,15 @@
             <td>{{ (f.zona or '—')|title }}</td>
             <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.fecha_ingreso.strftime('%d/%m/%Y') if f.fecha_ingreso else '—' }}</td>
+            <td>
+              {% if f.vacante_ahora %}
+                <span class="badge bad" title="Reportado Vacante en Marcar asistencia -- falta procesar &quot;Dar de baja&quot;">
+                  Vacante{% if f.dias_vacante_ahora is not none %} ({{ f.dias_vacante_ahora }} días){% endif %}
+                </span>
+              {% else %}
+                <span class="badge ok">Activo</span>
+              {% endif %}
+            </td>
             <td>
               {% if f.reemplazo_de %}
                 Reemplazó a {{ f.reemplazo_de|title }} —
@@ -216,6 +238,7 @@
             </td>
           </tr>
           {% endfor %}
+          </tbody>
         </table>
       </div>
       {% endif %}
@@ -227,12 +250,22 @@
         <div class="empty">No hay posiciones vacantes con los filtros elegidos.</div>
       {% else %}
       <div class="table-wrap">
-        <table>
+        <table id="tabla-vacantes">
+          <thead>
           <tr>
-            <th>Posición (persona que faltó)</th>
-            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
-            <th>Último día que vino</th><th>Estado en el sistema</th><th>Días vacante</th>
+            <th data-tipo="texto">Posición (persona que faltó) <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Rol <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Región <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Último día que vino <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Estado en el sistema <span class="flecha">↕</span></th>
+            <th class="num" data-tipo="num">Días vacante <span class="flecha">↕</span></th>
           </tr>
+          </thead>
+          <tbody>
           {% for f in aun_vacantes %}
           <tr>
             <td>{{ (f.nombre or '')|title }} <span style="color:var(--muted);">({{ f.dni }})</span></td>
@@ -250,7 +283,7 @@
                 <span class="badge muted">Vacante</span>
               {% endif %}
             </td>
-            <td>
+            <td class="num">
               {% if f.dias_vacante is none %}
                 <span class="badge muted">Sin datos</span>
               {% elif f.dias_vacante > 30 %}
@@ -263,6 +296,7 @@
             </td>
           </tr>
           {% endfor %}
+          </tbody>
         </table>
       </div>
       {% endif %}
@@ -274,12 +308,23 @@
         <div class="empty">No hay reemplazos registrados con los filtros elegidos.</div>
       {% else %}
       <div class="table-wrap">
-        <table>
+        <table id="tabla-cubiertas">
+          <thead>
           <tr>
-            <th>Salió</th><th>Entró</th>
-            <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
-            <th>Último día (saliente)</th><th>Primer día (entrante)</th><th>Días para cubrir</th>
+            <th data-tipo="texto">Salió <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Entró <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Rol <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Canal <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Región <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Zona <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Último día (saliente) <span class="flecha">↕</span></th>
+            <th data-tipo="texto">Primer día (entrante) <span class="flecha">↕</span></th>
+            <th class="num" data-tipo="num">Días para cubrir <span class="flecha">↕</span></th>
           </tr>
+          </thead>
+          <tbody>
           {% for f in cubiertas %}
           <tr>
             <td>{{ (f.nombre_vacante or '')|title }} <span style="color:var(--muted);">({{ f.dni_vacante }})</span></td>
@@ -292,7 +337,7 @@
             <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else '—' }}</td>
             <td>{{ f.primer_dia_real.strftime('%d/%m/%Y') if f.primer_dia_real else '—' }}</td>
-            <td>
+            <td class="num">
               {% if f.dias_para_cubrir is none %}
                 <span class="badge muted">Sin marcación aún</span>
               {% elif f.dias_para_cubrir > 30 %}
@@ -305,10 +350,43 @@
             </td>
           </tr>
           {% endfor %}
+          </tbody>
         </table>
       </div>
       {% endif %}
     </div>
   </div>
+
+  <script>
+    // Ordenar por encabezado (mismo patrón que reportes_horas.html) en las 3 tablas de esta página.
+    ['tabla-activos', 'tabla-vacantes', 'tabla-cubiertas'].forEach(function (idTabla) {
+      var tabla = document.getElementById(idTabla);
+      if (!tabla) return;
+      var ths = tabla.querySelectorAll('th');
+      var ordenActual = { col: null, asc: true };
+      ths.forEach(function (th, idx) {
+        th.addEventListener('click', function () {
+          var tbody = tabla.querySelector('tbody');
+          var filas = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+          var esNum = th.dataset.tipo === 'num';
+          var asc = ordenActual.col === idx ? !ordenActual.asc : true;
+          ordenActual = { col: idx, asc: asc };
+          filas.sort(function (a, b) {
+            var va = a.children[idx].innerText.trim();
+            var vb = b.children[idx].innerText.trim();
+            if (esNum) {
+              va = parseFloat(va.replace(/[^\d.-]/g, '')); if (isNaN(va)) va = -Infinity;
+              vb = parseFloat(vb.replace(/[^\d.-]/g, '')); if (isNaN(vb)) vb = -Infinity;
+              return asc ? va - vb : vb - va;
+            }
+            return asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');
+          });
+          filas.forEach(function (f) { tbody.appendChild(f); });
+          ths.forEach(function (t) { t.querySelector('.flecha').textContent = '↕'; });
+          th.querySelector('.flecha').textContent = asc ? '▲' : '▼';
+        });
+      });
+    });
+  </script>
 </body>
 </html>
