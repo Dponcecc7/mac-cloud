@@ -696,6 +696,78 @@ def cobertura_posiciones():
     )
 
 
+@bp.get("/cobertura-posiciones/exportar")
+@requiere_pagina("reportes_cobertura_posiciones")
+def cobertura_posiciones_exportar():
+    filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
+    cubiertas, aun_vacantes, activos_roster = tiempo_cobertura_posiciones(
+        current_user, rol_filtro=filtro_args["rol"], region_filtro=filtro_args["region"],
+        supervisor_filtro=filtro_args["supervisor"], ciudad_filtro=filtro_args["ciudad"],
+        canal_filtro=filtro_args["canal"],
+    )
+
+    def _fecha(d):
+        return d.strftime("%d/%m/%Y") if d else ""
+
+    wb = openpyxl.Workbook()
+
+    ws = wb.active
+    ws.title = "Personal activo"
+    ws.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad", "Zona", "Supervisor",
+               "Fecha de ingreso", "Estado ahora", "Días", "Reemplazó a", "Días para cubrir"])
+    for celda in ws[1]:
+        celda.font = Font(bold=True)
+    for f in activos_roster:
+        if f["vacante_ahora"]:
+            estado, dias_estado = "Vacante", f["dias_vacante_ahora"]
+        elif f["en_descanso_medico"]:
+            estado, dias_estado = "Descanso médico", f["dias_descanso_medico"]
+        else:
+            estado, dias_estado = "Activo", ""
+        ws.append(fila_segura([
+            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            _fecha(f["fecha_ingreso"]), estado, dias_estado if dias_estado != "" else "",
+            f["reemplazo_de"] or "", f["dias_para_cubrir"] if f["dias_para_cubrir"] is not None else "",
+        ]))
+
+    ws2 = wb.create_sheet("Vacantes abiertas")
+    ws2.append(["DNI", "Nombre", "Rol", "Canal", "Región", "Ciudad", "Zona", "Supervisor",
+                "Último día que vino", "Estado en el sistema", "Días vacante"])
+    for celda in ws2[1]:
+        celda.font = Font(bold=True)
+    for f in aun_vacantes:
+        ws2.append(fila_segura([
+            f["dni"], f["nombre"], f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            _fecha(f["ultimo_dia_real"]), "Falta procesar baja" if f["pendiente_dar_de_baja"] else "Vacante",
+            f["dias_vacante"] if f["dias_vacante"] is not None else "",
+        ]))
+
+    ws3 = wb.create_sheet("Posiciones cubiertas")
+    ws3.append(["DNI saliente", "Salió", "DNI entrante", "Entró", "Rol", "Canal", "Región", "Ciudad", "Zona",
+                "Supervisor", "Último día (saliente)", "Primer día (entrante)", "Días para cubrir"])
+    for celda in ws3[1]:
+        celda.font = Font(bold=True)
+    for f in cubiertas:
+        ws3.append(fila_segura([
+            f["dni_vacante"], f["nombre_vacante"], f["dni_nuevo"], f["nombre_nuevo"],
+            f["rol"], f["canal"], f["region"], f["ciudad"], f["zona"], f["supervisor"],
+            _fecha(f["ultimo_dia_real"]), _fecha(f["primer_dia_real"]),
+            f["dias_para_cubrir"] if f["dias_para_cubrir"] is not None else "",
+        ]))
+
+    for hoja in (ws, ws2, ws3):
+        for i in range(1, hoja.max_column + 1):
+            hoja.column_dimensions[hoja.cell(row=1, column=i).column_letter].width = 20
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, as_attachment=True, download_name=f"Cubrir_Posiciones_{dt.date.today().isoformat()}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @bp.get("/cobertura/exportar")
 @requiere_pagina("reportes_cobertura")
 def cobertura_exportar():

@@ -38,8 +38,10 @@
 
     .filtros-admin { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
     .filtros-admin select { font:inherit; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:170px; }
+    .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
     .btn { cursor:pointer; font-size:13px; font-weight:700; padding:9px 18px; border-radius:8px; border:none; text-decoration:none; display:inline-block; }
     .btn.primary { background:var(--brand); color:#fff; }
+    .btn.ghost { background:var(--card); border:1px solid var(--line); color:var(--ink); }
 
     .resumen { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
     .stat { background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(35,25,10,.06); min-width:180px; }
@@ -76,6 +78,8 @@
       .nav-pages a { padding:5px 9px; }
       nav.tabs { gap:6px; margin-bottom:14px; }
       nav.tabs a { padding:8px 12px; font-size:12.5px; }
+      .top-actions { flex-direction:column; align-items:stretch; gap:8px; }
+      .top-actions .btn { width:100%; min-height:44px; text-align:center; }
       .filtros-admin { flex-direction:column; align-items:stretch; gap:8px; }
       .filtros-admin select { max-width:none; width:100%; min-height:44px; font-size:15px; }
       .filtros-admin .btn { width:100%; min-height:44px; text-align:center; }
@@ -124,6 +128,10 @@
       {% if tiene_acceso(usuario, 'reportes_planning') %}<a href="{{ url_for('reportes.planning') }}">Cobertura vs Planning</a>{% endif %}
       {% if tiene_acceso(usuario, 'reportes_cobertura_posiciones') %}<a href="{{ url_for('reportes.cobertura_posiciones') }}" class="active">Cubrir posiciones</a>{% endif %}
     </nav>
+
+    <div class="top-actions">
+      <a class="btn ghost" href="{{ url_for('reportes.cobertura_posiciones_exportar', **filtro_args) }}">↓ Exportar Excel</a>
+    </div>
 
     {% if roles_disponibles %}
     <div class="filtros-admin">
