@@ -9,16 +9,20 @@ Tres listas:
   con los días") -- cada Activo que matchea los filtros, con el dato de
   "cubiertas" pegado si esa persona reemplazó una vacante.
 - Posiciones YA cubiertas: toda Persona con reemplaza_a_dni (ver
-  reemplazos.py::procesar_reemplazo()) -- el "día que empezó la vacante" es
-  el ÚLTIMO día con marcación real (entrada_real no nula) de quien se fue,
-  y el "día que se cubrió" es el PRIMER día con marcación real de quien
-  entró -- a propósito NO se usa fecha_baja/fecha_ingreso (administrativas,
-  pueden quedar atrasadas respecto al día real) sino Clasificacion Diaria
-  directo, mismo criterio que ya usa el resto de Reportes para "cuándo
-  pasó de verdad".
+  reemplazos.py::procesar_reemplazo()) -- el "día que empezó la vacante"
+  (para contar "días para cubrir") es el día siguiente al ÚLTIMO día con
+  marcación real (entrada_real no nula) de quien se fue, SALVO que el
+  analista ya haya marcado ese día siguiente como Vacante -- en ese caso
+  cuenta desde ahí mismo, sin el día de gracia (ver
+  _inicio_vacante_por_dni(), Davor 2026-10-29: "consider 1 día más como
+  Falta y ya desde ahí le pones como Vacante, pero si el analista desde el
+  primer día puso vacante, consideralo desde ahí"). El "día que se cubrió"
+  es el PRIMER día con marcación real de quien entró -- a propósito NO se
+  usa fecha_baja/fecha_ingreso (administrativas, pueden quedar atrasadas
+  respecto al día real) sino Clasificacion Diaria directo.
 - Posiciones TODAVÍA vacantes (Persona.estado == "Vacante", igual que la
-  vista `vacantes` de dimension_models.py) -- días contados hasta HOY,
-  sin fecha de cierre todavía.
+  vista `vacantes` de dimension_models.py) -- mismo criterio de inicio de
+  arriba, días contados hasta HOY, sin fecha de cierre todavía.
 
 Si la vacante o el reemplazo nunca tuvieron ninguna marcación real
 (ej. reemplazo recién ingresado, aún no empieza), esa fila queda con
@@ -59,6 +63,35 @@ def _primer_real_por_dni(session, dnis):
     return dict(filas)
 
 
+def _inicio_vacante_por_dni(session, ultimo_real):
+    """Davor, 2026-10-29: "la última vez que tiene como asistencia, consider
+    1 día más como Falta y ya desde ahí le pones como Vacante, pero si el
+    analista desde el primer día puso vacante, consideralo desde ahí" -- el
+    día siguiente al último real cuenta como gracia (podría ser cualquier
+    motivo puntual), la vacante arranca recién al segundo día sin marcación,
+    EXCEPTO si el analista ya marcó ese primer día como Vacante -- ahí se
+    cuenta desde ese mismo día, sin gracia. `ultimo_real`: {dni: fecha}."""
+    if not ultimo_real:
+        return {}
+    siguiente_por_dni = {dni: fecha + dt.timedelta(days=1) for dni, fecha in ultimo_real.items()}
+    filas = (
+        session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha, ClasificacionDiaria.estado)
+        .filter(ClasificacionDiaria.dni.in_(list(siguiente_por_dni)))
+        .all()
+    )
+    estado_dia_siguiente = {
+        dni: estado for dni, fecha, estado in filas if siguiente_por_dni.get(dni) == fecha
+    }
+    inicio = {}
+    for dni, fecha_siguiente in siguiente_por_dni.items():
+        estado = estado_dia_siguiente.get(dni)
+        if estado and estado.upper().startswith("VACANTE"):
+            inicio[dni] = fecha_siguiente
+        else:
+            inicio[dni] = fecha_siguiente + dt.timedelta(days=1)
+    return inicio
+
+
 def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=None, supervisor_filtro=None,
                                  ciudad_filtro=None, canal_filtro=None):
     """Devuelve (cubiertas, aun_vacantes, activos_roster)."""
@@ -84,18 +117,23 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
 
         ultimo_real = _ultimo_real_por_dni(session, {vacante.dni for _, vacante, _ in pares})
         primer_real = _primer_real_por_dni(session, {nuevo.dni for nuevo, _, _ in pares})
+        inicio_vacante = _inicio_vacante_por_dni(session, ultimo_real)
 
         cubiertas = []
         for nuevo, vacante, nombre_supervisor in pares:
             ult = ultimo_real.get(vacante.dni)
             prim = primer_real.get(nuevo.dni)
+            inicio = inicio_vacante.get(vacante.dni)
             cubiertas.append({
                 "dni_vacante": vacante.dni, "nombre_vacante": vacante.nombre_completo,
                 "dni_nuevo": nuevo.dni, "nombre_nuevo": nuevo.nombre_completo,
                 "rol": nuevo.rol, "canal": nuevo.canal, "region": nuevo.region, "ciudad": nuevo.ciudad,
                 "zona": nuevo.zona, "supervisor": nombre_supervisor,
                 "ultimo_dia_real": ult, "primer_dia_real": prim,
-                "dias_para_cubrir": (prim - ult).days if ult and prim else None,
+                # max(0, ...) -- si el reemplazo arrancó DENTRO del día de
+                # gracia (antes de que la vacante "empezara" oficialmente),
+                # no tiene sentido un número negativo: se cubrió al toque.
+                "dias_para_cubrir": max(0, (prim - inicio).days) if inicio and prim else None,
             })
         cubiertas.sort(key=lambda f: f["primer_dia_real"] or dt.date.min, reverse=True)
 
@@ -158,6 +196,7 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         )
         abiertas = q_vacantes.all() + activos_reportados_vacante
         ultimo_real_abiertas = _ultimo_real_por_dni(session, {p.dni for p in abiertas})
+        inicio_vacante_abiertas = _inicio_vacante_por_dni(session, ultimo_real_abiertas)
 
         supervisores_dni = {p.supervisor_dni for p in abiertas + activos if p.supervisor_dni}
         nombres_supervisores = dict(
@@ -168,12 +207,14 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
         aun_vacantes = []
         for p in abiertas:
             ult = ultimo_real_abiertas.get(p.dni)
+            inicio = inicio_vacante_abiertas.get(p.dni)
+            dias = max(0, (hoy - inicio).days) if inicio else None
             aun_vacantes.append({
                 "dni": p.dni, "nombre": p.nombre_completo,
                 "rol": p.rol, "canal": p.canal, "region": p.region, "ciudad": p.ciudad, "zona": p.zona,
                 "supervisor": nombres_supervisores.get(p.supervisor_dni),
                 "ultimo_dia_real": ult,
-                "dias_vacante": (hoy - ult).days if ult else None,
+                "dias_vacante": dias,
                 "pendiente_dar_de_baja": p.dni in estados_ultima_fecha,
             })
         aun_vacantes.sort(key=lambda f: f["dias_vacante"] if f["dias_vacante"] is not None else -1, reverse=True)
