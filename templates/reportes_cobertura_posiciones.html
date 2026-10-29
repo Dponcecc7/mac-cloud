@@ -182,7 +182,7 @@
           <tr>
             <th>Posición (persona que faltó)</th>
             <th>Rol</th><th>Canal</th><th>Región</th><th>Ciudad</th><th>Zona</th><th>Supervisor</th>
-            <th>Último día que vino</th><th>Días vacante</th>
+            <th>Último día que vino</th><th>Estado en el sistema</th><th>Días vacante</th>
           </tr>
           {% for f in aun_vacantes %}
           <tr>
@@ -194,6 +194,13 @@
             <td>{{ (f.zona or '—')|title }}</td>
             <td>{{ (f.supervisor or '—')|title }}</td>
             <td>{{ f.ultimo_dia_real.strftime('%d/%m/%Y') if f.ultimo_dia_real else 'Sin marcación registrada' }}</td>
+            <td>
+              {% if f.pendiente_dar_de_baja %}
+                <span class="badge warn" title="El supervisor ya la marcó Vacante en Marcar asistencia, pero falta procesar &quot;Dar de baja&quot;">Falta procesar baja</span>
+              {% else %}
+                <span class="badge muted">Vacante</span>
+              {% endif %}
+            </td>
             <td>
               {% if f.dias_vacante is none %}
                 <span class="badge muted">Sin datos</span>

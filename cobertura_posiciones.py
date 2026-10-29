@@ -95,6 +95,42 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
             })
         cubiertas.sort(key=lambda f: f["primer_dia_real"] or dt.date.min, reverse=True)
 
+        # Davor, 2026-10-29 (caso real Alexandra Sayuri Malasquez): no basta
+        # Persona.estado == "Vacante" -- eso es el paso ADMINISTRATIVO ("Dar
+        # de baja" procesado), que puede quedar atrasado varios días
+        # respecto a lo que el supervisor ya reportó día a día en Marcar
+        # asistencia. Si el ÚLTIMO día clasificado de un Activo ya salió
+        # "VACANTE..." (botón Vacante de Marcar asistencia, sin marcación
+        # real), esa posición YA está operativamente vacante aunque nadie
+        # haya tocado "Dar de baja" todavía -- se suma a la lista con el
+        # mismo criterio. Validado: solo 2 casos así en todo el sistema al
+        # momento de escribir esto, no un falso-positivo masivo.
+        q_activos = session.query(Persona).filter(Persona.estado == "Activo")
+        if cond_scope is not None:
+            q_activos = q_activos.filter(cond_scope)
+        q_activos = aplicar_filtros_extra(
+            q_activos, Persona, rol_filtro=rol_filtro, region_filtro=region_filtro,
+            supervisor_filtro=supervisor_filtro, ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
+        )
+        activos = q_activos.all()
+        ultima_fecha_clasif = dict(
+            session.query(ClasificacionDiaria.dni, func.max(ClasificacionDiaria.fecha))
+            .filter(ClasificacionDiaria.dni.in_([p.dni for p in activos]))
+            .group_by(ClasificacionDiaria.dni).all()
+        ) if activos else {}
+        pares_fecha_dni = [(dni, fecha) for dni, fecha in ultima_fecha_clasif.items()]
+        estados_ultima_fecha = {}
+        if pares_fecha_dni:
+            filas_estado = (
+                session.query(ClasificacionDiaria.dni, ClasificacionDiaria.fecha, ClasificacionDiaria.estado)
+                .filter(ClasificacionDiaria.dni.in_([d for d, _ in pares_fecha_dni]))
+                .all()
+            )
+            for dni, fecha, estado in filas_estado:
+                if ultima_fecha_clasif.get(dni) == fecha and estado.upper().startswith("VACANTE"):
+                    estados_ultima_fecha[dni] = estado
+        activos_reportados_vacante = [p for p in activos if p.dni in estados_ultima_fecha]
+
         q_vacantes = session.query(Persona).filter(Persona.estado == "Vacante")
         if cond_scope is not None:
             q_vacantes = q_vacantes.filter(cond_scope)
@@ -102,7 +138,7 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
             q_vacantes, Persona, rol_filtro=rol_filtro, region_filtro=region_filtro,
             supervisor_filtro=supervisor_filtro, ciudad_filtro=ciudad_filtro, canal_filtro=canal_filtro,
         )
-        abiertas = q_vacantes.all()
+        abiertas = q_vacantes.all() + activos_reportados_vacante
         ultimo_real_abiertas = _ultimo_real_por_dni(session, {p.dni for p in abiertas})
 
         supervisores_dni = {p.supervisor_dni for p in abiertas if p.supervisor_dni}
@@ -120,6 +156,7 @@ def tiempo_cobertura_posiciones(usuario_actual, rol_filtro=None, region_filtro=N
                 "supervisor": nombres_supervisores.get(p.supervisor_dni),
                 "ultimo_dia_real": ult,
                 "dias_vacante": (hoy - ult).days if ult else None,
+                "pendiente_dar_de_baja": p.dni in estados_ultima_fecha,
             })
         aun_vacantes.sort(key=lambda f: f["dias_vacante"] if f["dias_vacante"] is not None else -1, reverse=True)
 
