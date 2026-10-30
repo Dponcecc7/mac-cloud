@@ -119,6 +119,21 @@ CREATE TABLE visitas (
 	CONSTRAINT uq_visita_dedup UNIQUE (dni, punto_venta_id, fecha_inicio, hora_inicio)
 );
 
+CREATE TABLE ejecucion_fotografica (
+	id SERIAL NOT NULL,
+	visita_id VARCHAR(20) NOT NULL,
+	punto_venta_id VARCHAR(50) NOT NULL,
+	fecha DATE NOT NULL,
+	categoria VARCHAR(20) NOT NULL,
+	con_ejecucion BOOLEAN NOT NULL,
+	dni_usuario VARCHAR(15),
+	nombre_usuario VARCHAR(150),
+	actividad_id INTEGER,
+	fecha_sync TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+	PRIMARY KEY (id),
+	CONSTRAINT uq_ejecucion_fotografica_visita_categoria UNIQUE (visita_id, categoria)
+);
+
 CREATE TABLE clasificacion_diaria (
 	id SERIAL NOT NULL, 
 	dni VARCHAR(15) NOT NULL, 

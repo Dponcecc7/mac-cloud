@@ -426,6 +426,45 @@ class PlanningPdvDia(Base):
     )
 
 
+class EjecucionFotografica(Base):
+    """Cruce con fotos antes/después de dim_lf_general_fotografico_antes_
+    despues (Athena, cliente_id=295) -- Davor, 2026-10-30: "vamos a cruzar
+    con otras 2 tablas del ETL... considerar PDVs con ejecución: relevos
+    que el mercaderista relevó tanto foto". Dos grupos de actividad_id
+    (7713) y (7817, 7880) -- separados porque traen PDVs distintos, pero
+    se combinan acá en una sola tabla.
+
+    Una fila por (visita_id, categoria) -- un mismo visita_id puede tener
+    ejecución de Cuidado Femenino Y de Cuidado del Adulto a la vez (no son
+    excluyentes). `con_ejecucion` ya viene resuelto (True si existe foto
+    "Antes" Y foto "Despues" -- cualquier variante numerada de "Despues"
+    cuenta, ej. "Despues Exhibición Cuidado Femenino 2/3") para no repetir
+    esa lógica en cada consumidor. "PDV con ejecución" (la métrica final
+    que pidió Davor) = ese punto_venta_id tiene AL MENOS una fila con
+    con_ejecucion=True, sin importar la categoría -- se resuelve con un
+    EXISTS/group by en el código que lee esta tabla, no acá.
+
+    OJO con los acentos -- confirmado contra Athena, no son parejos entre
+    categorías: "Despues Exhibición Cuidado Femenino" (sin tilde en
+    "Despues") pero "Después Exhibición Cuidado del Adulto" (con tilde)."""
+    __tablename__ = "ejecucion_fotografica"
+
+    id = Column(Integer, primary_key=True)
+    visita_id = Column(String(20), nullable=False)
+    punto_venta_id = Column(String(50), nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)
+    categoria = Column(String(20), nullable=False)
+    con_ejecucion = Column(Boolean, nullable=False)
+    dni_usuario = Column(String(15))
+    nombre_usuario = Column(String(150))
+    actividad_id = Column(Integer)
+    fecha_sync = Column(TIMESTAMP, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("visita_id", "categoria", name="uq_ejecucion_fotografica_visita_categoria"),
+    )
+
+
 VACANTES_VIEW_SQL = """
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,

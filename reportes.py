@@ -31,6 +31,7 @@ from permisos import requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, personal_activo,
+    pdvs_con_ejecucion_fotografica,
     planning_del_periodo, pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles,
     reasignar_mercaderista, reasignar_pdv, resumen_planning, resumen_por_mercaderista, valores_filtrables,
     visitas_tradicional,
@@ -842,6 +843,16 @@ def planning():
     v = visitas_tradicional(desde, hasta, current_user)
 
     resumen = resumen_planning(planning_periodo, v)
+    # Davor, 2026-10-30: cruce con fotos antes/despues (dim_lf_general_
+    # fotografico_antes_despues, Athena) -- "PDV con ejecución" es un cruce
+    # DISTINTO al de arriba (visitó vs ejecutó el relevo con foto de
+    # respaldo), por eso es un KPI aparte, no se mezcla con pct_cumplimiento.
+    co_lis_planning = {p.co_li for p in planning_periodo}
+    pdvs_ejecutados = pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta)
+    resumen["pdvs_con_ejecucion"] = len(pdvs_ejecutados)
+    resumen["pct_ejecucion"] = (
+        round(len(pdvs_ejecutados) / len(co_lis_planning) * 100, 1) if co_lis_planning else None
+    )
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)

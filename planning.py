@@ -17,7 +17,7 @@ import pandas as pd
 from sqlalchemy import insert
 
 from cobertura import _cargar_visitas
-from dimension_models import PlanningPdv, PlanningPdvDia, Persona, get_session
+from dimension_models import EjecucionFotografica, PlanningPdv, PlanningPdvDia, Persona, get_session
 from parseo_headcount import validar_columnas
 from reemplazos import resolver_cadena_vigente
 
@@ -501,6 +501,43 @@ def resumen_planning(planning, v):
         "pdvs_visitados": n_visitados,
         "pct_cumplimiento": pct_cumplimiento,
     }
+
+
+def pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta):
+    """Davor, 2026-10-30: cruce con dim_lf_general_fotografico_antes_despues
+    (Athena, ya sincronizado a Postgres por pipeline/sync_fotografico.py) --
+    "considerar PDVs con ejecución: relevos que el mercaderista relevó tanto
+    foto". "PDV con ejecución" = tiene AL MENOS una fila con_ejecucion=True
+    en el período, sin importar la categoría (Femenino/Adulto) -- "si releva
+    en cualquiera de los cuidados se considera PDV con ejecución" (Davor).
+
+    `co_lis_planning`: set de punto_venta_id del Planning actual (ya
+    filtrado por región/ciudad/supervisor/mercado en pantalla) -- acota la
+    consulta a esos PDVs nomás, igual que ya hace resumen_planning() con
+    las visitas.
+
+    "Comenzemos cruzando solo el mes de Octubre 2026 hacia adelante" --
+    por eso no hay guard de "actividad sin datos aún" ni fallback: si el
+    período pedido es anterior a cuando arrancó la sincronización, esto
+    simplemente devuelve un set vacío (0 PDVs con ejecución), no un error."""
+    if not co_lis_planning:
+        return set()
+    session = get_session()
+    try:
+        filas = (
+            session.query(EjecucionFotografica.punto_venta_id)
+            .filter(
+                EjecucionFotografica.con_ejecucion.is_(True),
+                EjecucionFotografica.fecha >= desde,
+                EjecucionFotografica.fecha <= hasta,
+                EjecucionFotografica.punto_venta_id.in_(co_lis_planning),
+            )
+            .distinct()
+            .all()
+        )
+        return {p for (p,) in filas}
+    finally:
+        session.close()
 
 
 def pdvs_pendientes(planning, v):

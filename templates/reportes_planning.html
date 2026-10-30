@@ -341,7 +341,10 @@
         <div class="kpi"><div class="valor">{{ resumen.pdvs_planning }}</div><div class="label">PDVs en Planning</div></div>
         <div class="kpi"><div class="valor">{{ resumen.pdvs_visitados }}</div><div class="label">PDVs visitados</div></div>
         <div class="kpi"><div class="valor">{{ (resumen.pct_cumplimiento ~ '%') if resumen.pct_cumplimiento is not none else '—' }}</div><div class="label">% Cumplimiento</div></div>
+        <div class="kpi"><div class="valor">{{ resumen.pdvs_con_ejecucion }}</div><div class="label">PDVs con ejecución</div></div>
+        <div class="kpi"><div class="valor">{{ (resumen.pct_ejecucion ~ '%') if resumen.pct_ejecucion is not none else '—' }}</div><div class="label">% Ejecución</div></div>
       </div>
+      <p class="note">"PDVs con ejecución" = tienen foto Antes Y Después (Cuidado Femenino o Cuidado del Adulto) registrada en el relevo -- distinto de "% Cumplimiento" (ese solo mide si hubo visita, no si se ejecutó el relevo con respaldo fotográfico).</p>
       {% if usuario.rol in ("analista", "admin") %}
       <form method="post" action="{{ url_for('reportes.planning_aplicar_reemplazos', mes=periodo_str) }}" style="margin-top:14px;" onsubmit="return confirm('¿Actualizar en la base a quien reemplazó a cada mercaderista dado de baja, para {{ periodo_str }}? Ya se muestra así en pantalla -- esto lo deja escrito de una vez en el Planning guardado.');" title="Ya se muestra en pantalla y al exportar a quien reemplazó a cada mercaderista dado de baja -- este botón además lo deja guardado en el Planning de este mes. Se puede apretar las veces que haga falta, no duplica ni rompe nada si ya estaba al día.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -35,8 +35,14 @@ PASOS = [
     # misma corrida ya están sincronizadas y son inmutables, ver ese
     # archivo), y motor_clasificacion.py lee la tabla `visitas` directo
     # (pipeline/visitas_motor.py), no un archivo local.
-    ("1/2 Trayendo visitas desde Athena y sincronizando a Postgres", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
-    ("2/2 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
+    ("1/3 Trayendo visitas desde Athena y sincronizando a Postgres", ["traer_visitas_historico.py"] + (sys.argv[1:2] if len(sys.argv) > 1 else [])),
+    ("2/3 Corriendo motor de clasificación (nube)", ["motor_clasificacion.py"]),
+    # Davor, 2026-10-30: cruce con dim_lf_general_fotografico_antes_despues
+    # (Athena) para "PDVs con ejecución" en Cobertura vs Planning -- mismo
+    # patrón que Visitas (upsert directo a Postgres, ventana móvil, ver
+    # sync_fotografico.py). No depende de motor_clasificacion.py/Visitas,
+    # así que su orden acá no importa -- se agrupa al final por prolijidad.
+    ("3/3 Sincronizando ejecución fotográfica (relevos antes/despues)", ["sync_fotografico.py"]),
     # Pasos retirados (Davor, 2026-10-27): resumen_por_persona.py / motor_
     # compensacion_indicador.py / alerta_visita_larga.py / export_dashboard_
     # data.py generaban Excel que NADIE leía en la nube -- ninguno sube a

@@ -277,3 +277,47 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
         "motivo_visita": df["motivo_visita"],
     })
     return out
+
+
+# Davor, 2026-10-30: "vamos a cruzar con otras 2 tablas del ETL... considerar
+# PDVs con ejecución: relevos que el mercaderista relevó tanto foto". Dos
+# grupos de actividad_id (separados porque traen PDVs distintos, pero se
+# combinan en una sola consulta -- el filtro por etiqueta ya los distingue).
+# OJO con los acentos, confirmado contra Athena: "Despues Exhibición Cuidado
+# Femenino" (SIN tilde en "Despues") pero "Después Exhibición Cuidado del
+# Adulto" (CON tilde) -- no son parejos entre categorías. El "%%" al final de
+# cada LIKE cubre las variantes numeradas reales ("Despues Exhibición
+# Cuidado Femenino 2"/"3", vistas en producción) sin tener que listarlas
+# una por una ni arriesgarse a perder una variante futura.
+ACTIVIDADES_FOTOGRAFICO = [7713, 7817, 7880]
+
+
+def traer_fotografico(desde):
+    """`desde`: fecha ISO "YYYY-MM-DD" -- comparación como texto (la
+    columna `fecha` de esta tabla es varchar "YYYY-MM-DD", no date; el
+    formato ISO ordena igual como texto que como fecha, así que ">" simple
+    alcanza, mismo criterio que ya validó Davor en sus consultas de
+    referencia).
+
+    Devuelve una fila por (visita_id, componente_etiqueta) -- SIN pivotar
+    todavía (eso lo hace sync_fotografico.py, que necesita agrupar por
+    categoría)."""
+    conn = conectar()
+    cursor = conn.cursor()
+    actividades_sql = ",".join(str(a) for a in ACTIVIDADES_FOTOGRAFICO)
+    query = f"""
+        SELECT visita_id, punto_venta_id, dni_usuario, nombre_usuario, fecha,
+               actividad_id, componente_etiqueta, componente_valor
+        FROM livetradebi.dim_lf_general_fotografico_antes_despues
+        WHERE cliente_id = {CLIENTE_ID}
+          AND actividad_id IN ({actividades_sql})
+          AND fecha > '{desde}'
+          AND (componente_etiqueta LIKE 'Antes Exhibición Cuidado Femenino%'
+               OR componente_etiqueta LIKE 'Despues Exhibición Cuidado Femenino%'
+               OR componente_etiqueta LIKE 'Antes Exhibición Cuidado del Adulto%'
+               OR componente_etiqueta LIKE 'Después Exhibición Cuidado del Adulto%')
+    """
+    print("Consultando Athena (fotográfico antes/despues)...")
+    df = cursor.execute(query).as_pandas()
+    print(f"Filas crudas: {len(df)}")
+    return df
