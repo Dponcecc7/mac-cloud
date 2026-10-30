@@ -155,6 +155,15 @@
     th .th-resizer { position:absolute; right:0; top:0; height:100%; width:7px; cursor:col-resize; user-select:none; touch-action:none; }
     th .th-resizer:hover, th .th-resizer.resizing { background:var(--brand); opacity:.4; }
     tr:last-child td { border-bottom:none; }
+    /* "Cumplimiento de ruta del día" (Davor, 2026-10-30: "comprimir esta
+       tabla, como estan las otras") -- mismo criterio que
+       reportes_cobertura_posiciones.html: table-layout:fixed + sin nowrap
+       + word-break para que entren las 9 columnas sin scroll horizontal,
+       en vez de depender de que el usuario arrastre cada columna a mano
+       con el redimensionador de más abajo (que sigue funcionando igual,
+       solo que ahora arranca de un ancho ya compacto). */
+    #tabla-cumplimiento-dia { table-layout:fixed; font-size:11.5px; }
+    #tabla-cumplimiento-dia th, #tabla-cumplimiento-dia td { white-space:normal; word-break:break-word; }
     th.th-ordenable { cursor:pointer; user-select:none; }
     th.th-ordenable:hover { color:var(--brand); }
     .flecha-orden { display:inline-block; width:10px; }
