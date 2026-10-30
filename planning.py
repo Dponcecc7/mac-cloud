@@ -640,7 +640,7 @@ def _mercado_sin_palabra(mercado):
     return limpio.title() if limpio else None
 
 
-def resumen_por_mercaderista(planning, pendientes):
+def resumen_por_mercaderista(planning, pendientes, desde=None, hasta=None):
     """Por mercaderista: cuántos PDVs tiene asignados en el Planning del
     período (sumando TODAS sus ciudades en una sola fila), cuántos de esos
     le quedan pendientes de visitar, y su DNI -- Davor, 2026-09-22:
@@ -688,7 +688,19 @@ def resumen_por_mercaderista(planning, pendientes):
     `dni_variantes` para avisar la inconsistencia en vez de esconderla.
 
     Reusa `pendientes` (ya calculado por pdvs_pendientes() en la misma
-    request) en vez de volver a cruzar contra las visitas."""
+    request) en vez de volver a cruzar contra las visitas.
+
+    `pdvs_con_ejecucion`/`pct_ejecucion` (Davor, 2026-10-30: "agrega el
+    indicador %ejecución y PDVs con ejecución" en esta tabla) -- mismo
+    cruce que el KPI general de la página (pdvs_con_ejecucion_fotografica,
+    ver reportes.py::planning()), pero partido por mercaderista. Una sola
+    consulta a Postgres con TODOS los co_li de TODOS los grupos a la vez
+    (no una por mercaderista) y después se intersecta en memoria contra el
+    set de co_li de cada grupo -- mismo motivo que ya evitó el N+1 de
+    pdvs_pendientes()/pdvs_detalle() en otras funciones de este archivo.
+    Si no se pasa `desde`/`hasta` (nadie los pasaba antes de este cambio),
+    queda en 0/None en vez de fallar, para no romper a quien llame a esta
+    función sin el rango."""
     uf = _UnionFind()
     for p in planning:
         nombre_norm = (p.mercaderista_nombre or "").strip().upper()
@@ -714,7 +726,7 @@ def resumen_por_mercaderista(planning, pendientes):
         fila = conteo.setdefault(clave, {
             "ciudades": {}, "asignados": 0, "pendientes": 0,
             "dnis": Counter(), "nombres": Counter(),
-            "tipos": set(), "mercados": {},
+            "tipos": set(), "mercados": {}, "co_lis": set(),
         })
         ciudad_norm = _ciudad_normalizada(p.ciudad)
         # dict en vez de set: dedupea case-insensitive (misma ciudad tipeada
@@ -722,6 +734,7 @@ def resumen_por_mercaderista(planning, pendientes):
         # veces) quedándose con la forma que apareció primero, mismo criterio
         # que ya usaba la agrupación vieja por (persona, ciudad.upper()).
         fila["ciudades"].setdefault((ciudad_norm or "—").upper(), ciudad_norm or "—")
+        fila["co_lis"].add(p.co_li)
         fila["asignados"] += 1
         if p.co_li in co_lis_pendientes:
             fila["pendientes"] += 1
@@ -741,6 +754,9 @@ def resumen_por_mercaderista(planning, pendientes):
         if mercado_limpio:
             fila["mercados"].setdefault(mercado_limpio.upper(), mercado_limpio)
 
+    todos_co_lis = {c for v in conteo.values() for c in v["co_lis"]}
+    pdvs_ejecutados = pdvs_con_ejecucion_fotografica(todos_co_lis, desde, hasta) if desde and hasta else set()
+
     filas = []
     for v in conteo.values():
         dnis_ordenados = v["dnis"].most_common()
@@ -749,12 +765,15 @@ def resumen_por_mercaderista(planning, pendientes):
         nombre_principal = v["nombres"].most_common(1)[0][0] if v["nombres"] else None
         es_solo_mayorista = v["tipos"] == {"Mayorista"}
         mercado_str = ", ".join(sorted(v["mercados"].values())) if es_solo_mayorista and v["mercados"] else None
+        con_ejecucion = len(v["co_lis"] & pdvs_ejecutados)
         filas.append({
             "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": ", ".join(sorted(v["ciudades"].values())),
             "mercado": mercado_str,
             "dni": dni_principal, "dni_variantes": dni_variantes,
             "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
             "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
+            "pdvs_con_ejecucion": con_ejecucion,
+            "pct_ejecucion": round(con_ejecucion / v["asignados"] * 100, 1) if v["asignados"] else None,
         })
     filas.sort(key=lambda f: f["mercaderista"])
     return filas

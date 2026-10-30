@@ -856,7 +856,7 @@ def planning():
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
     # Cumplimiento de ruta del día (Davor, 2026-10-15: "cuando cargue el
     # planning el mercaderista esta asignado a una ruta... quiero que por
@@ -917,7 +917,7 @@ def _planning_periodo_filtrado_desde_query():
     region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
     planning_periodo = planning_del_periodo(desde, region_f, ciudad_f, supervisor_f, mercado_f)
     v = visitas_tradicional(desde, hasta, current_user)
-    return planning_periodo, v, periodo_str
+    return planning_periodo, v, periodo_str, desde, hasta
 
 
 @bp.get("/planning/fragmento/personal")
@@ -932,16 +932,16 @@ def planning_fragmento_personal():
     costo de armarla) cuando el usuario realmente abre el panel."""
     if current_user.rol not in ("analista", "admin"):
         abort(403)
-    planning_periodo, v, periodo_str = _planning_periodo_filtrado_desde_query()
+    planning_periodo, v, periodo_str, desde, hasta = _planning_periodo_filtrado_desde_query()
     pendientes = pdvs_pendientes(planning_periodo, v)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
     return render_template("_planning_fragmento_personal.html", por_mercaderista=por_mercaderista, periodo_str=periodo_str)
 
 
 @bp.get("/planning/fragmento/pendientes")
 @requiere_pagina("reportes_planning")
 def planning_fragmento_pendientes():
-    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    planning_periodo, v, _, _desde, _hasta = _planning_periodo_filtrado_desde_query()
     pendientes = pdvs_pendientes(planning_periodo, v)
     return render_template("_planning_fragmento_pendientes.html", pendientes=pendientes, usuario=current_user)
 
@@ -949,7 +949,7 @@ def planning_fragmento_pendientes():
 @bp.get("/planning/fragmento/detalle")
 @requiere_pagina("reportes_planning")
 def planning_fragmento_detalle():
-    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    planning_periodo, v, _, _desde, _hasta = _planning_periodo_filtrado_desde_query()
     detalle = pdvs_detalle(planning_periodo, v)
     return render_template("_planning_fragmento_detalle.html", detalle=detalle, usuario=current_user)
 
@@ -957,7 +957,7 @@ def planning_fragmento_detalle():
 @bp.get("/planning/fragmento/fuera")
 @requiere_pagina("reportes_planning")
 def planning_fragmento_fuera():
-    planning_periodo, v, _ = _planning_periodo_filtrado_desde_query()
+    planning_periodo, v, _, _desde, _hasta = _planning_periodo_filtrado_desde_query()
     fuera = pdvs_fuera_planning(planning_periodo, v)
     return render_template("_planning_fragmento_fuera.html", fuera_planning=fuera)
 
@@ -1185,18 +1185,22 @@ def planning_exportar():
     pendientes = pdvs_pendientes(planning_periodo, v)
     detalle = pdvs_detalle(planning_periodo, v)
     fuera = pdvs_fuera_planning(planning_periodo, v)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
     wb = openpyxl.Workbook()
     ws0 = wb.active
     ws0.title = "Mercaderista x Ciudad"
-    ws0.append(["Mercaderista", "DNI", "Otros DNI vistos (Excel inconsistente)", "Ciudad", "Mercado", "PDVs asignados", "PDVs pendientes", "% Cumplimiento"])
+    ws0.append([
+        "Mercaderista", "DNI", "Otros DNI vistos (Excel inconsistente)", "Ciudad", "Mercado",
+        "PDVs asignados", "PDVs pendientes", "% Cumplimiento", "PDVs con ejecución", "% Ejecución",
+    ])
     for celda in ws0[1]:
         celda.font = Font(bold=True)
     for m in por_mercaderista:
         ws0.append(fila_segura([
             m["mercaderista"], m["dni"], ", ".join(m["dni_variantes"]) or None, m["ciudad"], m["mercado"],
             m["pdvs_asignados"], m["pdvs_pendientes"], m["pct_cumplimiento"],
+            m["pdvs_con_ejecucion"], m["pct_ejecucion"],
         ]))
 
     ws1 = wb.create_sheet("PDVs Pendientes")
