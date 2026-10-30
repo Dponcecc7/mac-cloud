@@ -7,31 +7,36 @@
       <th class="th-ordenable" onclick="ordenarPor('detalle', 'nombre')">Nombre PDV <span class="flecha-orden" id="flecha-detalle-nombre"></span></th>
       <th>CO_LI</th>
       <th>Ciudad</th>
-      <th class="th-ordenable" onclick="ordenarPor('detalle', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-detalle-mercaderista"></span></th>
+      <th class="th-ordenable" onclick="ordenarPor('detalle', 'mercaderista')">Mercaderista (última visita) <span class="flecha-orden" id="flecha-detalle-mercaderista"></span></th>
       <th class="th-ordenable" onclick="ordenarPor('detalle', 'planificadas')" data-numerico>Golpes planificados <span class="flecha-orden" id="flecha-detalle-planificadas"></span></th>
       <th class="th-ordenable" onclick="ordenarPor('detalle', 'visitas')" data-numerico>Golpes realizados <span class="flecha-orden" id="flecha-detalle-visitas"></span></th>
       <th class="th-ordenable" onclick="ordenarPor('detalle', 'cumplimiento')" data-numerico>% Cumplimiento <span class="flecha-orden" id="flecha-detalle-cumplimiento"></span></th>
       <th>Última visita</th>
+      <th class="th-ordenable" onclick="ordenarPor('detalle', 'golpesejecucion')" data-numerico>Golpes con ejecución <span class="flecha-orden" id="flecha-detalle-golpesejecucion"></span></th>
+      <th>Fecha última ejecución</th>
+      <th>Mercaderista que ejecutó</th>
     </tr>
     {% for p in detalle %}
-    <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}" data-orden-dni="{{ p.dni_asignado or '' }}">
+    <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}" data-orden-golpesejecucion="{{ p.golpes_con_ejecucion }}" data-orden-dni="{{ p.dni_asignado or '' }}">
       <td>{{ p.nombre_pdv or '—' }}</td>
       <td>{{ p.co_li }}</td>
       <td>{{ (p.ciudad or '—')|title }}</td>
       <td>
         {{ (p.mercaderista or '—')|title }}
-        {% if p.reemplazo_de %}<span style="color:var(--muted); font-size:11px; cursor:help;" title="El Excel de Planning traía a {{ p.reemplazo_de|title }} -- se muestra el reemplazo vigente en Personal.">↻</span>{% endif %}
         {% if usuario.rol in ("analista", "admin") %}
-        <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista or '')|e }}')">Editar</a>
+        <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista_asignado or '')|e }}')" title="Edita quién tiene asignado este PDV en el Planning (no cambia quién lo visitó de verdad).">Editar</a>
         {% endif %}
       </td>
       <td>{{ p.visitas_planificadas }}</td>
       <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
       <td {{ 'class=celda-cero' if p.pct_cumplimiento is not none and p.pct_cumplimiento < 50 else '' }}>{{ (p.pct_cumplimiento ~ '%') if p.pct_cumplimiento is not none else '—' }}</td>
       <td>{{ p.fecha_ultima_visita.strftime('%d/%m/%Y') if p.fecha_ultima_visita else '—' }}</td>
+      <td {{ 'class=celda-cero' if p.golpes_con_ejecucion == 0 else '' }}>{{ p.golpes_con_ejecucion }}</td>
+      <td>{{ p.fecha_ultima_ejecucion.strftime('%d/%m/%Y') if p.fecha_ultima_ejecucion else '—' }}</td>
+      <td>{{ (p.mercaderista_ejecucion or '—')|title }}</td>
     </tr>
     {% endfor %}
   </table>
 </div>
-<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). Ordenado por % de cumplimiento, los más bajos primero.</p>
+<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). "Mercaderista" = quien hizo la última visita REAL a este PDV (no necesariamente el asignado en el Planning -- "Editar" sigue editando la asignación del Planning). "Golpes con ejecución"/"Fecha última ejecución"/"Mercaderista que ejecutó" = cruce con el relevo fotográfico Antes+Después, para comparar contra los golpes realizados cuántos quedaron respaldados con foto. Ordenado por % de cumplimiento, los más bajos primero.</p>
 {% endif %}

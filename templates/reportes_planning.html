@@ -485,6 +485,13 @@
       {% endif %}
     </div>
 
+    <details class="panel panel-colapsable" id="det-pendientes-ejecucion">
+      <summary class="panel-title">PDVs pendientes de ejecución ({{ pendientes_ejecucion|length }})</summary>
+      <div class="fragmento-lazy" id="frag-pendientes-ejecucion" data-url="{{ url_for('reportes.planning_fragmento_pendientes_ejecucion', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
+      </div>
+    </details>
+
     <details class="panel panel-colapsable" id="det-pendientes">
       <summary class="panel-title">PDVs pendientes de visitar ({{ pendientes|length }})</summary>
       <div class="fragmento-lazy" id="frag-pendientes" data-url="{{ url_for('reportes.planning_fragmento_pendientes', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
@@ -608,7 +615,7 @@ function ordenarPor(tabla_id, campo) {
   var actual = ordenActual[tabla_id];
   var asc = (actual && actual.campo === campo) ? !actual.asc : true;
   ordenActual[tabla_id] = { campo: campo, asc: asc };
-  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento' || campo === 'asignados' || campo === 'pendientes' || campo === 'conejecucion' || campo === 'ejecucion';
+  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento' || campo === 'asignados' || campo === 'pendientes' || campo === 'conejecucion' || campo === 'ejecucion' || campo === 'golpesejecucion';
   filas.sort(function (a, b) {
     var va = a.getAttribute('data-orden-' + campo) || '';
     var vb = b.getAttribute('data-orden-' + campo) || '';
@@ -630,6 +637,7 @@ function ordenarPor(tabla_id, campo) {
 // y data-orden-punto para el PDV, al revés que tabla-pendientes/detalle).
 var CONFIG_BUSQUEDA = {
   'tabla-mercaderista': { mercaderista: ['mercaderista', 'dni'] },
+  'tabla-pendientesejecucion': { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-pendientes':   { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-detalle':      { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-fuera':        { mercaderista: ['nombre'], pdv: ['punto'] },
@@ -864,6 +872,7 @@ function cargarFragmentoAlAbrir(detallesId, contenedorId) {
 }
 
 cargarFragmentoAlAbrir('det-personal', 'frag-personal');
+cargarFragmentoAlAbrir('det-pendientes-ejecucion', 'frag-pendientes-ejecucion');
 cargarFragmentoAlAbrir('det-pendientes', 'frag-pendientes');
 cargarFragmentoAlAbrir('det-detalle', 'frag-detalle');
 cargarFragmentoAlAbrir('det-fuera', 'frag-fuera');

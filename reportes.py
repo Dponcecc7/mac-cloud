@@ -32,7 +32,7 @@ from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, personal_activo,
     pdvs_con_ejecucion_fotografica,
-    planning_del_periodo, pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, periodos_disponibles,
+    planning_del_periodo, pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, pdvs_pendientes_ejecucion, periodos_disponibles,
     reasignar_mercaderista, reasignar_pdv, resumen_planning, resumen_por_mercaderista, valores_filtrables,
     visitas_tradicional,
 )
@@ -854,7 +854,8 @@ def planning():
         round(len(pdvs_ejecutados) / len(co_lis_planning) * 100, 1) if co_lis_planning else None
     )
     pendientes = pdvs_pendientes(planning_periodo, v)
-    detalle = pdvs_detalle(planning_periodo, v)
+    pendientes_ejecucion = pdvs_pendientes_ejecucion(planning_periodo, v, pdvs_ejecutados)
+    detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
     por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
@@ -903,7 +904,7 @@ def planning():
         mercado_filtro=mercado_f,
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
         mercados_disponibles=mercados_disp,
-        resumen=resumen, pendientes=pendientes, detalle=detalle, fuera_planning=fuera,
+        resumen=resumen, pendientes=pendientes, pendientes_ejecucion=pendientes_ejecucion, detalle=detalle, fuera_planning=fuera,
         por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
         dia_desde_str=dia_desde.isoformat(), dia_hasta_str=dia_hasta.isoformat(), cumplimiento_dia=cumplimiento_dia,
         ultima_actualizacion=ultima_actualizacion,
@@ -946,11 +947,23 @@ def planning_fragmento_pendientes():
     return render_template("_planning_fragmento_pendientes.html", pendientes=pendientes, usuario=current_user)
 
 
+@bp.get("/planning/fragmento/pendientes-ejecucion")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_pendientes_ejecucion():
+    planning_periodo, v, _, desde, hasta = _planning_periodo_filtrado_desde_query()
+    co_lis_planning = {p.co_li for p in planning_periodo}
+    pdvs_ejecutados = pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta)
+    pendientes_ejecucion = pdvs_pendientes_ejecucion(planning_periodo, v, pdvs_ejecutados)
+    return render_template(
+        "_planning_fragmento_pendientes_ejecucion.html", pendientes_ejecucion=pendientes_ejecucion, usuario=current_user,
+    )
+
+
 @bp.get("/planning/fragmento/detalle")
 @requiere_pagina("reportes_planning")
 def planning_fragmento_detalle():
-    planning_periodo, v, _, _desde, _hasta = _planning_periodo_filtrado_desde_query()
-    detalle = pdvs_detalle(planning_periodo, v)
+    planning_periodo, v, _, desde, hasta = _planning_periodo_filtrado_desde_query()
+    detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     return render_template("_planning_fragmento_detalle.html", detalle=detalle, usuario=current_user)
 
 
@@ -1182,8 +1195,11 @@ def planning_exportar():
 
     planning_periodo = planning_del_periodo(periodo, region_f, ciudad_f, supervisor_f, mercado_f)
     v = visitas_tradicional(desde, hasta, current_user)
+    co_lis_planning = {p.co_li for p in planning_periodo}
+    pdvs_ejecutados = pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta)
     pendientes = pdvs_pendientes(planning_periodo, v)
-    detalle = pdvs_detalle(planning_periodo, v)
+    pendientes_ejecucion = pdvs_pendientes_ejecucion(planning_periodo, v, pdvs_ejecutados)
+    detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
     por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
@@ -1211,13 +1227,28 @@ def planning_exportar():
         ws1.append(fila_segura([p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"]]))
 
     ws2 = wb.create_sheet("PDVs Detalle")
-    ws2.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista", "Supervisor", "Golpes planificados", "Golpes realizados", "% Cumplimiento", "Última visita"])
+    ws2.append([
+        "CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercaderista (última visita real)", "Supervisor",
+        "Golpes planificados", "Golpes realizados", "% Cumplimiento", "Última visita",
+        "Golpes con ejecución", "Fecha última ejecución", "Mercaderista que ejecutó",
+    ])
     for celda in ws2[1]:
         celda.font = Font(bold=True)
     for p in detalle:
         ws2.append(fila_segura([
             p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercaderista"], p["supervisor"],
             p["visitas_planificadas"], p["visitas_realizadas"], p["pct_cumplimiento"], p["fecha_ultima_visita"],
+            p["golpes_con_ejecucion"], p["fecha_ultima_ejecucion"], p["mercaderista_ejecucion"],
+        ]))
+
+    ws2b = wb.create_sheet("PDVs Pendientes Ejecución")
+    ws2b.append(["CO_LI", "Nombre PDV", "Tipo", "Ciudad", "Región", "Mercado", "Mercaderista", "Supervisor", "Visitado en el período"])
+    for celda in ws2b[1]:
+        celda.font = Font(bold=True)
+    for p in pendientes_ejecucion:
+        ws2b.append(fila_segura([
+            p["co_li"], p["nombre_pdv"], p["tipo"], p["ciudad"], p["region"], p["mercado"], p["mercaderista"], p["supervisor"],
+            "Sí" if p["visitado"] else "No",
         ]))
 
     ws3 = wb.create_sheet("Fuera de Planning")

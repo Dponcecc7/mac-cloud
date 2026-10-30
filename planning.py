@@ -555,32 +555,116 @@ def pdvs_pendientes(planning, v):
     } for p in pendientes]
 
 
-def pdvs_detalle(planning, v):
+def pdvs_pendientes_ejecucion(planning, v, pdvs_ejecutados):
+    """PDVs del planning que NO tienen ejecución fotográfica confirmada
+    (ver pdvs_con_ejecucion_fotografica) en el período -- Davor,
+    2026-10-30: "agregar otra tablita PDVs pendiente con ejecución".
+
+    Distinto de pdvs_pendientes() (esa es "nunca visitado"): acá entran
+    TANTO los nunca visitados COMO los que sí tuvieron visita pero el
+    mercaderista no completó el relevo con foto Antes+Después -- `visitado`
+    distingue cuál de los dos casos es cada fila, para no mezclar ambas
+    causas sin avisar."""
+    visitados = set(v["punto_venta_id"].astype(str)) if len(v) else set()
+
+    pendientes = [p for p in planning if p.co_li not in pdvs_ejecutados]
+    pendientes.sort(key=lambda p: (p.nombre_pdv or ""))
+    return [{
+        "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
+        "region": p.region, "mercado": _mercado_sin_palabra(p.mercado),
+        "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
+        "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
+        "visitado": p.co_li in visitados,
+    } for p in pendientes]
+
+
+def _ejecucion_por_pdv(co_lis_planning, desde, hasta):
+    """Por CO_LI: (golpes_con_ejecucion, fecha_ultima_ejecucion,
+    mercaderista_ejecucion) -- Davor, 2026-10-30: "coloca fecha de la
+    última ejecución y coloca nombre del último mercaderista que
+    ejecutó". "Golpe con ejecución" = día distinto con con_ejecucion=True
+    en CUALQUIER categoría (Femenino o Adulto) para ese PDV, mismo
+    criterio que pdvs_con_ejecucion_fotografica() pero sin colapsar a un
+    solo booleano -- acá interesa CUÁNTOS golpes (para comparar contra
+    "golpes realizados") y CUÁL fue el más reciente."""
+    if not co_lis_planning or not desde or not hasta:
+        return {}
+    session = get_session()
+    try:
+        filas = (
+            session.query(
+                EjecucionFotografica.punto_venta_id, EjecucionFotografica.fecha, EjecucionFotografica.nombre_usuario,
+            )
+            .filter(
+                EjecucionFotografica.con_ejecucion.is_(True),
+                EjecucionFotografica.fecha >= desde,
+                EjecucionFotografica.fecha <= hasta,
+                EjecucionFotografica.punto_venta_id.in_(co_lis_planning),
+            )
+            .all()
+        )
+    finally:
+        session.close()
+
+    por_pdv = {}
+    for co_li, fecha, nombre in filas:
+        d = por_pdv.setdefault(co_li, {"fechas": set(), "ultima_fecha": None, "ultimo_nombre": None})
+        d["fechas"].add(fecha)
+        if d["ultima_fecha"] is None or fecha > d["ultima_fecha"]:
+            d["ultima_fecha"], d["ultimo_nombre"] = fecha, nombre
+    return {co_li: (len(d["fechas"]), d["ultima_fecha"], d["ultimo_nombre"]) for co_li, d in por_pdv.items()}
+
+
+def pdvs_detalle(planning, v, desde=None, hasta=None):
     """Por cada CO_LI del planning: golpes de visita PLANIFICADOS (columnas
     de fecha marcadas en el Excel, `dias_programados` -- ver
     _consolidar_por_pdv()) vs REALIZADOS (cualquier persona) y fecha de la
     última -- responde "le programamos 10 golpes, cuántos tiene de
     verdad" (Davor, 2026-09-08). % cumplimiento por PDV, no confundir con
     el % cumplimiento del resumen (ese es binario -- visitado sí/no -- este
-    es realizados/planificados)."""
-    conteo, ultima = {}, {}
+    es realizados/planificados).
+
+    `mercaderista` (Davor, 2026-10-30: "elimina esa columna que diga
+    mercaderista y la reemplazas por mercaderista que última vez visitó
+    ese PDV") -- YA NO es el asignado en el Excel de Planning, es quien
+    REALMENTE hizo la última visita real (de `v`). El asignado de
+    Planning queda aparte en `mercaderista_asignado` (lo sigue usando el
+    botón "Editar" para reasignar, que edita el Planning, no la visita
+    real). `golpes_con_ejecucion`/`fecha_ultima_ejecucion`/
+    `mercaderista_ejecucion`: mismo cruce de fotos antes/después, para
+    comparar contra `visitas_realizadas` cuántas de esas visitas
+    quedaron con el relevo respaldado."""
+    conteo, ultima_fecha_visita, ultimo_visitante = {}, {}, {}
     if len(v):
         v = v.copy()
         v["punto_venta_id"] = v["punto_venta_id"].astype(str)
         conteo = v.groupby("punto_venta_id").size().to_dict()
-        ultima = v.groupby("punto_venta_id")["fecha_inicio"].max().to_dict()
+        idx_ultima = v.groupby("punto_venta_id")["fecha_inicio"].idxmax()
+        ultima_filas = v.loc[idx_ultima]
+        ultima_fecha_visita = dict(zip(ultima_filas["punto_venta_id"], ultima_filas["fecha_inicio"]))
+        ultimo_visitante = dict(zip(ultima_filas["punto_venta_id"], ultima_filas["nombre"]))
+
+    co_lis = {p.co_li for p in planning}
+    ejecucion_por_pdv = _ejecucion_por_pdv(co_lis, desde, hasta)
 
     filas = []
     for p in planning:
         realizadas = int(conteo.get(p.co_li, 0))
         planificadas = int(p.dias_programados or 0)
+        golpes_ejecucion, fecha_ejecucion, mercaderista_ejecucion = ejecucion_por_pdv.get(p.co_li, (0, None, None))
         filas.append({
             "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
-            "region": p.region, "mercaderista": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
-            "reemplazo_de": getattr(p, "mercaderista_nombre_original", None),
+            "region": p.region, "mercaderista": ultimo_visitante.get(p.co_li),
+            "mercaderista_asignado": p.mercaderista_nombre, "dni_asignado": p.dni_asignado, "supervisor": p.supervisor,
             "visitas_planificadas": planificadas, "visitas_realizadas": realizadas,
             "pct_cumplimiento": round(realizadas / planificadas * 100, 1) if planificadas else None,
-            "fecha_ultima_visita": ultima.get(p.co_li).date() if p.co_li in ultima and pd.notna(ultima.get(p.co_li)) else None,
+            "fecha_ultima_visita": (
+                ultima_fecha_visita.get(p.co_li).date()
+                if p.co_li in ultima_fecha_visita and pd.notna(ultima_fecha_visita.get(p.co_li)) else None
+            ),
+            "golpes_con_ejecucion": golpes_ejecucion,
+            "fecha_ultima_ejecucion": fecha_ejecucion,
+            "mercaderista_ejecucion": mercaderista_ejecucion,
         })
     filas.sort(key=lambda f: (f["pct_cumplimiento"] if f["pct_cumplimiento"] is not None else -1))
     return filas
