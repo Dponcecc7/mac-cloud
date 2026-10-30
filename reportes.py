@@ -829,7 +829,9 @@ def planning():
     desde, hasta, periodo_str = _mes_desde_query()
     periodo = desde
     region_f, ciudad_f, supervisor_f, mercado_f = _filtros_planning_desde_query()
-    regiones_disp, ciudades_disp, supervisores_disp, mercados_disp = valores_filtrables(periodo)
+    regiones_disp, ciudades_disp, supervisores_disp, mercados_disp = valores_filtrables(
+        periodo, region_f, ciudad_f, supervisor_f, mercado_f,
+    )
 
     # Una sola carga de planning/visitas para las 4 vistas de abajo -- antes
     # cada función hacía su propia consulta completa a Postgres (4 veces la

@@ -422,7 +422,7 @@ def periodos_disponibles():
         session.close()
 
 
-def valores_filtrables(periodo):
+def valores_filtrables(periodo, region_f=None, ciudad_f=None, supervisor_f=None, mercado_f=None):
     """Región/Ciudad/Supervisor/Mercado distintos DENTRO del planning de
     `periodo` -- a propósito no reusa los desplegables de Persona
     (reportes._filtros_admin) porque son texto libre tipeado en el Excel de
@@ -432,15 +432,34 @@ def valores_filtrables(periodo):
     `mercados` usa el nombre YA limpio (_mercado_sin_palabra, sin la
     palabra "mercado") -- mismo texto que ve el usuario en la tabla
     "Mercaderista x Ciudad", para que el filtro y lo que se muestra
-    coincidan letra por letra."""
+    coincidan letra por letra.
+
+    Davor, 2026-10-30 ("en esta ventana los filtros no están cruzados"):
+    cada desplegable se acota además por los OTROS filtros YA elegidos
+    (mismo criterio que reportes._filtros_admin()) -- si Región=Sur está
+    puesto, Ciudad/Supervisor/Mercado solo muestran valores que de verdad
+    existen en el Sur. `mercado_f` se compara contra el nombre YA limpio,
+    como lo manda `_mercado_sin_palabra` -- la fila cruda puede traer la
+    palabra "mercado" de más."""
     session = get_session()
     try:
-        query = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
-        filas = query.with_entities(PlanningPdv.region, PlanningPdv.ciudad, PlanningPdv.supervisor, PlanningPdv.mercado).all()
-        regiones = sorted({r for r, _, _, _ in filas if r})
-        ciudades = sorted({c for _, c, _, _ in filas if c})
-        supervisores = sorted({s for _, _, s, _ in filas if s})
-        mercados = sorted({_mercado_sin_palabra(m) for _, _, _, m in filas if _mercado_sin_palabra(m)})
+        def _filas(excluir):
+            q = session.query(PlanningPdv).filter(PlanningPdv.periodo == periodo)
+            if region_f and excluir != "region":
+                q = q.filter(PlanningPdv.region.in_(region_f))
+            if ciudad_f and excluir != "ciudad":
+                q = q.filter(PlanningPdv.ciudad.in_(ciudad_f))
+            if supervisor_f and excluir != "supervisor":
+                q = q.filter(PlanningPdv.supervisor.in_(supervisor_f))
+            filas = q.with_entities(PlanningPdv.region, PlanningPdv.ciudad, PlanningPdv.supervisor, PlanningPdv.mercado).all()
+            if mercado_f and excluir != "mercado":
+                filas = [f for f in filas if _mercado_sin_palabra(f[3]) in mercado_f]
+            return filas
+
+        regiones = sorted({r for r, _, _, _ in _filas("region") if r})
+        ciudades = sorted({c for _, c, _, _ in _filas("ciudad") if c})
+        supervisores = sorted({s for _, _, s, _ in _filas("supervisor") if s})
+        mercados = sorted({_mercado_sin_palabra(m) for _, _, _, m in _filas("mercado") if _mercado_sin_palabra(m)})
         return regiones, ciudades, supervisores, mercados
     finally:
         session.close()
