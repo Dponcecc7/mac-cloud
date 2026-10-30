@@ -21,12 +21,7 @@
       <td>{{ p.nombre_pdv or '—' }}</td>
       <td>{{ p.co_li }}</td>
       <td>{{ (p.ciudad or '—')|title }}</td>
-      <td>
-        {{ (p.mercaderista or '—')|title }}
-        {% if usuario.rol in ("analista", "admin") %}
-        <a href="javascript:void(0)" style="font-size:11px;" onclick="abrirEditarPdv({{ p.id }}, '{{ (p.co_li or '')|e }}', '{{ (p.nombre_pdv or '')|e }}', '{{ (p.dni_asignado or '')|e }}', '{{ (p.mercaderista_asignado or '')|e }}')" title="Edita quién tiene asignado este PDV en el Planning (no cambia quién lo visitó de verdad).">Editar</a>
-        {% endif %}
-      </td>
+      <td>{{ (p.mercaderista or '—')|title }}</td>
       <td>{{ p.visitas_planificadas }}</td>
       <td {{ 'class=celda-cero' if p.visitas_realizadas == 0 else '' }}>{{ p.visitas_realizadas }}</td>
       <td {{ 'class=celda-cero' if p.pct_cumplimiento is not none and p.pct_cumplimiento < 50 else '' }}>{{ (p.pct_cumplimiento ~ '%') if p.pct_cumplimiento is not none else '—' }}</td>
@@ -38,5 +33,5 @@
     {% endfor %}
   </table>
 </div>
-<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). "Mercaderista" = quien hizo la última visita REAL a este PDV (no necesariamente el asignado en el Planning -- "Editar" sigue editando la asignación del Planning). "Golpes con ejecución"/"Fecha última ejecución"/"Mercaderista que ejecutó" = cruce con el relevo fotográfico Antes+Después, para comparar contra los golpes realizados cuántos quedaron respaldados con foto. Ordenado por % de cumplimiento, los más bajos primero.</p>
+<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). "Mercaderista" = quien hizo la última visita REAL a este PDV (no necesariamente el asignado en el Planning -- para reasignar un PDV, hacelo desde "PDVs pendientes de visitar"). "Golpes con ejecución"/"Fecha última ejecución"/"Mercaderista que ejecutó" = cruce con el relevo fotográfico Antes+Después, para comparar contra los golpes realizados cuántos quedaron respaldados con foto. Ordenado por % de cumplimiento, los más bajos primero.</p>
 {% endif %}
