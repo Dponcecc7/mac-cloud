@@ -512,6 +512,13 @@
         <p class="empty">Cargando…</p>
       </div>
     </details>
+
+    <details class="panel panel-colapsable" id="det-ejecutados-fuera">
+      <summary class="panel-title">PDVs ejecutados fuera del Planning ({{ ejecutados_fuera_planning|length }})</summary>
+      <div class="fragmento-lazy" id="frag-ejecutados-fuera" data-url="{{ url_for('reportes.planning_fragmento_ejecutados_fuera', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
+        <p class="empty">Cargando…</p>
+      </div>
+    </details>
   </div>
 
 <dialog id="dlg-editar-pdv" style="border:none; border-radius:14px; padding:0; max-width:380px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,.2);">
@@ -641,6 +648,7 @@ var CONFIG_BUSQUEDA = {
   'tabla-pendientes':   { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-detalle':      { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-fuera':        { mercaderista: ['nombre'], pdv: ['punto'] },
+  'tabla-ejecutadosfuera': { mercaderista: ['nombre'], pdv: ['punto'] },
   // Davor, 2026-10-16: "Los filtros mercaderisa y PDV, no afecta la tabla
   // 'Cumplimiento de ruta del día'" -- le faltaba el id y los data-orden-*
   // que usa _coincide(), así que aplicarFiltrosBusqueda() simplemente no
@@ -876,6 +884,7 @@ cargarFragmentoAlAbrir('det-pendientes-ejecucion', 'frag-pendientes-ejecucion');
 cargarFragmentoAlAbrir('det-pendientes', 'frag-pendientes');
 cargarFragmentoAlAbrir('det-detalle', 'frag-detalle');
 cargarFragmentoAlAbrir('det-fuera', 'frag-fuera');
+cargarFragmentoAlAbrir('det-ejecutados-fuera', 'frag-ejecutados-fuera');
 </script>
 </body>
 </html>

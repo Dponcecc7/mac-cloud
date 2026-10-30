@@ -17,7 +17,7 @@ import pandas as pd
 from sqlalchemy import insert
 
 from cobertura import _cargar_visitas
-from dimension_models import EjecucionFotografica, PlanningPdv, PlanningPdvDia, Persona, get_session
+from dimension_models import EjecucionFotografica, PlanningPdv, PlanningPdvDia, Persona, Visita, get_session
 from parseo_headcount import validar_columnas
 from reemplazos import resolver_cadena_vigente
 
@@ -890,6 +890,62 @@ def pdvs_fuera_planning(planning, v):
         "dni": r["dni"], "nombre": r["nombre"], "veces_visitado": int(r["veces_visitado"]),
         "primera_visita": r["primera_visita"].date(), "ultima_visita": r["ultima_visita"].date(),
     } for _, r in resumen.iterrows()]
+
+
+def pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta):
+    """PDVs con ejecución fotográfica confirmada en el período que NO
+    están en el Planning de este mes -- mismo espíritu que
+    pdvs_fuera_planning() ("hay actividad de PDVs que no están en el
+    planning"), pero para el cruce de fotos antes/después en vez de
+    visitas -- Davor, 2026-10-30: "agreguemos otra tabla PDVs ejecutados
+    fuera del planning, igual que Visitas fuera del Planning".
+
+    dim_lf_general_fotografico_antes_despues no trae el nombre del PDV
+    (solo punto_venta_id) -- se busca en Visita (CUALQUIER canal, no solo
+    Tradicional, a propósito: el objetivo acá es solo mostrar un nombre
+    legible, no filtrar) por si ese mismo punto_venta_id generó alguna
+    visita registrada bajo cualquier campaña."""
+    if not desde or not hasta:
+        return []
+    session = get_session()
+    try:
+        filas = (
+            session.query(
+                EjecucionFotografica.punto_venta_id, EjecucionFotografica.fecha, EjecucionFotografica.nombre_usuario,
+            )
+            .filter(
+                EjecucionFotografica.con_ejecucion.is_(True),
+                EjecucionFotografica.fecha >= desde,
+                EjecucionFotografica.fecha <= hasta,
+            )
+            .all()
+        )
+        por_pdv = {}
+        for co_li, fecha, nombre in filas:
+            if co_li in co_lis_planning:
+                continue
+            d = por_pdv.setdefault(co_li, {"fechas": set(), "primera": None, "ultima": None, "ultimo_nombre": None})
+            d["fechas"].add(fecha)
+            if d["primera"] is None or fecha < d["primera"]:
+                d["primera"] = fecha
+            if d["ultima"] is None or fecha > d["ultima"]:
+                d["ultima"], d["ultimo_nombre"] = fecha, nombre
+        if not por_pdv:
+            return []
+
+        nombres_pdv = {}
+        for co_li, nombre in session.query(Visita.punto_venta_id, Visita.punto_venta).filter(Visita.punto_venta_id.in_(por_pdv.keys())).all():
+            nombres_pdv.setdefault(co_li, nombre)
+    finally:
+        session.close()
+
+    filas_resultado = [{
+        "punto_venta_id": co_li, "punto_venta": nombres_pdv.get(co_li),
+        "golpes_con_ejecucion": len(d["fechas"]), "primera_ejecucion": d["primera"], "ultima_ejecucion": d["ultima"],
+        "mercaderista_ejecucion": d["ultimo_nombre"],
+    } for co_li, d in por_pdv.items()]
+    filas_resultado.sort(key=lambda f: -f["golpes_con_ejecucion"])
+    return filas_resultado
 
 
 def cumplimiento_ruta_dia(desde, hasta, planning_filtrado, v_rango):

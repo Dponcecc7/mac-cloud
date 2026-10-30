@@ -32,7 +32,8 @@ from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, personal_activo,
     pdvs_con_ejecucion_fotografica,
-    planning_del_periodo, pdvs_detalle, pdvs_fuera_planning, pdvs_pendientes, pdvs_pendientes_ejecucion, periodos_disponibles,
+    planning_del_periodo, pdvs_detalle, pdvs_ejecutados_fuera_planning, pdvs_fuera_planning, pdvs_pendientes,
+    pdvs_pendientes_ejecucion, periodos_disponibles,
     reasignar_mercaderista, reasignar_pdv, resumen_planning, resumen_por_mercaderista, valores_filtrables,
     visitas_tradicional,
 )
@@ -857,6 +858,7 @@ def planning():
     pendientes_ejecucion = pdvs_pendientes_ejecucion(planning_periodo, v, pdvs_ejecutados)
     detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
+    ejecutados_fuera = pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta)
     por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
     # Cumplimiento de ruta del día (Davor, 2026-10-15: "cuando cargue el
@@ -905,6 +907,7 @@ def planning():
         regiones_disponibles=regiones_disp, ciudades_disponibles=ciudades_disp, supervisores_disponibles=supervisores_disp,
         mercados_disponibles=mercados_disp,
         resumen=resumen, pendientes=pendientes, pendientes_ejecucion=pendientes_ejecucion, detalle=detalle, fuera_planning=fuera,
+        ejecutados_fuera_planning=ejecutados_fuera,
         por_mercaderista=por_mercaderista, personal_activo=personal_activo(),
         dia_desde_str=dia_desde.isoformat(), dia_hasta_str=dia_hasta.isoformat(), cumplimiento_dia=cumplimiento_dia,
         ultima_actualizacion=ultima_actualizacion,
@@ -973,6 +976,15 @@ def planning_fragmento_fuera():
     planning_periodo, v, _, _desde, _hasta = _planning_periodo_filtrado_desde_query()
     fuera = pdvs_fuera_planning(planning_periodo, v)
     return render_template("_planning_fragmento_fuera.html", fuera_planning=fuera)
+
+
+@bp.get("/planning/fragmento/ejecutados-fuera")
+@requiere_pagina("reportes_planning")
+def planning_fragmento_ejecutados_fuera():
+    planning_periodo, _v, _, desde, hasta = _planning_periodo_filtrado_desde_query()
+    co_lis_planning = {p.co_li for p in planning_periodo}
+    ejecutados_fuera = pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta)
+    return render_template("_planning_fragmento_ejecutados_fuera.html", ejecutados_fuera_planning=ejecutados_fuera)
 
 
 def _plantilla_planning():
@@ -1201,6 +1213,7 @@ def planning_exportar():
     pendientes_ejecucion = pdvs_pendientes_ejecucion(planning_periodo, v, pdvs_ejecutados)
     detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
+    ejecutados_fuera = pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta)
     por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
 
     wb = openpyxl.Workbook()
@@ -1259,6 +1272,19 @@ def planning_exportar():
         ws3.append(fila_segura([
             p["punto_venta_id"], p["punto_venta"], p["dni"], p["nombre"],
             p["veces_visitado"], p["primera_visita"], p["ultima_visita"],
+        ]))
+
+    ws4 = wb.create_sheet("PDVs Ejecutados Fuera Planning")
+    ws4.append([
+        "Punto de venta ID", "Nombre PDV", "Golpes con ejecución", "Primera ejecución",
+        "Última ejecución", "Mercaderista que ejecutó",
+    ])
+    for celda in ws4[1]:
+        celda.font = Font(bold=True)
+    for p in ejecutados_fuera:
+        ws4.append(fila_segura([
+            p["punto_venta_id"], p["punto_venta"], p["golpes_con_ejecucion"],
+            p["primera_ejecucion"], p["ultima_ejecucion"], p["mercaderista_ejecucion"],
         ]))
 
     buf = io.BytesIO()

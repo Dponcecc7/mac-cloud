@@ -1,0 +1,27 @@
+{% if not ejecutados_fuera_planning %}
+  <p class="empty">No hay PDVs con ejecución fotográfica confirmada fuera del Planning en este período.</p>
+{% else %}
+<div class="table-wrap">
+  <table id="tabla-ejecutadosfuera">
+    <tr>
+      <th class="th-ordenable" onclick="ordenarPor('ejecutadosfuera', 'punto')">Punto de venta <span class="flecha-orden" id="flecha-ejecutadosfuera-punto"></span></th>
+      <th>Punto venta ID</th>
+      <th class="th-ordenable" onclick="ordenarPor('ejecutadosfuera', 'nombre')">Mercaderista que ejecutó <span class="flecha-orden" id="flecha-ejecutadosfuera-nombre"></span></th>
+      <th class="th-ordenable" onclick="ordenarPor('ejecutadosfuera', 'golpesejecucion')" data-numerico>Golpes con ejecución <span class="flecha-orden" id="flecha-ejecutadosfuera-golpesejecucion"></span></th>
+      <th>Primera ejecución</th>
+      <th>Última ejecución</th>
+    </tr>
+    {% for f in ejecutados_fuera_planning %}
+    <tr data-orden-punto="{{ (f.punto_venta or '')|upper }}" data-orden-nombre="{{ (f.mercaderista_ejecucion or '')|upper }}" data-orden-golpesejecucion="{{ f.golpes_con_ejecucion }}">
+      <td>{{ f.punto_venta or '—' }}</td>
+      <td>{{ f.punto_venta_id }}</td>
+      <td>{{ (f.mercaderista_ejecucion or '—')|title }}</td>
+      <td>{{ f.golpes_con_ejecucion }}</td>
+      <td>{{ f.primera_ejecucion.strftime('%d/%m/%Y') if f.primera_ejecucion else '—' }}</td>
+      <td>{{ f.ultima_ejecucion.strftime('%d/%m/%Y') if f.ultima_ejecucion else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="note">"Nombre PDV" se busca en las visitas registradas (cualquier canal) para ese mismo punto de venta ID -- si nunca generó una visita registrada en la MAC, aparece "—". Mismo cruce de fotos Antes+Después que el resto de esta página, aplicado a PDVs que no son parte del Planning de este mes.</p>
+{% endif %}
