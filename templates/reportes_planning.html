@@ -372,8 +372,8 @@
     </details>
     {% endif %}
 
-    <div class="panel">
-      <p class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</p>
+    <details class="panel panel-colapsable" id="det-cumplimiento-dia">
+      <summary class="panel-title">Cumplimiento de ruta del día ({{ cumplimiento_dia|length }})</summary>
       {% if ultima_actualizacion %}
         <p class="note" style="margin-top:0; margin-bottom:12px;">Datos actualizados hasta las {{ ultima_actualizacion.strftime('%H:%M') }} del {{ ultima_actualizacion.strftime('%d/%m/%Y') }} (hora de la visita más reciente registrada en este rango, con los filtros de arriba aplicados).</p>
       {% endif %}
@@ -443,7 +443,7 @@
       </div>
       {% endif %}
       <p class="note">"Fuera de lo programado (otro día de su ruta)": el PDV sí es parte de su cartera del mes, pero no le tocaba justo ese día. "Fuera de planning": visitó un PDV que ni siquiera está en su Planning de este mes. "Desde"/"Hasta" iguales = un solo día (máximo 31 días por consulta).</p>
-    </div>
+    </details>
 
     <div class="panel">
       <p class="panel-title">Mercaderista x Ciudad — PDVs asignados ({{ por_mercaderista|length }})</p>
