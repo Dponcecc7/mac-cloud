@@ -279,6 +279,17 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
     return out
 
 
+# Davor, 2026-10-30: "que tan viable es que aparezca un link para ver la
+# foto del antes, despues y fachada de la última ejecución?" -- "sería las
+# que trae FOTO DESPUES FACHADA" (confirmado contra Athena: dentro de
+# nuestro actividad_id/fecha, es una sola etiqueta consistente, "FOTO
+# DESPUES FACHADA", sin variantes numeradas reales como sí tienen las de
+# Cuidado Femenino -- igual se deja el wildcard de tilde por consistencia
+# con el resto de este archivo, no porque se haya visto mezcla). Se agrega
+# acá nomás (no antes, Davor no la pidió) -- componente_valor para esta
+# etiqueta es la URL de la foto, igual que para las de Cuidado Femenino/
+# Adulto.
+#
 # Davor, 2026-10-30: "vamos a cruzar con otras 2 tablas del ETL... considerar
 # PDVs con ejecución: relevos que el mercaderista relevó tanto foto". Dos
 # grupos de actividad_id (separados porque traen PDVs distintos, pero se
@@ -323,7 +334,8 @@ def traer_fotografico(desde):
           AND (LOWER(componente_etiqueta) LIKE LOWER('Antes Exhibición Cuidado Femenino%')
                OR LOWER(componente_etiqueta) LIKE LOWER('Despu_s Exhibición Cuidado Femenino%')
                OR LOWER(componente_etiqueta) LIKE LOWER('Antes Exhibición Cuidado del Adulto%')
-               OR LOWER(componente_etiqueta) LIKE LOWER('Despu_s Exhibición Cuidado del Adulto%'))
+               OR LOWER(componente_etiqueta) LIKE LOWER('Despu_s Exhibición Cuidado del Adulto%')
+               OR LOWER(componente_etiqueta) LIKE LOWER('Foto Despu_s Fachada%'))
     """
     print("Consultando Athena (fotográfico antes/despues)...")
     df = cursor.execute(query).as_pandas()

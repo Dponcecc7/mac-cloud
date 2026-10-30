@@ -129,6 +129,9 @@ CREATE TABLE ejecucion_fotografica (
 	dni_usuario VARCHAR(15),
 	nombre_usuario VARCHAR(150),
 	actividad_id INTEGER,
+	foto_antes_url TEXT,
+	foto_despues_url TEXT,
+	foto_fachada_url TEXT,
 	fecha_sync TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
 	PRIMARY KEY (id),
 	CONSTRAINT uq_ejecucion_fotografica_visita_categoria UNIQUE (visita_id, categoria)

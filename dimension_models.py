@@ -446,7 +446,17 @@ class EjecucionFotografica(Base):
 
     OJO con los acentos -- confirmado contra Athena, no son parejos entre
     categorías: "Despues Exhibición Cuidado Femenino" (sin tilde en
-    "Despues") pero "Después Exhibición Cuidado del Adulto" (con tilde)."""
+    "Despues") pero "Después Exhibición Cuidado del Adulto" (con tilde).
+
+    `foto_antes_url`/`foto_despues_url` (Davor, 2026-10-30: "link para ver
+    la foto del antes, despues y fachada de la última ejecución") -- URL
+    directa de S3 (componente_valor), pública sin firma, confirmada con
+    una descarga real. Si hay más de una foto "Despues" (variantes
+    numeradas "2"/"3"), se guarda cualquiera de ellas -- no se pidió
+    distinguir cuál, mismo criterio que ya usa `con_ejecucion` (cualquier
+    variante cuenta). `foto_fachada_url` es la de "FOTO DESPUES FACHADA"
+    -- una por visita, no por categoría (se repite igual en la fila
+    FEMENINO y en la ADULTO de un mismo visita_id, si tiene ambas)."""
     __tablename__ = "ejecucion_fotografica"
 
     id = Column(Integer, primary_key=True)
@@ -458,6 +468,9 @@ class EjecucionFotografica(Base):
     dni_usuario = Column(String(15))
     nombre_usuario = Column(String(150))
     actividad_id = Column(Integer)
+    foto_antes_url = Column(Text)
+    foto_despues_url = Column(Text)
+    foto_fachada_url = Column(Text)
     fecha_sync = Column(TIMESTAMP, server_default=func.now())
 
     __table_args__ = (

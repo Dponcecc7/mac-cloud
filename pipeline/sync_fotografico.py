@@ -58,33 +58,66 @@ def _lado(etiqueta):
     return None
 
 
+def _es_fachada_despues(etiqueta):
+    # Davor, 2026-10-30: "sería las que trae FOTO DESPUES FACHADA" -- a
+    # diferencia de Cuidado Femenino/Adulto, NO hay variante "Antes" en
+    # alcance (no se pidió) ni variantes numeradas reales dentro de nuestro
+    # actividad_id/fecha (confirmado contra Athena). Es por-VISITA, no
+    # por-categoría (una sola foto de fachada cubre toda la visita).
+    e = etiqueta.strip().upper()
+    return e.startswith("FOTO DESPUES FACHADA") or e.startswith("FOTO DESPUÉS FACHADA")
+
+
 def pivotar(df):
     """Devuelve una fila por (visita_id, categoria) con con_ejecucion
     resuelto (True si hay foto Antes Y foto Despues -- cualquier variante
-    numerada de Despues cuenta -- ambas con valor no vacío)."""
+    numerada de Despues cuenta -- ambas con valor no vacío), más las URLs
+    de las fotos (Davor, 2026-10-30: "link para ver la foto del antes,
+    despues y fachada de la última ejecución") -- cualquiera de las
+    variantes si hay más de una por lado, no se pidió distinguir cuál."""
     if not len(df):
         return pd.DataFrame(columns=[
             "visita_id", "punto_venta_id", "fecha", "categoria", "con_ejecucion",
             "dni_usuario", "nombre_usuario", "actividad_id",
+            "foto_antes_url", "foto_despues_url", "foto_fachada_url",
         ])
 
     df = df.copy()
+    df["tiene_valor"] = df["componente_valor"].notna() & (df["componente_valor"].astype(str).str.strip() != "")
+    df = df[df["tiene_valor"]]
+
+    es_fachada = df["componente_etiqueta"].apply(_es_fachada_despues)
+    fachada_por_visita = (
+        df[es_fachada].drop_duplicates(subset=["visita_id"]).set_index("visita_id")["componente_valor"]
+    )
+
+    df = df[~es_fachada].copy()
     df["categoria"] = df["componente_etiqueta"].apply(_categoria)
     df["lado"] = df["componente_etiqueta"].apply(_lado)
     df = df.dropna(subset=["categoria", "lado"])
-    df["tiene_valor"] = df["componente_valor"].notna() & (df["componente_valor"].astype(str).str.strip() != "")
-    df = df[df["tiene_valor"]]
 
     presentes = (
         df.groupby(["visita_id", "categoria", "lado"]).size().unstack(fill_value=0)
     )
     con_ejecucion = (presentes.get("ANTES", 0) > 0) & (presentes.get("DESPUES", 0) > 0)
 
+    url_por_lado = (
+        df.drop_duplicates(subset=["visita_id", "categoria", "lado"])
+        .set_index(["visita_id", "categoria", "lado"])["componente_valor"]
+    )
+
     contexto = (
         df.drop_duplicates(subset=["visita_id", "categoria"])
         .set_index(["visita_id", "categoria"])[["punto_venta_id", "fecha", "dni_usuario", "nombre_usuario", "actividad_id"]]
     )
     resultado = contexto.join(con_ejecucion.rename("con_ejecucion")).reset_index()
+    resultado["foto_antes_url"] = resultado.apply(
+        lambda f: url_por_lado.get((f["visita_id"], f["categoria"], "ANTES")), axis=1
+    )
+    resultado["foto_despues_url"] = resultado.apply(
+        lambda f: url_por_lado.get((f["visita_id"], f["categoria"], "DESPUES")), axis=1
+    )
+    resultado["foto_fachada_url"] = resultado["visita_id"].map(fachada_por_visita)
     return resultado
 
 
@@ -95,10 +128,22 @@ def preparar_filas(resultado):
     r["fecha"] = pd.to_datetime(r["fecha"], format="%Y-%m-%d", errors="coerce").dt.date
     r["dni_usuario"] = r["dni_usuario"].astype(str).str.zfill(8)
     r["actividad_id"] = pd.to_numeric(r["actividad_id"], errors="coerce").astype("Int64")
+    # .astype(object).where(...) en vez de simplemente dejar el faltante como
+    # está (Davor, 2026-10-30, bug real encontrado en el backfill en vivo):
+    # pandas 3.x infiere dtype "str" para estas 3 columnas (vienen de
+    # url_por_lado.get(), que sí devuelve None de verdad) y bajo ese dtype
+    # un faltante se representa como float('nan'), NO como None -- ese nan
+    # sobrevivía hasta el INSERT a Postgres y psycopg2 lo guardaba como el
+    # string literal "NaN" en la columna TEXT en vez de NULL real. Pasar la
+    # columna a dtype "object" antes del .where() rompe esa inferencia y
+    # preserva None de verdad.
+    for col in ("foto_antes_url", "foto_despues_url", "foto_fachada_url"):
+        r[col] = r[col].astype(object).where(r[col].notna(), None)
     r = r.dropna(subset=["visita_id", "punto_venta_id", "fecha", "categoria"])
     return r[[
         "visita_id", "punto_venta_id", "fecha", "categoria", "con_ejecucion",
         "dni_usuario", "nombre_usuario", "actividad_id",
+        "foto_antes_url", "foto_despues_url", "foto_fachada_url",
     ]].to_dict("records")
 
 
@@ -120,6 +165,9 @@ def upsert_ejecucion(filas):
                     "dni_usuario": stmt.excluded.dni_usuario,
                     "nombre_usuario": stmt.excluded.nombre_usuario,
                     "actividad_id": stmt.excluded.actividad_id,
+                    "foto_antes_url": stmt.excluded.foto_antes_url,
+                    "foto_despues_url": stmt.excluded.foto_despues_url,
+                    "foto_fachada_url": stmt.excluded.foto_fachada_url,
                 },
             )
             conn.execute(stmt)

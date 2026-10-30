@@ -15,6 +15,7 @@
       <th class="th-ordenable" onclick="ordenarPor('detalle', 'golpesejecucion')" data-numerico>Golpes con ejecución <span class="flecha-orden" id="flecha-detalle-golpesejecucion"></span></th>
       <th>Fecha última ejecución</th>
       <th>Mercaderista que ejecutó</th>
+      <th>Fotos última ejecución</th>
     </tr>
     {% for p in detalle %}
     <tr data-orden-nombre="{{ (p.nombre_pdv or '')|upper }}" data-orden-mercaderista="{{ (p.mercaderista or '')|upper }}" data-orden-planificadas="{{ p.visitas_planificadas }}" data-orden-visitas="{{ p.visitas_realizadas }}" data-orden-cumplimiento="{{ p.pct_cumplimiento if p.pct_cumplimiento is not none else -1 }}" data-orden-golpesejecucion="{{ p.golpes_con_ejecucion }}" data-orden-dni="{{ p.dni_asignado or '' }}">
@@ -29,9 +30,15 @@
       <td {{ 'class=celda-cero' if p.golpes_con_ejecucion == 0 else '' }}>{{ p.golpes_con_ejecucion }}</td>
       <td>{{ p.fecha_ultima_ejecucion.strftime('%d/%m/%Y') if p.fecha_ultima_ejecucion else '—' }}</td>
       <td>{{ (p.mercaderista_ejecucion or '—')|title }}</td>
+      <td style="white-space:nowrap;">
+        {% if p.foto_antes_url %}<a href="{{ p.foto_antes_url }}" target="_blank" rel="noopener" style="margin-right:8px;">Antes</a>{% endif %}
+        {% if p.foto_despues_url %}<a href="{{ p.foto_despues_url }}" target="_blank" rel="noopener" style="margin-right:8px;">Después</a>{% endif %}
+        {% if p.foto_fachada_url %}<a href="{{ p.foto_fachada_url }}" target="_blank" rel="noopener">Fachada</a>{% endif %}
+        {% if not p.foto_antes_url and not p.foto_despues_url and not p.foto_fachada_url %}—{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table>
 </div>
-<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). "Mercaderista" = quien hizo la última visita REAL a este PDV (no necesariamente el asignado en el Planning -- para reasignar un PDV, hacelo desde "PDVs pendientes de visitar"). "Golpes con ejecución"/"Fecha última ejecución"/"Mercaderista que ejecutó" = cruce con el relevo fotográfico Antes+Después, para comparar contra los golpes realizados cuántos quedaron respaldados con foto. Ordenado por % de cumplimiento, los más bajos primero.</p>
+<p class="note">Golpes planificados = días marcados para ese PDV en el Excel de Planning ese mes (si el mismo CO_LI aparece en más de una fila del archivo, se suman). "Mercaderista" = quien hizo la última visita REAL a este PDV (no necesariamente el asignado en el Planning -- para reasignar un PDV, hacelo desde "PDVs pendientes de visitar"). "Golpes con ejecución"/"Fecha última ejecución"/"Mercaderista que ejecutó" = cruce con el relevo fotográfico Antes+Después, para comparar contra los golpes realizados cuántos quedaron respaldados con foto. "Fotos última ejecución" = del golpe más reciente con ejecución confirmada; "Fachada" puede faltar aunque Antes/Después sí estén, si esa visita puntual no tuvo foto de fachada. Ordenado por % de cumplimiento, los más bajos primero.</p>
 {% endif %}

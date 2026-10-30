@@ -586,7 +586,14 @@ def _ejecucion_por_pdv(co_lis_planning, desde, hasta):
     en CUALQUIER categoría (Femenino o Adulto) para ese PDV, mismo
     criterio que pdvs_con_ejecucion_fotografica() pero sin colapsar a un
     solo booleano -- acá interesa CUÁNTOS golpes (para comparar contra
-    "golpes realizados") y CUÁL fue el más reciente."""
+    "golpes realizados") y CUÁL fue el más reciente.
+
+    También trae las URLs de foto (antes/después/fachada) del golpe MÁS
+    RECIENTE -- Davor, 2026-10-30: "link para ver la foto del antes,
+    despues y fachada de la última ejecución". Como el filtro ya exige
+    con_ejecucion=True, antes y después siempre vienen con URL (ver
+    pivotar() en sync_fotografico.py); fachada puede faltar si esa visita
+    puntual no tuvo foto de fachada."""
     if not co_lis_planning or not desde or not hasta:
         return {}
     session = get_session()
@@ -594,6 +601,7 @@ def _ejecucion_por_pdv(co_lis_planning, desde, hasta):
         filas = (
             session.query(
                 EjecucionFotografica.punto_venta_id, EjecucionFotografica.fecha, EjecucionFotografica.nombre_usuario,
+                EjecucionFotografica.foto_antes_url, EjecucionFotografica.foto_despues_url, EjecucionFotografica.foto_fachada_url,
             )
             .filter(
                 EjecucionFotografica.con_ejecucion.is_(True),
@@ -607,12 +615,22 @@ def _ejecucion_por_pdv(co_lis_planning, desde, hasta):
         session.close()
 
     por_pdv = {}
-    for co_li, fecha, nombre in filas:
-        d = por_pdv.setdefault(co_li, {"fechas": set(), "ultima_fecha": None, "ultimo_nombre": None})
+    for co_li, fecha, nombre, foto_antes, foto_despues, foto_fachada in filas:
+        d = por_pdv.setdefault(co_li, {
+            "fechas": set(), "ultima_fecha": None, "ultimo_nombre": None,
+            "foto_antes_url": None, "foto_despues_url": None, "foto_fachada_url": None,
+        })
         d["fechas"].add(fecha)
         if d["ultima_fecha"] is None or fecha > d["ultima_fecha"]:
             d["ultima_fecha"], d["ultimo_nombre"] = fecha, nombre
-    return {co_li: (len(d["fechas"]), d["ultima_fecha"], d["ultimo_nombre"]) for co_li, d in por_pdv.items()}
+            d["foto_antes_url"], d["foto_despues_url"], d["foto_fachada_url"] = foto_antes, foto_despues, foto_fachada
+    return {
+        co_li: (
+            len(d["fechas"]), d["ultima_fecha"], d["ultimo_nombre"],
+            d["foto_antes_url"], d["foto_despues_url"], d["foto_fachada_url"],
+        )
+        for co_li, d in por_pdv.items()
+    }
 
 
 def pdvs_detalle(planning, v, desde=None, hasta=None):
@@ -651,7 +669,9 @@ def pdvs_detalle(planning, v, desde=None, hasta=None):
     for p in planning:
         realizadas = int(conteo.get(p.co_li, 0))
         planificadas = int(p.dias_programados or 0)
-        golpes_ejecucion, fecha_ejecucion, mercaderista_ejecucion = ejecucion_por_pdv.get(p.co_li, (0, None, None))
+        golpes_ejecucion, fecha_ejecucion, mercaderista_ejecucion, foto_antes_url, foto_despues_url, foto_fachada_url = (
+            ejecucion_por_pdv.get(p.co_li, (0, None, None, None, None, None))
+        )
         filas.append({
             "id": p.id, "co_li": p.co_li, "nombre_pdv": p.nombre_pdv, "tipo": p.tipo, "ciudad": p.ciudad,
             "region": p.region, "mercaderista": ultimo_visitante.get(p.co_li),
@@ -665,6 +685,7 @@ def pdvs_detalle(planning, v, desde=None, hasta=None):
             "golpes_con_ejecucion": golpes_ejecucion,
             "fecha_ultima_ejecucion": fecha_ejecucion,
             "mercaderista_ejecucion": mercaderista_ejecucion,
+            "foto_antes_url": foto_antes_url, "foto_despues_url": foto_despues_url, "foto_fachada_url": foto_fachada_url,
         })
     filas.sort(key=lambda f: (f["pct_cumplimiento"] if f["pct_cumplimiento"] is not None else -1))
     return filas
