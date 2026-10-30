@@ -283,12 +283,16 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
 # PDVs con ejecución: relevos que el mercaderista relevó tanto foto". Dos
 # grupos de actividad_id (separados porque traen PDVs distintos, pero se
 # combinan en una sola consulta -- el filtro por etiqueta ya los distingue).
-# OJO con los acentos, confirmado contra Athena: "Despues Exhibición Cuidado
-# Femenino" (SIN tilde en "Despues") pero "Después Exhibición Cuidado del
-# Adulto" (CON tilde) -- no son parejos entre categorías. El "%%" al final de
-# cada LIKE cubre las variantes numeradas reales ("Despues Exhibición
-# Cuidado Femenino 2"/"3", vistas en producción) sin tener que listarlas
-# una por una ni arriesgarse a perder una variante futura.
+# "Despu_s" (con guion bajo, comodín SQL de 1 solo carácter) en vez de
+# "Despues"/"Después" fijo -- confirmado contra Athena que HOY "Despues
+# Exhibición Cuidado Femenino" va sin tilde y "Después Exhibición Cuidado
+# del Adulto" va con tilde (no son parejos entre categorías), pero más vale
+# no apostar a que ese patrón se mantenga así para siempre -- el comodín
+# acepta cualquiera de las dos tildes en CUALQUIER categoría, sin
+# arriesgarse a perder filas en silencio si el dato de origen cambia de
+# formato. El "%%" al final de cada LIKE cubre las variantes numeradas
+# reales ("Despues Exhibición Cuidado Femenino 2"/"3", vistas en
+# producción) sin tener que listarlas una por una.
 ACTIVIDADES_FOTOGRAFICO = [7713, 7817, 7880]
 
 
@@ -313,9 +317,9 @@ def traer_fotografico(desde):
           AND actividad_id IN ({actividades_sql})
           AND fecha > '{desde}'
           AND (componente_etiqueta LIKE 'Antes Exhibición Cuidado Femenino%'
-               OR componente_etiqueta LIKE 'Despues Exhibición Cuidado Femenino%'
+               OR componente_etiqueta LIKE 'Despu_s Exhibición Cuidado Femenino%'
                OR componente_etiqueta LIKE 'Antes Exhibición Cuidado del Adulto%'
-               OR componente_etiqueta LIKE 'Después Exhibición Cuidado del Adulto%')
+               OR componente_etiqueta LIKE 'Despu_s Exhibición Cuidado del Adulto%')
     """
     print("Consultando Athena (fotográfico antes/despues)...")
     df = cursor.execute(query).as_pandas()
