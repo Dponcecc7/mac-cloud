@@ -292,7 +292,11 @@ def traer_visitas(tabla, filtro_fecha_sql=""):
 # arriesgarse a perder filas en silencio si el dato de origen cambia de
 # formato. El "%%" al final de cada LIKE cubre las variantes numeradas
 # reales ("Despues Exhibición Cuidado Femenino 2"/"3", vistas en
-# producción) sin tener que listarlas una por una.
+# producción) sin tener que listarlas una por una. Mismo criterio con
+# LOWER() de ambos lados del LIKE -- hoy las 6 variantes reales vienen
+# siempre en "Title Case" consistente (verificado contra Athena), pero por
+# la misma razón que las tildes, no vale la pena apostar a que el origen
+# nunca mande una variante en mayúsculas/minúsculas distinta.
 ACTIVIDADES_FOTOGRAFICO = [7713, 7817, 7880]
 
 
@@ -316,10 +320,10 @@ def traer_fotografico(desde):
         WHERE cliente_id = {CLIENTE_ID}
           AND actividad_id IN ({actividades_sql})
           AND fecha > '{desde}'
-          AND (componente_etiqueta LIKE 'Antes Exhibición Cuidado Femenino%'
-               OR componente_etiqueta LIKE 'Despu_s Exhibición Cuidado Femenino%'
-               OR componente_etiqueta LIKE 'Antes Exhibición Cuidado del Adulto%'
-               OR componente_etiqueta LIKE 'Despu_s Exhibición Cuidado del Adulto%')
+          AND (LOWER(componente_etiqueta) LIKE LOWER('Antes Exhibición Cuidado Femenino%')
+               OR LOWER(componente_etiqueta) LIKE LOWER('Despu_s Exhibición Cuidado Femenino%')
+               OR LOWER(componente_etiqueta) LIKE LOWER('Antes Exhibición Cuidado del Adulto%')
+               OR LOWER(componente_etiqueta) LIKE LOWER('Despu_s Exhibición Cuidado del Adulto%'))
     """
     print("Consultando Athena (fotográfico antes/despues)...")
     df = cursor.execute(query).as_pandas()
