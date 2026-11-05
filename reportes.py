@@ -314,26 +314,36 @@ def _semana_desde_query():
 
 
 def _periodo_horas_desde_query():
-    """Semana o mes para "Horas programadas vs trabajadas" (Davor,
-    2026-10-09: "coloquemos una opción de seleccionar todo el mes
-    también, no solo semana") -- ?modo=mes usa _mes_desde_query() (ya
-    existente, reusado tal cual -- mismos 7 lugares del archivo que ya la
-    usan para "mes calendario completo", sin inventar un criterio nuevo
-    de hasta/tope). calcular_detalle_semana()/resumen_por_persona() no
-    necesitan cambios -- ya reciben un desde/hasta genérico, da igual si
-    el rango es de 7 o 30 días.
+    """Semana, mes o rango de días para "Horas programadas vs trabajadas"
+    (Davor, 2026-10-09: "coloquemos una opción de seleccionar todo el mes
+    también, no solo semana"; 2026-11-05: "aca para seleccionar por días
+    del mes" -- un tercer modo con ?desde=&hasta= de calendario libre,
+    para no estar atado a semana ISO completa ni mes calendario completo).
+    ?modo=mes usa _mes_desde_query(); ?modo=rango usa
+    _rango_mes_actual_por_defecto() (ya existente, mismo criterio que
+    "Recomendaciones": sin params, día 1 del mes actual hasta hoy).
+    calcular_detalle_semana()/resumen_por_persona() no necesitan cambios --
+    ya reciben un desde/hasta genérico, da igual el tamaño del rango.
 
-    Devuelve siempre AMBOS strings (semana_str Y mes_str, sin importar el
-    modo activo) -- así cada <input> conserva su propio último valor
-    elegido al alternar entre modos, en vez de resetearse al actual.
-    `incluye_hoy` (para que la plantilla sepa si tiene sentido mostrar el
-    checkbox de abajo) es sobre el periodo SIN ajustar -- aunque se haya
-    pedido excluir_hoy=1 y `hasta` ya haya bajado un día, la pregunta
-    sigue siendo "¿hoy caía originalmente en este periodo?"."""
-    modo = "mes" if request.args.get("modo") == "mes" else "semana"
+    Devuelve siempre los TRES pares (semana_str, mes_str Y desde_rango/
+    hasta_rango), sin importar el modo activo -- así cada <input> conserva
+    su propio último valor elegido al alternar entre modos, en vez de
+    resetearse al actual. `incluye_hoy` (para que la plantilla sepa si
+    tiene sentido mostrar el checkbox de abajo) es sobre el periodo SIN
+    ajustar -- aunque se haya pedido excluir_hoy=1 y `hasta` ya haya
+    bajado un día, la pregunta sigue siendo "¿hoy caía originalmente en
+    este periodo?"."""
+    modo = request.args.get("modo")
+    modo = modo if modo in ("mes", "rango") else "semana"
     desde_sem, hasta_sem, semana_str = _semana_desde_query()
     desde_mes, hasta_mes, mes_str = _mes_desde_query()
-    desde, hasta = (desde_mes, hasta_mes) if modo == "mes" else (desde_sem, hasta_sem)
+    desde_rango, hasta_rango = _rango_mes_actual_por_defecto()
+    if modo == "mes":
+        desde, hasta = desde_mes, hasta_mes
+    elif modo == "rango":
+        desde, hasta = desde_rango, hasta_rango
+    else:
+        desde, hasta = desde_sem, hasta_sem
 
     # "No considerar hoy" (Davor, 2026-10-10: "como hoy estan trabajando
     # tambien considera el día y el avance se muestra mal... el día aun
@@ -349,13 +359,13 @@ def _periodo_horas_desde_query():
     if excluir_hoy and incluye_hoy:
         hasta = hoy - dt.timedelta(days=1)
 
-    return modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy
+    return modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy, desde_rango, hasta_rango
 
 
 @bp.get("/horas")
 @requiere_pagina("reportes_horas")
 def horas():
-    modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy = _periodo_horas_desde_query()
+    modo, desde, hasta, semana_str, mes_str, incluye_hoy, excluir_hoy, desde_rango, hasta_rango = _periodo_horas_desde_query()
     filtro_args, roles_disp, regiones_disp, supervisores_disp, ciudades_disp, canales_disp = _filtros_admin()
     # "Solo activos" (Davor, 2026-10-09: "filtro, para mostrar solo a los
     # activos") -- alguien que este mes/semana estuvo Activo y después se
@@ -389,6 +399,7 @@ def horas():
     return render_template(
         "reportes_horas.html", usuario=current_user, activo="horas",
         modo=modo, semana_str=semana_str, mes_str=mes_str, semana_contexto=semana_contexto,
+        desde_rango_str=desde_rango.isoformat(), hasta_rango_str=hasta_rango.isoformat(),
         desde=desde, hasta=hasta, filas=filas, solo_activos=solo_activos, canal_dia_estricto=canal_dia_estricto,
         incluye_hoy=incluye_hoy, excluir_hoy=excluir_hoy,
         filtro_args=filtro_args, roles_disponibles=roles_disp,
@@ -400,8 +411,13 @@ def horas():
 @bp.get("/horas/exportar")
 @requiere_pagina("reportes_horas")
 def horas_exportar():
-    modo, desde, hasta, semana_str, mes_str, _incluye_hoy, _excluir_hoy = _periodo_horas_desde_query()
-    periodo_str = mes_str if modo == "mes" else semana_str
+    modo, desde, hasta, semana_str, mes_str, _incluye_hoy, _excluir_hoy, _desde_rango, _hasta_rango = _periodo_horas_desde_query()
+    if modo == "mes":
+        periodo_str = mes_str
+    elif modo == "rango":
+        periodo_str = f"{desde.isoformat()}_a_{hasta.isoformat()}"
+    else:
+        periodo_str = semana_str
     filtro_args, _roles_disp, _regiones_disp, _supervisores_disp, _ciudades_disp, _canales_disp = _filtros_admin()
     estado_filtro = "Activo" if request.args.get("solo_activos") == "1" else None
     detalle = calcular_detalle_semana(
@@ -426,7 +442,7 @@ def horas_exportar():
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    prefijo = "Horas_Mes" if modo == "mes" else "Horas_Semanales"
+    prefijo = "Horas_Mes" if modo == "mes" else ("Horas_Rango" if modo == "rango" else "Horas_Semanales")
     return send_file(
         buf, as_attachment=True, download_name=f"{prefijo}_{periodo_str}.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
