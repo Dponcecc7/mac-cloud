@@ -20,7 +20,7 @@ from dimension_models import Persona, PatronRecurrente, PersonaSupervisorCanal, 
 from github_actions import disparar_workflow
 from patron_recurrente import canonizar_canal_dia, sin_acentos
 from permisos import requiere_pagina
-from scoping import canonizar_canal
+from scoping import canales_asignados_de, canonizar_canal
 from parseo_headcount import (
     COLUMNAS_MAESTRO_ESPERADAS, COLUMNAS_PATRON_ESPERADAS,
     parsear_maestro, parsear_patron, validar_columnas,
@@ -368,7 +368,11 @@ def headcount_submit():
             flash(f"Error leyendo el Patrón Recurrente: {e}", "error")
             return redirect(url_for("cargas.headcount_form"))
 
-    canal_propio = (getattr(current_user, "canal_asignado", None) or "").strip().upper() or None
+    # El canal del Excel solo se fuerza con UN canal asignado: con varios
+    # (Davor, 2026-11-05) no hay uno solo que imponer, así que se respeta lo
+    # tipeado en cada fila, igual que para quien no tiene canal fijo.
+    canales_propios = canales_asignados_de(current_user)
+    canal_propio = canales_propios[0] if len(canales_propios) == 1 else None
 
     session = get_session()
     try:

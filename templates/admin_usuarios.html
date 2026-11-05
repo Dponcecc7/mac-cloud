@@ -67,6 +67,8 @@
     .permisos-grupo-title:first-child { margin-top:0; }
     .permiso-chk { display:flex; align-items:center; gap:7px; font-size:13px; font-weight:400; padding:3px 0; cursor:pointer; }
     .permiso-chk input { width:auto; margin:0; }
+    .canales-chk { min-width:112px; }
+    .canales-chk .permiso-chk { font-size:12.5px; padding:1px 0; white-space:nowrap; }
     .btn-guardar-permisos { margin-top:16px; font-size:12.5px; padding:9px 18px; }
     #permisos-vacio { color:var(--muted); font-size:12.5px; }
 
@@ -154,12 +156,12 @@
             <input type="text" name="cliente_id_athena" form="acceso-{{ u.id }}" value="{{ u.cliente_id_athena or '' }}" placeholder="—" title="Cliente ID de Athena -- ve a todos los del mismo grupo si no tiene canal asignado" style="width:70px; padding:4px 6px; margin:0;">
           </td>
           <td>
-            <select name="canal_asignado" form="acceso-{{ u.id }}" title="Si está seteado, solo ve Personas de ese canal (Farmacia/Autoservicio/Tradicional), sin importar quién las cargó">
-              <option value="" {{ 'selected' if not u.canal_asignado else '' }}>— (sin canal, usa Cliente ID)</option>
+            {% set canales_u = (u.canal_asignado or '').split(',') %}
+            <div class="canales-chk" title="Con canales marcados, solo ve Personas de esos canales, sin importar quién las cargó. Sin ninguno, usa Cliente ID.">
               {% for c in ("FARMACIA", "AUTOSERVICIO", "TRADICIONAL") %}
-              <option value="{{ c }}" {{ 'selected' if u.canal_asignado == c else '' }}>{{ c|title }}</option>
+              <label class="permiso-chk"><input type="checkbox" name="canal_asignado" value="{{ c }}" form="acceso-{{ u.id }}" {{ 'checked' if c in canales_u else '' }}> {{ c|title }}</label>
               {% endfor %}
-            </select>
+            </div>
           </td>
           <td>
             <input type="text" name="dni_asociado" form="acceso-{{ u.id }}" value="{{ u.dni_asociado or '' }}" placeholder="—" title="Solo aplica si el Rol es Supervisor -- ve a su equipo directo" style="width:90px; padding:4px 6px; margin:0;">

@@ -6,7 +6,7 @@ Postgres. Se usa el modelo Persona real (dimension_models) en vez de un
 mock -- comparar Persona.dni == "123" ya funciona sin conexión, es
 exactamente lo que hace la app antes de pasarlo a .filter()."""
 from dimension_models import Persona
-from scoping import canal_del_dia_coincide, condicion_canal, condicion_scope
+from scoping import canal_del_dia_coincide, canales_asignados_de, condicion_canal, condicion_scope
 
 
 class UsuarioFalso:
@@ -59,6 +59,23 @@ def test_analista_de_canal_usa_condicion_canal():
     cond = condicion_scope(Persona, analista_canal)
     assert cond is not None
     assert str(cond) == str(condicion_canal(Persona, "FARMACIA"))
+
+
+def test_canales_asignados_lee_uno_o_varios():
+    assert canales_asignados_de(UsuarioFalso("analista")) == []
+    assert canales_asignados_de(None) == []
+    assert canales_asignados_de(UsuarioFalso("analista", canal_asignado="FARMACIA")) == ["FARMACIA"]
+    multiple = UsuarioFalso("analista", canal_asignado="FARMACIA, autoservicios,FARMACIA,")
+    assert canales_asignados_de(multiple) == ["FARMACIA", "AUTOSERVICIO"]
+
+
+def test_analista_con_varios_canales_ve_la_union():
+    analista = UsuarioFalso("analista", canal_asignado="FARMACIA,TRADICIONAL")
+    cond = condicion_scope(Persona, analista)
+    compilado = str(cond.compile(compile_kwargs={"literal_binds": True}))
+    assert "'FARMACIA'" in compilado
+    assert "'TRADICIONAL'" in compilado
+    assert "'AUTOSERVICIO'" not in compilado
 
 
 def test_condicion_canal_normaliza_mayusculas_y_espacios():

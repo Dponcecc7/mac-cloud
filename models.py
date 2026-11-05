@@ -25,7 +25,9 @@ class Usuario(db.Model, UserMixin):
     # TODO el grupo (headcount Tradicional incluido) en vez de solo su
     # propio canal. Si está seteado, scoping.py filtra por canal en vez de
     # por analista_propietario/cliente_id_athena. None = sin cambio de
-    # comportamiento (sigue el fallback anterior).
+    # comportamiento (sigue el fallback anterior). Puede traer varios canales
+    # separados por coma (Davor, 2026-11-05) -- leerlo siempre con
+    # scoping.py::canales_asignados_de(), nunca comparar el texto directo.
     canal_asignado = db.Column(db.String(50), nullable=True)
     # Lista JSON de claves de pagina/subpagina que este usuario puede ver
     # (ver permisos.py) -- Davor, 2026-08-30: "yo como admin debo

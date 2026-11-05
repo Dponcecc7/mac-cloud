@@ -24,6 +24,8 @@
   canales (ej. canal="MULTICANAL", unos días Farmacia otros Autoservicio)
   aparezca para CADA analista de canal en el suyo, sin duplicar la fila
   (Persona sigue siendo una sola fila por DNI -- admin la ve una sola vez).
+  Un analista puede tener VARIOS canales (Davor, 2026-11-05) -- ve la unión
+  de todos, ver canales_asignados_de().
 
 Admin ve todo (supervisión cruzada). Un usuario sin nada de esto asignado
 todavía también ve todo -- para no romper accesos existentes en silencio;
@@ -74,8 +76,9 @@ def condicion_scope(persona_model, usuario_actual):
             for s in UsuarioSupervisorVisible.query.filter_by(usuario_id=usuario_actual.id).all()
         ]
         return (persona_model.supervisor_dni.in_(dnis)) | (persona_model.dni.in_(dnis))
-    if getattr(usuario_actual, "canal_asignado", None):
-        return condicion_canal(persona_model, usuario_actual.canal_asignado)
+    canales = canales_asignados_de(usuario_actual)
+    if canales:
+        return condicion_canal(persona_model, canales)
     if usuario_actual.cliente_id_athena is not None:
         correos = [
             u.email for u in Usuario.query.filter_by(cliente_id_athena=usuario_actual.cliente_id_athena).all()
@@ -116,6 +119,19 @@ def canonizar_canal(valor):
         if v in variantes:
             return canonico
     return v
+
+
+def canales_asignados_de(usuario):
+    """Lista de canales asignados a `usuario`, canonizados y sin repetir --
+    [] si no tiene ninguno. Usuario.canal_asignado guarda varios separados
+    por coma (Davor, 2026-11-05: "que sea opción múltiple los canales"), en
+    la misma columna de texto para no necesitar migración: una cuenta con un
+    solo canal ya guardado se lee igual que antes."""
+    valor = getattr(usuario, "canal_asignado", None) if usuario else None
+    if not valor:
+        return []
+    canales = (canonizar_canal(c) for c in valor.split(","))
+    return list(dict.fromkeys(c for c in canales if c))
 
 
 def canal_del_dia_coincide(canal_esperado, canales_marcados, canales_objetivo):
@@ -216,17 +232,22 @@ def overrides_supervisor_canal(session, dnis, usuario_actual):
     inventar un dato, no resolver la ambigüedad."""
     if not dnis:
         return {}
-    canal_asignado = getattr(usuario_actual, "canal_asignado", None) if usuario_actual else None
-    if canal_asignado:
+    canales = canales_asignados_de(usuario_actual)
+    if canales:
         filas = (
             session.query(PersonaSupervisorCanal.dni, PersonaSupervisorCanal.supervisor_dni)
             .filter(
                 PersonaSupervisorCanal.dni.in_(dnis),
-                func.upper(PersonaSupervisorCanal.canal) == canal_asignado.strip().upper(),
+                func.upper(PersonaSupervisorCanal.canal).in_(canales),
             )
             .all()
         )
-        return dict(filas)
+        # Con varios canales asignados, misma regla que abajo: si difieren
+        # los supervisores entre esos canales no se elige uno inventando.
+        supervisores = {}
+        for dni, supervisor_dni in filas:
+            supervisores.setdefault(dni, set()).add(supervisor_dni)
+        return {dni: next(iter(s)) for dni, s in supervisores.items() if len(s) == 1}
     todos = todos_overrides_supervisor_canal(session, dnis)
     return {
         dni: pares[0][1]

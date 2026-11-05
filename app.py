@@ -33,7 +33,8 @@ from dimension_models import get_session as get_dim_session
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow
 from scoping import (
-    CANALES_FILTRABLES, aplicar_filtros_extra, canal_del_dia_coincide, canonizar_canal, condicion_canal,
+    CANALES_FILTRABLES, aplicar_filtros_extra, canal_del_dia_coincide, canales_asignados_de, canonizar_canal,
+    condicion_canal,
     condicion_scope, todos_overrides_supervisor_canal, todos_overrides_zona_canal,
 )
 from vacaciones import calcular_viajes_vacaciones
@@ -330,10 +331,13 @@ def create_app():
         # Tradicional) ya está acotado por condicion_scope() via
         # canal_asignado -- para él no tiene sentido el <select> (elegir
         # otro canal daría siempre 0 resultados), pero el checkbox de abajo
-        # le aplica igual con su canal fijo.
-        canal_asignado_usuario = getattr(current_user, "canal_asignado", None) if not es_admin else None
-        canal_filtro = request.args.getlist("canal") if not canal_asignado_usuario else []
-        canal_efectivo = canal_filtro or ([canal_asignado_usuario] if canal_asignado_usuario else [])
+        # le aplica igual con su canal fijo. Con VARIOS canales asignados
+        # (Davor, 2026-11-05) sí puede elegir, pero solo entre los suyos.
+        canales_usuario = canales_asignados_de(current_user) if not es_admin else []
+        canal_filtro = request.args.getlist("canal") if len(canales_usuario) != 1 else []
+        if canales_usuario:
+            canal_filtro = [c for c in canal_filtro if c in canales_usuario]
+        canal_efectivo = canal_filtro or canales_usuario
         # "Otro filtro adicional" (Davor, 2026-10-09; caso real Diego no
         # veía el checkbox): el Canal de arriba (o el canal_asignado del
         # propio analista) es a nivel PERSONA (condicion_canal() -- incluye
@@ -431,10 +435,14 @@ def create_app():
             "canal": canal_filtro, "canal_dia": "1" if canal_dia_estricto else "",
         }
         # El <select> de Canal se muestra para cualquiera MENOS un analista
-        # de canal (ya tiene el suyo fijo, elegir otro daría 0 resultados);
-        # el checkbox de abajo se muestra para todos, uno u otro caso.
-        canales_disponibles = [] if canal_asignado_usuario else CANALES_FILTRABLES
-        mostrar_filtro_canal_dia = bool(canales_disponibles) or bool(canal_asignado_usuario)
+        # con un solo canal (ya tiene el suyo fijo, elegir otro daría 0
+        # resultados); con varios, ofrece solo los suyos. El checkbox de
+        # abajo se muestra para todos, uno u otro caso.
+        if canales_usuario:
+            canales_disponibles = canales_usuario if len(canales_usuario) > 1 else []
+        else:
+            canales_disponibles = CANALES_FILTRABLES
+        mostrar_filtro_canal_dia = bool(canales_disponibles) or bool(canales_usuario)
 
         if canal_dia_estricto:
             canales_objetivo = {canonizar_canal(c) for c in canal_efectivo}

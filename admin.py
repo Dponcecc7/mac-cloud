@@ -141,7 +141,12 @@ def set_acceso_usuario(usuario_id):
     usuario = Usuario.query.get_or_404(usuario_id)
 
     cliente_id_athena = request.form.get("cliente_id_athena", "").strip()
-    canal_asignado = request.form.get("canal_asignado", "").strip().upper() or None
+    # Varios canales por usuario (Davor, 2026-11-05) -- se guardan separados
+    # por coma, en el orden fijo de CANALES_ASIGNABLES. Ver
+    # scoping.py::canales_asignados_de().
+    canales = {c.strip().upper() for c in request.form.getlist("canal_asignado") if c.strip()}
+    canales_invalidos = canales - set(CANALES_ASIGNABLES)
+    canal_asignado = ",".join(c for c in CANALES_ASIGNABLES if c in canales) or None
     dni_asociado = request.form.get("dni_asociado", "").strip() or None
     if dni_asociado:
         # Mismo motivo que en el alta (arriba): sin cero a la izquierda, para
@@ -150,7 +155,7 @@ def set_acceso_usuario(usuario_id):
 
     if cliente_id_athena and not cliente_id_athena.isdigit():
         flash("El cliente ID de Athena tiene que ser un número.", "error")
-    elif canal_asignado and canal_asignado not in CANALES_ASIGNABLES:
+    elif canales_invalidos:
         flash(f"Canal inválido -- tiene que ser uno de: {', '.join(CANALES_ASIGNABLES)}.", "error")
     else:
         usuario.cliente_id_athena = int(cliente_id_athena) if cliente_id_athena else None
