@@ -308,6 +308,7 @@
           <thead>
             <tr>
               <th data-tipo="texto">Nombre <span class="flecha">↕</span></th>
+              <th data-tipo="texto">DNI <span class="flecha">↕</span></th>
               <th data-tipo="texto">Supervisor <span class="flecha">↕</span></th>
               <th data-tipo="texto">Ciudad <span class="flecha">↕</span></th>
               <th data-tipo="texto">Región <span class="flecha">↕</span></th>
@@ -329,6 +330,7 @@
             {% set clase_pct = 'ok' if pct is not none and pct >= 95 else ('warn' if pct is not none and pct >= 80 else 'bad') %}
             <tr>
               <td data-label="Nombre"><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=f.dni, semana=semana_contexto) }}" title="Ver detalle día a día de esta semana">{{ f.nombre|title }}</a></td>
+              <td data-label="DNI">{{ f.dni or '—' }}</td>
               <td data-label="Supervisor">{{ (f.supervisor or '—')|title }}</td>
               <td data-label="Ciudad">{{ (f.ciudad or '—')|title }}</td>
               <td data-label="Región">{{ (f.region or '—')|title }}</td>
