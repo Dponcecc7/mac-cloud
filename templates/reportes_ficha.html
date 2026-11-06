@@ -542,6 +542,53 @@
       {% endif %}
     </div>
 
+    <div class="panel" id="compensaciones-panel">
+      <p class="panel-title">Compensaciones de {{ mes_str }} ({{ compensaciones_mes|length }})</p>
+      {% if not compensaciones_mes %}<p class="empty">Todavía no hay motivos registrados este mes. Se cargan en "Tardanzas y salidas anticipadas", arriba.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table class="cards-mobile">
+          <tr>
+            <th>Fecha</th>
+            <th>Qué pasó</th>
+            <th>Motivo</th>
+            <th>¿Qué compensa?</th>
+            <th class="num">Hs. compensadas</th>
+            <th class="num">Hs. pendientes</th>
+            <th>Registrado por</th>
+            <th>Registrado el</th>
+          </tr>
+          {% for c in compensaciones_mes %}
+          <tr>
+            <td data-label="Fecha">{{ c.fecha }}</td>
+            <td data-label="Qué pasó">
+              {% if c.hubo_tardanza %}<span class="badge-pct warn">Tardanza</span>{% endif %}
+              {% if c.hubo_salida %}<span class="badge-pct warn">Salida anticipada</span>{% endif %}
+              {% if not c.hubo_tardanza and not c.hubo_salida %}—{% endif %}
+            </td>
+            <td data-label="Motivo">{{ c.motivo }}</td>
+            <td data-label="¿Qué compensa?">
+              {% if c.compensa_tardanza %}<span class="badge-pct ok">Tardanza</span>{% endif %}
+              {% if c.compensa_salida %}<span class="badge-pct ok">Salida anticipada</span>{% endif %}
+              {% if not c.compensa_tardanza and not c.compensa_salida %}<span class="badge-pct bad">No compensa</span>{% endif %}
+            </td>
+            <td class="num" data-label="Hs. compensadas">{{ c.horas_compensadas }}</td>
+            <td class="num" data-label="Hs. pendientes">{{ c.horas_pendientes }}</td>
+            <td data-label="Registrado por">{{ c.registrado_por }}</td>
+            <td data-label="Registrado el">{{ c.registrado_el }}</td>
+          </tr>
+          {% endfor %}
+          <tr style="font-weight:700;">
+            <td colspan="4">Total del mes</td>
+            <td class="num">{{ total_comp_h }}</td>
+            <td class="num">{{ total_pend_h }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
     <div class="panel">
       <p class="panel-title">Faltas de {{ mes_str }} ({{ faltas_mes|length }})</p>
       {% if not faltas_mes %}<p class="empty">Sin faltas este mes.</p>

@@ -27,7 +27,7 @@ from dimension_models import (
 from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
-from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
+from horas_semanales import semana_iso, calcular_detalle_semana, compensaciones_del_mes, resumen_por_persona
 from patron_recurrente import sin_acentos
 from permisos import requiere_analista_admin, requiere_pagina
 from planning import (
@@ -1951,6 +1951,13 @@ def ficha(dni):
                 "motivo_comp": motivo_comp, "comp_tardanza": comp_t, "comp_salida": comp_s, "comp_estado": comp_estado,
             })
 
+    # Tabla inferior de compensaciones del mes con su detalle (Davor,
+    # 2026-11-06) -- lo mismo que se registra arriba, con horas compensadas y
+    # pendientes por día y quién/cuándo lo registró.
+    compensaciones_mes = compensaciones_del_mes(dni, mes_desde, mes_hasta, detalle_mes)
+    total_comp_h = round(sum(c["horas_compensadas"] for c in compensaciones_mes), 2)
+    total_pend_h = round(sum(c["horas_pendientes"] for c in compensaciones_mes), 2)
+
     # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,
     # 2026-08-24: "tiene una falta pero no me sale en el detalle del
     # perfil" -- el indicador de arriba ya contaba la falta, pero "Detalle
@@ -1977,6 +1984,7 @@ def ficha(dni):
         umbral_cumplimiento_bajo=UMBRAL_CUMPLIMIENTO_BAJO,
         detalle_dias=detalle_dias, semana_vista_str=semana_vista_str,
         desde_v=desde_v, hasta_v=hasta_v, tardanzas_mes=tardanzas_mes, faltas_mes=faltas_mes,
+        compensaciones_mes=compensaciones_mes, total_comp_h=total_comp_h, total_pend_h=total_pend_h,
         alertas_mes=alertas_mes, insights=insights,
         historial_persona=historial_persona, campos_historial=CAMPOS_VALIDOS, dias_semana_historial=DIAS_SEMANA_HISTORIAL,
         patron_semanal=patron_semanal, motivos=_motivos_falta(), motivos_descanso=_motivos_descanso(),

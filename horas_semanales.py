@@ -362,6 +362,60 @@ def aplicar_compensaciones(r, compensaciones):
     return r
 
 
+def compensaciones_del_mes(dni, desde, hasta, detalle_mes):
+    """Detalle de lo registrado en Ficha > "Tardanzas y salidas anticipadas"
+    para `dni` entre `desde` y `hasta` (Davor, 2026-11-06: "una tabla
+    inferior de compensaciones con su detalle"), más reciente primero.
+    `detalle_mes` es el DataFrame de calcular_detalle_semana() de ese mismo
+    rango: de ahí salen lo que pasó ese día (tardanza / salida anticipada),
+    cuántas horas faltaron, cuántas quedaron compensadas y cuántas siguen
+    pendientes. Si la tabla no se puede leer devuelve [] -- la ficha no se cae."""
+    session = get_session()
+    try:
+        asegurar_tabla_compensaciones()
+        registros = (
+            session.query(CompensacionHoras)
+            .filter(CompensacionHoras.dni == dni, CompensacionHoras.fecha >= desde, CompensacionHoras.fecha <= hasta)
+            .order_by(CompensacionHoras.fecha.desc())
+            .all()
+        )
+        filas_db = [
+            (r.fecha, r.motivo, bool(r.compensa_tardanza), bool(r.compensa_salida), r.registrado_por, r.updated_at)
+            for r in registros
+        ]
+    except Exception as e:
+        print(f"[horas_semanales] detalle de compensaciones no disponible: {e}", file=sys.stderr)
+        return []
+    finally:
+        session.close()
+
+    hay_detalle = detalle_mes is not None and len(detalle_mes) > 0
+    fechas = detalle_mes["fecha"].dt.date if hay_detalle else None
+    resultado = []
+    for fecha, motivo, compensa_tardanza, compensa_salida, registrado_por, registrado_el in filas_db:
+        horas_compensadas = horas_pendientes = 0.0
+        hubo_tardanza = hubo_salida = False
+        if hay_detalle:
+            dia = detalle_mes[fechas == fecha]
+            if len(dia):
+                trabajadas = pd.to_numeric(dia["horas_trabajadas"], errors="coerce")
+                a_trabajar = pd.to_numeric(dia["horas_a_trabajar"], errors="coerce")
+                faltante = float((a_trabajar - trabajadas).clip(lower=0).fillna(0.0).sum())
+                horas_compensadas = float(dia["_horas_compensadas_dia"].sum())
+                horas_pendientes = max(faltante - horas_compensadas, 0.0)
+                hubo_tardanza = bool(dia["es_tardanza"].any())
+                hubo_salida = bool(dia["es_salida_temprana"].any())
+        resultado.append({
+            "fecha": fecha.strftime("%d/%m"), "fecha_iso": fecha.isoformat(),
+            "hubo_tardanza": hubo_tardanza, "hubo_salida": hubo_salida,
+            "motivo": motivo, "compensa_tardanza": compensa_tardanza, "compensa_salida": compensa_salida,
+            "horas_compensadas": round(horas_compensadas, 2), "horas_pendientes": round(horas_pendientes, 2),
+            "registrado_por": registrado_por or "—",
+            "registrado_el": registrado_el.strftime("%d/%m/%Y %H:%M") if registrado_el else "—",
+        })
+    return resultado
+
+
 def resumen_por_persona(detalle_semana):
     """Agregado semanal por persona -- mismas columnas/regla que
     reporte_semanal.py::agregar_detalle_mercaderista()."""
