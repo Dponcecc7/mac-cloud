@@ -277,6 +277,8 @@ CREATE TABLE compensaciones_horas (
 	fecha DATE NOT NULL,
 	motivo VARCHAR(200) NOT NULL,
 	compensa BOOLEAN NOT NULL,
+	compensa_tardanza BOOLEAN DEFAULT false NOT NULL,
+	compensa_salida BOOLEAN DEFAULT false NOT NULL,
 	registrado_por VARCHAR(150),
 	updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
 	PRIMARY KEY (id),

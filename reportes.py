@@ -1560,11 +1560,12 @@ def _volver_a_ficha(dni):
 @bp.post("/ficha/<dni>/compensacion")
 @requiere_analista_admin()
 def guardar_compensacion(dni):
-    """Guarda el motivo de una tardanza/salida anticipada y si compensa todas
-    las horas de ese día (Davor, 2026-11-06) -- lo usa Horas programadas vs
-    trabajadas, ver horas_semanales.py::aplicar_compensaciones(). Sin motivo
-    borra lo que hubiera. Solo analista/admin y solo sobre gente dentro de
-    su alcance (mismo criterio que ficha())."""
+    """Guarda el motivo de una tardanza/salida anticipada y qué compensa
+    (la tardanza, la salida anticipada o ambas) -- Davor, 2026-11-06. Lo usa
+    Horas programadas vs trabajadas, ver
+    horas_semanales.py::aplicar_compensaciones(). Sin motivo borra lo que
+    hubiera. Solo analista/admin y solo sobre gente dentro de su alcance
+    (mismo criterio que ficha())."""
     volver = _volver_a_ficha(dni) + "#tardanzas-panel"
     try:
         fecha = dt.date.fromisoformat(request.form.get("fecha", ""))
@@ -1575,9 +1576,14 @@ def guardar_compensacion(dni):
         flash("No se puede registrar el motivo de un día que todavía no pasó.", "error")
         return redirect(volver)
     motivo = " ".join(request.form.get("motivo", "").split())[:200]
-    compensa = request.form.get("compensa") == "1"
-    if compensa and not motivo:
-        flash("Para compensar las horas escribí primero el motivo.", "error")
+    compensa_tardanza = request.form.get("compensa_tardanza") == "1"
+    compensa_salida = request.form.get("compensa_salida") == "1"
+    if request.form.get("compensa") == "1":
+        # Formulario de la versión anterior (una pestaña que quedó abierta):
+        # "Sí compensa" cubría todo el día.
+        compensa_tardanza = compensa_salida = True
+    if (compensa_tardanza or compensa_salida) and not motivo:
+        flash("Para compensar escribí primero el motivo.", "error")
         return redirect(volver)
 
     session = get_session()
@@ -1604,14 +1610,23 @@ def guardar_compensacion(dni):
                 flash("Escribí un motivo para guardarlo.", "error")
         else:
             if existente is None:
-                existente = CompensacionHoras(dni=dni, fecha=fecha, motivo=motivo, compensa=compensa)
+                existente = CompensacionHoras(dni=dni, fecha=fecha, motivo=motivo)
                 session.add(existente)
             existente.motivo = motivo
-            existente.compensa = compensa
+            existente.compensa_tardanza = compensa_tardanza
+            existente.compensa_salida = compensa_salida
+            existente.compensa = compensa_tardanza or compensa_salida
             existente.registrado_por = current_user.email
             existente.updated_at = dt.datetime.now()
             session.commit()
-            resultado = "compensa todas las horas" if compensa else "no compensa las horas"
+            if compensa_tardanza and compensa_salida:
+                resultado = "compensa la tardanza y la salida anticipada"
+            elif compensa_tardanza:
+                resultado = "compensa la tardanza"
+            elif compensa_salida:
+                resultado = "compensa la salida anticipada"
+            else:
+                resultado = "no compensa las horas (solo queda anotado el motivo)"
             flash(f"Motivo del {dia} de {nombre} guardado: {resultado}.", "ok")
     finally:
         session.close()
@@ -1900,6 +1915,19 @@ def ficha(dni):
                 continue
             horas_trabajadas = row["horas_trabajadas"] if pd.notna(row["horas_trabajadas"]) else None
             horas_a_trabajar = row["horas_a_trabajar"]
+            # Motivo + qué compensa (Davor, 2026-11-06) -- comp_estado: None
+            # sin motivo cargado; "no" motivo sin compensar; "total" cubre
+            # TODO lo que aplica ese día; "parcial" solo una de las dos cosas.
+            motivo_comp = row["motivo_compensacion"] if isinstance(row["motivo_compensacion"], str) else ""
+            comp_t, comp_s = bool(row["comp_tardanza"]), bool(row["comp_salida"])
+            if not motivo_comp:
+                comp_estado = None
+            elif not (comp_t or comp_s):
+                comp_estado = "no"
+            elif (not es_tardanza or comp_t) and (not es_salida_temprana or comp_s):
+                comp_estado = "total"
+            else:
+                comp_estado = "parcial"
             tardanzas_mes.append({
                 "fecha_iso": row["fecha"].date().isoformat(),
                 "fecha": row["fecha"].strftime("%d/%m"),
@@ -1920,10 +1948,7 @@ def ficha(dni):
                     horas_trabajadas is not None and horas_a_trabajar is not None
                     and horas_trabajadas >= horas_a_trabajar
                 ) if horas_trabajadas is not None else None,
-                # Motivo + si compensa TODAS las horas de ese día (Davor,
-                # 2026-11-06) -- compensa=None: todavía sin motivo cargado.
-                "motivo_comp": row["motivo_compensacion"] if isinstance(row["motivo_compensacion"], str) else "",
-                "compensa": bool(row["compensado"]) if isinstance(row["motivo_compensacion"], str) else None,
+                "motivo_comp": motivo_comp, "comp_tardanza": comp_t, "comp_salida": comp_s, "comp_estado": comp_estado,
             })
 
     # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,

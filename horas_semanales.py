@@ -302,15 +302,16 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
 
 
 def cargar_compensaciones(session, desde, hasta):
-    """{(dni, fecha): (compensa, motivo)} de los días registrados en
-    Ficha > "Tardanzas y salidas anticipadas". Si la tabla todavía no se
-    puede leer devuelve {} -- un reporte de horas sin compensaciones es
-    mejor que un reporte caído."""
+    """{(dni, fecha): (compensa_tardanza, compensa_salida, motivo)} de los
+    días registrados en Ficha > "Tardanzas y salidas anticipadas". Si la tabla
+    todavía no se puede leer devuelve {} -- un reporte de horas sin
+    compensaciones es mejor que un reporte caído."""
     try:
         asegurar_tabla_compensaciones()
         filas = (
             session.query(
-                CompensacionHoras.dni, CompensacionHoras.fecha, CompensacionHoras.compensa, CompensacionHoras.motivo,
+                CompensacionHoras.dni, CompensacionHoras.fecha, CompensacionHoras.compensa_tardanza,
+                CompensacionHoras.compensa_salida, CompensacionHoras.motivo,
             )
             .filter(CompensacionHoras.fecha >= desde, CompensacionHoras.fecha <= hasta)
             .all()
@@ -319,31 +320,45 @@ def cargar_compensaciones(session, desde, hasta):
         session.rollback()
         print(f"[horas_semanales] compensaciones no disponibles: {e}", file=sys.stderr)
         return {}
-    return {(dni, fecha): (bool(compensa), motivo) for dni, fecha, compensa, motivo in filas}
+    return {(dni, fecha): (bool(tarde), bool(salida), motivo) for dni, fecha, tarde, salida, motivo in filas}
 
 
 def aplicar_compensaciones(r, compensaciones):
-    """Agrega `motivo_compensacion`, `compensado` y `_horas_compensadas_dia`
-    a `r` (una fila por turno, con dni/fecha/horas_trabajadas/
-    horas_a_trabajar/recupero_dia).
+    """Agrega `motivo_compensacion`, `comp_tardanza`, `comp_salida`,
+    `compensado` (alguna de las dos) y `_horas_compensadas_dia` a `r` (una
+    fila por turno, con las columnas de calcular_detalle_semana()).
 
-    Si un analista marcó que el motivo de ese día compensa todas las horas,
-    lo que faltó trabajar se descuenta de la base "Horas a trabajar" (mismo
-    tratamiento que Vacante/con sustento: no se le "debe" esa parte) en vez
-    de sumarse a Horas trabajadas -- así "Horas trabajadas" sigue siendo lo
-    realmente marcado -- y ese día cuenta como recuperado/cumplido. Solo
-    aplica a días con marcación real: sin horas trabajadas no hay faltante
-    que compensar. `compensa`=False solo deja el motivo documentado."""
+    Un analista marca qué cubre el motivo de ese día: la tardanza, la salida
+    anticipada o ambas. Si marcó TODO lo que aplica ese día, lo que faltó
+    trabajar se descuenta de la base "Horas a trabajar" (mismo tratamiento
+    que Vacante/con sustento: no se le "debe" esa parte) y el día cuenta como
+    recuperado. Si marcó solo una de las dos, se descuenta únicamente esa
+    parte -- los minutos de tardanza (entrada real - programada) o de salida
+    anticipada -- y lo demás sigue restando. "Horas trabajadas" nunca se
+    toca: sigue siendo lo realmente marcado. Solo aplica a días con
+    marcación real: sin horas trabajadas no hay faltante que compensar."""
     claves = list(zip(r["dni"], r["fecha"].dt.date))
     registro = [compensaciones.get(k) for k in claves]
-    r["motivo_compensacion"] = pd.Series([x[1] if x else None for x in registro], index=r.index, dtype=object)
-    r["compensado"] = pd.Series([bool(x and x[0]) for x in registro], index=r.index, dtype=bool)
+    r["motivo_compensacion"] = pd.Series([x[2] if x else None for x in registro], index=r.index, dtype=object)
+    r["comp_tardanza"] = pd.Series([bool(x and x[0]) for x in registro], index=r.index, dtype=bool)
+    r["comp_salida"] = pd.Series([bool(x and x[1]) for x in registro], index=r.index, dtype=bool)
+    r["compensado"] = r["comp_tardanza"] | r["comp_salida"]
+
     trabajadas = pd.to_numeric(r["horas_trabajadas"], errors="coerce")
     a_trabajar = pd.to_numeric(r["horas_a_trabajar"], errors="coerce")
-    con_horas = r["compensado"] & trabajadas.notna()
     faltante = (a_trabajar - trabajadas).clip(lower=0)
-    r["_horas_compensadas_dia"] = faltante.where(con_horas, 0.0).fillna(0.0)
-    r["recupero_dia"] = r["recupero_dia"] | con_horas
+
+    tarde_h = ((r["_entrada_real_td"] - r["_entrada_esp_td"]).dt.total_seconds() / 3600).clip(lower=0).fillna(0.0)
+    salida_h = (pd.to_numeric(r["salida_anticipada_min"], errors="coerce") / 60).clip(lower=0).fillna(0.0)
+    cubre_tarde = r["comp_tardanza"] & r["es_tardanza"]
+    cubre_salida = r["comp_salida"] & r["es_salida_temprana"]
+    completo = (~r["es_tardanza"] | r["comp_tardanza"]) & (~r["es_salida_temprana"] | r["comp_salida"])
+    parte_h = tarde_h.where(cubre_tarde, 0.0) + salida_h.where(cubre_salida, 0.0)
+    compensada = faltante.where(completo, np.minimum(faltante, parte_h))
+
+    con_horas = r["compensado"] & trabajadas.notna()
+    r["_horas_compensadas_dia"] = compensada.where(con_horas, 0.0).fillna(0.0)
+    r["recupero_dia"] = r["recupero_dia"] | (con_horas & (r["_horas_compensadas_dia"] >= faltante - 0.005))
     return r
 
 

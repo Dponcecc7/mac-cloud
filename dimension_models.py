@@ -17,7 +17,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, Date, Float, ForeignKey, Integer, String,
-    Text, Time, TIMESTAMP, UniqueConstraint, create_engine, func,
+    Text, Time, TIMESTAMP, UniqueConstraint, create_engine, false, func, inspect, text,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -211,19 +211,25 @@ class HistorialCambio(Base):
 
 
 class CompensacionHoras(Base):
-    """Motivo de una tardanza/salida anticipada y si ese motivo compensa TODAS
-    las horas que la persona debía ese día (Davor, 2026-11-06, Ficha del
-    trabajador > "Tardanzas y salidas anticipadas": "colocar un motivo y un
-    botón para confirmar si ese motivo compensa todas las horas que debe,
-    para el reporte de horas programadas vs horas trabajadas").
+    """Motivo de una tardanza/salida anticipada y qué compensa ese motivo
+    (Davor, 2026-11-06, Ficha del trabajador > "Tardanzas y salidas
+    anticipadas": "colocar un motivo y un botón para confirmar si ese motivo
+    compensa todas las horas que debe, para el reporte de horas programadas
+    vs horas trabajadas"; después: "debe señalar si compensa salida
+    anticipada o tardanza").
 
     Tabla aparte (no una columna de clasificacion_diaria) a propósito: el
     motor reescribe clasificacion_diaria en cada corrida del pipeline y
     pisaría lo que un analista cargó a mano. dni+fecha único: aplica al día
-    completo, también para un Multicanal con 2 turnos. `compensa`=False deja
-    el motivo documentado sin cambiar las horas; =True hace que ese día no
-    reste en Horas programadas vs trabajadas (ver
-    horas_semanales.py::aplicar_compensaciones)."""
+    completo, también para un Multicanal con 2 turnos.
+
+    `compensa_tardanza` / `compensa_salida`: qué parte del día cubre el
+    motivo. Sin ninguna marcada, el motivo solo queda anotado y las horas
+    siguen restando. Con TODAS las que aplican ese día marcadas, el faltante
+    deja de restar en Horas programadas vs trabajadas; con solo una, se
+    descuenta únicamente esa parte (ver
+    horas_semanales.py::aplicar_compensaciones). `compensa` queda como
+    "alguna de las dos", por compatibilidad con lo ya publicado."""
     __tablename__ = "compensaciones_horas"
 
     id = Column(Integer, primary_key=True)
@@ -231,6 +237,8 @@ class CompensacionHoras(Base):
     fecha = Column(Date, nullable=False)
     motivo = Column(String(200), nullable=False)
     compensa = Column(Boolean, nullable=False, default=False)
+    compensa_tardanza = Column(Boolean, nullable=False, default=False, server_default=false())
+    compensa_salida = Column(Boolean, nullable=False, default=False, server_default=false())
     registrado_por = Column(String(150))
     updated_at = Column(TIMESTAMP, server_default=func.now())
 
@@ -238,18 +246,42 @@ class CompensacionHoras(Base):
 
 
 _tabla_compensaciones_lista = False
+_COLUMNAS_TIPO_COMPENSACION = ("compensa_tardanza", "compensa_salida")
 
 
 def asegurar_tabla_compensaciones():
     """Crea `compensaciones_horas` si todavía no existe -- el esquema de
     producción se armó una sola vez con crear_tablas() y ningún deploy lo
     vuelve a correr, así que sin esto la primera vez fallaría con "la tabla
-    no existe". Idempotente y barato: después de la primera vez no vuelve a
-    consultar la base."""
+    no existe". También agrega las columnas por tipo a la tabla de la primera
+    versión (que solo tenía `compensa`): lo que ya estaba guardado como "Sí
+    compensa" cubría todo el día, así que pasa a compensar ambos tipos.
+    Idempotente y barato: después de la primera vez no vuelve a consultar la
+    base."""
     global _tabla_compensaciones_lista
     if _tabla_compensaciones_lista:
         return
-    CompensacionHoras.__table__.create(get_engine(), checkfirst=True)
+    engine = get_engine()
+    CompensacionHoras.__table__.create(engine, checkfirst=True)
+
+    def _faltantes():
+        existentes = {c["name"] for c in inspect(engine).get_columns("compensaciones_horas")}
+        return [c for c in _COLUMNAS_TIPO_COMPENSACION if c not in existentes]
+
+    faltantes = _faltantes()
+    if faltantes:
+        try:
+            with engine.begin() as conn:
+                for columna in faltantes:
+                    conn.execute(text(f"ALTER TABLE compensaciones_horas ADD COLUMN {columna} BOOLEAN NOT NULL DEFAULT FALSE"))
+                conn.execute(text(
+                    "UPDATE compensaciones_horas SET compensa_tardanza = TRUE, compensa_salida = TRUE WHERE compensa = TRUE"
+                ))
+        except Exception:
+            # Otro proceso pudo haberlas agregado justo antes -- solo es un
+            # error real si siguen faltando.
+            if _faltantes():
+                raise
     _tabla_compensaciones_lista = True
 
 
