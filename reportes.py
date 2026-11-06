@@ -21,13 +21,15 @@ from alertas import alertas_periodo, SALIDA_ANTICIPADA_MIN, UMBRAL_CUMPLIMIENTO_
 from asistencia import _cargar_reporte, _estado_base, _fecha_mas_reciente_con_datos, _homologar_motivo, _motivos_descanso, _motivos_falta, historico_persona
 from cobertura import _cargar_visitas, marcaciones_del_dia, matriz_cobertura
 from cobertura_posiciones import tiempo_cobertura_posiciones
-from dimension_models import HistorialCambio, Persona, PatronRecurrente, get_session
+from dimension_models import (
+    CompensacionHoras, HistorialCambio, Persona, PatronRecurrente, asegurar_tabla_compensaciones, get_session,
+)
 from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
 from horas_semanales import semana_iso, calcular_detalle_semana, resumen_por_persona
 from patron_recurrente import sin_acentos
-from permisos import requiere_pagina
+from permisos import requiere_analista_admin, requiere_pagina
 from planning import (
     COLUMNAS_MAYORISTA_ESPERADAS, COLUMNAS_MINORISTA_ESPERADAS,
     aplicar_reemplazos_vigentes, cumplimiento_ruta_dia, guardar_planning, parsear_planning, personal_activo,
@@ -208,6 +210,7 @@ COLUMNAS_HORAS = [
     ("dias_falta_vacante", "Días Falta/Vacante"),
     ("dias_tardanza", "Días tardanza"), ("tardanzas_recuperadas", "Tardanzas recuperadas"),
     ("dias_salida_temprana", "Días salida anticipada"), ("salidas_cumplieron", "Salidas que cumplieron su horario"),
+    ("dias_compensados", "Días compensados"),
     ("horas_trabajadas", "Horas trabajadas"),
     ("horas_a_trabajar", "Horas a trabajar"), ("horas_a_trabajar_sin_faltas", "Horas a trabajar sin faltas"),
     ("diferencia_h", "Diferencia (h)"), ("pct_cumplimiento", "% Cumplimiento"),
@@ -1544,6 +1547,77 @@ def tareo_exportar():
     )
 
 
+def _volver_a_ficha(dni):
+    """A dónde volver después de guardar: la misma ficha (con su ?mes=) que
+    mandó el formulario. Solo se acepta una ruta de ESTA ficha -- el campo
+    viene del navegador, no se redirige a cualquier valor."""
+    destino = request.form.get("volver", "")
+    if destino.startswith(f"/reportes/ficha/{dni}") and "//" not in destino and "\\" not in destino:
+        return destino.split("#")[0]
+    return url_for("reportes.ficha", dni=dni)
+
+
+@bp.post("/ficha/<dni>/compensacion")
+@requiere_analista_admin()
+def guardar_compensacion(dni):
+    """Guarda el motivo de una tardanza/salida anticipada y si compensa todas
+    las horas de ese día (Davor, 2026-11-06) -- lo usa Horas programadas vs
+    trabajadas, ver horas_semanales.py::aplicar_compensaciones(). Sin motivo
+    borra lo que hubiera. Solo analista/admin y solo sobre gente dentro de
+    su alcance (mismo criterio que ficha())."""
+    volver = _volver_a_ficha(dni) + "#tardanzas-panel"
+    try:
+        fecha = dt.date.fromisoformat(request.form.get("fecha", ""))
+    except ValueError:
+        flash("Fecha inválida.", "error")
+        return redirect(volver)
+    if fecha > dt.date.today():
+        flash("No se puede registrar el motivo de un día que todavía no pasó.", "error")
+        return redirect(volver)
+    motivo = " ".join(request.form.get("motivo", "").split())[:200]
+    compensa = request.form.get("compensa") == "1"
+    if compensa and not motivo:
+        flash("Para compensar las horas escribí primero el motivo.", "error")
+        return redirect(volver)
+
+    session = get_session()
+    try:
+        query = session.query(Persona).filter(Persona.dni == dni)
+        cond_scope = condicion_scope(Persona, current_user)
+        if cond_scope is not None:
+            query = query.filter(cond_scope)
+        persona = query.first()
+        if not persona:
+            flash("No se encontró a esa persona o no tenés acceso a su ficha.", "error")
+            return redirect(volver)
+
+        asegurar_tabla_compensaciones()
+        existente = session.query(CompensacionHoras).filter_by(dni=dni, fecha=fecha).first()
+        nombre = (persona.nombre_completo or dni).title()
+        dia = fecha.strftime("%d/%m")
+        if not motivo:
+            if existente:
+                session.delete(existente)
+                session.commit()
+                flash(f"Se quitó el motivo del {dia} de {nombre}.", "ok")
+            else:
+                flash("Escribí un motivo para guardarlo.", "error")
+        else:
+            if existente is None:
+                existente = CompensacionHoras(dni=dni, fecha=fecha, motivo=motivo, compensa=compensa)
+                session.add(existente)
+            existente.motivo = motivo
+            existente.compensa = compensa
+            existente.registrado_por = current_user.email
+            existente.updated_at = dt.datetime.now()
+            session.commit()
+            resultado = "compensa todas las horas" if compensa else "no compensa las horas"
+            flash(f"Motivo del {dia} de {nombre} guardado: {resultado}.", "ok")
+    finally:
+        session.close()
+    return redirect(volver)
+
+
 @bp.get("/ficha/<dni>")
 @login_required
 def ficha(dni):
@@ -1846,6 +1920,10 @@ def ficha(dni):
                     horas_trabajadas is not None and horas_a_trabajar is not None
                     and horas_trabajadas >= horas_a_trabajar
                 ) if horas_trabajadas is not None else None,
+                # Motivo + si compensa TODAS las horas de ese día (Davor,
+                # 2026-11-06) -- compensa=None: todavía sin motivo cargado.
+                "motivo_comp": row["motivo_compensacion"] if isinstance(row["motivo_compensacion"], str) else "",
+                "compensa": bool(row["compensado"]) if isinstance(row["motivo_compensacion"], str) else None,
             })
 
     # Faltas del mes -- mismo criterio que Tardanzas del mes (Davor,

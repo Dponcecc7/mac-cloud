@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from alertas import _tiene_sustento, SALIDA_ANTICIPADA_MIN
-from dimension_models import Feriado, Persona, get_session
+from dimension_models import CompensacionHoras, Feriado, Persona, asegurar_tabla_compensaciones, get_session
 from fact_models import ClasificacionDiaria
 from patron_recurrente import cargar_patron_recurrente, canal_para_historial, sin_acentos, valor_patron_para_canal, WD_NORM
 from scoping import aplicar_filtros_extra, canal_del_dia_coincide, canonizar_canal, condicion_scope, overrides_supervisor_canal
@@ -181,6 +181,7 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
         feriados_set = {f for (f,) in session.query(Feriado.fecha).all()}
         refrigerio_map = cargar_patron_recurrente(session, "refrigerio")
         idx_historial = cargar_historial()
+        compensaciones = cargar_compensaciones(session, desde, hasta)
     finally:
         session.close()
 
@@ -238,6 +239,9 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     r["es_tardanza"] = r["estado_base"] == "TARDANZA"
     r["es_salida_temprana"] = r["salida_anticipada_min"].fillna(0) > SALIDA_ANTICIPADA_MIN
     r["recupero_dia"] = r["horas_trabajadas"].notna() & (r["horas_trabajadas"] >= r["horas_a_trabajar"])
+    # Motivo que compensa las horas (Davor, 2026-11-06) -- ver
+    # aplicar_compensaciones().
+    r = aplicar_compensaciones(r, compensaciones)
 
     # Faltas "con sustento" (descanso médico/licencia/feriado regional,
     # Davor 2026-08-23) se tratan como Vacante para las horas: no le "debe"
@@ -297,11 +301,59 @@ def calcular_detalle_semana(desde, hasta, usuario_actual, dni_filtro=None,
     return r
 
 
+def cargar_compensaciones(session, desde, hasta):
+    """{(dni, fecha): (compensa, motivo)} de los días registrados en
+    Ficha > "Tardanzas y salidas anticipadas". Si la tabla todavía no se
+    puede leer devuelve {} -- un reporte de horas sin compensaciones es
+    mejor que un reporte caído."""
+    try:
+        asegurar_tabla_compensaciones()
+        filas = (
+            session.query(
+                CompensacionHoras.dni, CompensacionHoras.fecha, CompensacionHoras.compensa, CompensacionHoras.motivo,
+            )
+            .filter(CompensacionHoras.fecha >= desde, CompensacionHoras.fecha <= hasta)
+            .all()
+        )
+    except Exception as e:
+        session.rollback()
+        print(f"[horas_semanales] compensaciones no disponibles: {e}", file=sys.stderr)
+        return {}
+    return {(dni, fecha): (bool(compensa), motivo) for dni, fecha, compensa, motivo in filas}
+
+
+def aplicar_compensaciones(r, compensaciones):
+    """Agrega `motivo_compensacion`, `compensado` y `_horas_compensadas_dia`
+    a `r` (una fila por turno, con dni/fecha/horas_trabajadas/
+    horas_a_trabajar/recupero_dia).
+
+    Si un analista marcó que el motivo de ese día compensa todas las horas,
+    lo que faltó trabajar se descuenta de la base "Horas a trabajar" (mismo
+    tratamiento que Vacante/con sustento: no se le "debe" esa parte) en vez
+    de sumarse a Horas trabajadas -- así "Horas trabajadas" sigue siendo lo
+    realmente marcado -- y ese día cuenta como recuperado/cumplido. Solo
+    aplica a días con marcación real: sin horas trabajadas no hay faltante
+    que compensar. `compensa`=False solo deja el motivo documentado."""
+    claves = list(zip(r["dni"], r["fecha"].dt.date))
+    registro = [compensaciones.get(k) for k in claves]
+    r["motivo_compensacion"] = pd.Series([x[1] if x else None for x in registro], index=r.index, dtype=object)
+    r["compensado"] = pd.Series([bool(x and x[0]) for x in registro], index=r.index, dtype=bool)
+    trabajadas = pd.to_numeric(r["horas_trabajadas"], errors="coerce")
+    a_trabajar = pd.to_numeric(r["horas_a_trabajar"], errors="coerce")
+    con_horas = r["compensado"] & trabajadas.notna()
+    faltante = (a_trabajar - trabajadas).clip(lower=0)
+    r["_horas_compensadas_dia"] = faltante.where(con_horas, 0.0).fillna(0.0)
+    r["recupero_dia"] = r["recupero_dia"] | con_horas
+    return r
+
+
 def resumen_por_persona(detalle_semana):
     """Agregado semanal por persona -- mismas columnas/regla que
     reporte_semanal.py::agregar_detalle_mercaderista()."""
     if detalle_semana is None or not len(detalle_semana):
         return pd.DataFrame()
+    if "compensado" not in detalle_semana.columns:
+        detalle_semana = detalle_semana.assign(compensado=False, _horas_compensadas_dia=0.0)
 
     # Días DISTINTOS, no filas (Davor, 2026-09-22, soporte de 2 turnos/día)
     # -- un Multicanal con 2 turnos tardanza/falta el mismo día no debe
@@ -315,6 +367,7 @@ def resumen_por_persona(detalle_semana):
         es_salida_temprana=("es_salida_temprana", "any"),
         es_descanso_medico=("es_descanso_medico", "any"),
         recupero_dia=("recupero_dia", "any"),
+        compensado=("compensado", "any"),
         motivo_falta=("motivo_falta", "first"),
         dia_activo=("_dia_activo", "any"),
     ).reset_index()
@@ -328,6 +381,7 @@ def resumen_por_persona(detalle_semana):
         dias_salida_temprana=("es_salida_temprana", "sum"),
         salidas_cumplieron=("es_salida_temprana", lambda s: int((s & dias_flags.loc[s.index, "recupero_dia"]).sum())),
         dias_activos=("dia_activo", "sum"),
+        dias_compensados=("compensado", "sum"),
     )
 
     g = detalle_semana.groupby("dni").agg(
@@ -339,6 +393,7 @@ def resumen_por_persona(detalle_semana):
         _horas_sustento=("_horas_sustento_dia", "sum"),
         _horas_descanso=("_horas_descanso_dia", "sum"),
         _horas_sin_marcacion=("_horas_sin_marcacion_dia", "sum"),
+        _horas_compensadas=("_horas_compensadas_dia", "sum"),
     ).join(g_dias).reset_index()
 
     # DM y Tardanzas sumados al texto (Davor, 2026-10-06: "esa casilla que
@@ -355,7 +410,11 @@ def resumen_por_persona(detalle_semana):
     # regional) y días en estado DESCANSO se descuentan de la base -- a
     # nadie se le puede "deber" horas que tienen justificación real, que
     # nadie estaba para trabajar, o que directamente eran de descanso.
-    g["horas_a_trabajar"] = (g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"] - g["_horas_descanso"]).round(1)
+    # _horas_compensadas (Davor, 2026-11-06): lo que faltó en días cuyo
+    # motivo un analista marcó como "compensa todas las horas".
+    g["horas_a_trabajar"] = (
+        g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"] - g["_horas_descanso"] - g["_horas_compensadas"]
+    ).round(1)
     # "sin faltas" descuenta además cualquier día sin marcación real
     # (Falta/Vacaciones normales, o un "Asistió" todavía sin hora cargada) --
     # compara solo contra los días que sí tienen una jornada real registrada.
@@ -386,6 +445,7 @@ def resumen_por_persona(detalle_semana):
         # de un solo string plano en Horas programadas vs trabajadas.
         "dias_falta", "dias_descanso_medico", "dias_vacante",
         "dias_tardanza", "tardanzas_recuperadas", "dias_salida_temprana", "salidas_cumplieron",
+        "dias_compensados",
         "horas_trabajadas", "horas_a_trabajar", "horas_a_trabajar_sin_faltas",
         "diferencia_h", "pct_cumplimiento", "pct_cumplimiento_sin_faltas",
     ]]

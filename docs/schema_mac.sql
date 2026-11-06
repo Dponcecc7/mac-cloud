@@ -271,6 +271,19 @@ CREATE TABLE vacante_seguimiento (
 	FOREIGN KEY(dni) REFERENCES personas (dni) ON DELETE CASCADE
 );
 
+CREATE TABLE compensaciones_horas (
+	id SERIAL NOT NULL,
+	dni VARCHAR(15) NOT NULL,
+	fecha DATE NOT NULL,
+	motivo VARCHAR(200) NOT NULL,
+	compensa BOOLEAN NOT NULL,
+	registrado_por VARCHAR(150),
+	updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+	PRIMARY KEY (id),
+	CONSTRAINT uq_compensacion_dni_fecha UNIQUE (dni, fecha),
+	FOREIGN KEY(dni) REFERENCES personas (dni) ON DELETE CASCADE
+);
+
 -- Vista (dimension_models.py::VACANTES_VIEW_SQL, no es un CREATE TABLE de un modelo)
 CREATE OR REPLACE VIEW vacantes AS
 SELECT p.dni, p.zona, p.rol, p.canal, p.region, p.ciudad, p.supervisor_dni,

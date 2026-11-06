@@ -137,6 +137,17 @@
     .badge-pct.ok { background:var(--ok-bg); color:var(--ok); }
     .badge-pct.warn { background:var(--warn-bg); color:var(--warn); }
     .badge-pct.bad { background:var(--bad-bg); color:var(--bad); }
+    /* Motivo + "Sí compensa"/"No compensa" en Tardanzas y salidas anticipadas
+       (Davor, 2026-11-06). */
+    #tardanzas-panel { scroll-margin-top:190px; }  /* que el encabezado fijo no tape el aviso al volver con #tardanzas-panel */
+    .celda-comp { min-width:190px; }
+    .motivo-comp { font:inherit; font-size:11.5px; padding:4px 6px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; box-sizing:border-box; }
+    .botones-comp { display:flex; gap:4px; margin-top:4px; }
+    .btn-comp { white-space:nowrap; }
+    .aviso-comp { margin:0 0 10px; padding:8px 12px; border-radius:8px; font-size:12.5px; border-left:4px solid var(--ok); background:var(--ok-bg); color:var(--ink); }
+    .aviso-comp.error { border-left-color:var(--bad); background:var(--bad-bg); }
+    .btn-comp.activo-si { background:var(--ok-bg); color:var(--ok); border-color:var(--ok); font-weight:700; }
+    .btn-comp.activo-no { background:var(--bad-bg); color:var(--bad); border-color:var(--bad); font-weight:700; }
     .motivo-txt { font-size:11px; color:var(--muted); margin-left:6px; }
 
     .alerta-mini { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
@@ -447,12 +458,18 @@
       {% endif %}
     </div>
 
-    <div class="panel">
+    <div class="panel" id="tardanzas-panel">
       <p class="panel-title">Tardanzas y salidas anticipadas de {{ mes_str }} ({{ tardanzas_mes|length }})</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="aviso-comp {{ 'error' if category == 'error' else 'ok' }}">{{ message }}</p>
+        {% endfor %}
+      {% endwith %}
       {% if not tardanzas_mes %}<p class="empty">Sin tardanzas ni salidas anticipadas este mes.</p>
       {% else %}
       {% if usuario.rol in ("analista", "admin") %}
       <p class="empty" style="margin:-6px 0 8px;">"Editar" corrige la hora programada de ESE día puntual (ej. si el horario cambió y recién avisaron después) -- completa el formulario de Historial de cambios más abajo.</p>
+      <p class="empty" style="margin:0 0 8px;">Escribí el motivo y elegí "Sí compensa" si ese motivo cubre TODAS las horas que debía ese día: en Horas programadas vs trabajadas esas horas dejan de restar. "No compensa" solo deja el motivo anotado. Con el motivo vacío, cualquiera de los dos botones lo borra.</p>
       {% endif %}
       <div class="table-wrap">
         <table id="tabla-tardanzas" class="cards-mobile">
@@ -469,6 +486,7 @@
             <th>Hs. trabajadas</th>
             <th>Hs. a trabajar</th>
             <th>¿Recuperó?</th>
+            <th>Motivo y ¿compensa las horas?</th>
           </tr>
           {% for t in tardanzas_mes %}
           <tr data-orden-fecha="{{ t.fecha_iso }}" data-orden-estado="{{ ('TARDANZA' if t.tardanza else '') ~ (' SALIDA ANTICIPADA' if t.salida_temprana else '') }}"
@@ -487,9 +505,28 @@
             <td class="num" data-label="Hs. trabajadas">{{ t.horas_trabajadas if t.horas_trabajadas is not none else '—' }}</td>
             <td class="num" data-label="Hs. a trabajar">{{ t.horas_a_trabajar }}</td>
             <td data-label="¿Recuperó?">
-              {% if t.recupero is none %}—
+              {% if t.compensa %}<span class="badge-pct ok" title="Un analista confirmó que el motivo compensa todas las horas de ese día">Compensado</span>
+              {% elif t.recupero is none %}—
               {% elif t.recupero %}<span class="badge-pct ok">Sí</span>
               {% else %}<span class="badge-pct bad">No</span>
+              {% endif %}
+            </td>
+            <td data-label="Motivo y compensación" class="celda-comp">
+              {% if usuario.rol in ("analista", "admin") %}
+              <input type="text" class="motivo-comp" name="motivo" form="comp-{{ loop.index }}" value="{{ t.motivo_comp }}" maxlength="200" placeholder="Motivo (ej. permiso aprobado)">
+              <div class="botones-comp">
+                <button type="submit" name="compensa" value="1" form="comp-{{ loop.index }}" class="chico btn-comp {{ 'activo-si' if t.compensa is true else '' }}" title="El motivo compensa todas las horas que debía ese día">Sí compensa</button>
+                <button type="submit" name="compensa" value="0" form="comp-{{ loop.index }}" class="chico btn-comp {{ 'activo-no' if t.compensa is false else '' }}" title="Solo guarda el motivo; las horas siguen restando">No compensa</button>
+              </div>
+              <form id="comp-{{ loop.index }}" method="post" style="display:inline;" action="{{ url_for('reportes.guardar_compensacion', dni=persona.dni) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="fecha" value="{{ t.fecha_iso }}">
+                <input type="hidden" name="volver" value="{{ request.full_path.rstrip('?') }}">
+              </form>
+              {% elif t.compensa is none %}—
+              {% else %}
+              {{ t.motivo_comp }}
+              <span class="badge-pct {{ 'ok' if t.compensa else 'bad' }}">{{ 'Compensa' if t.compensa else 'No compensa' }}</span>
               {% endif %}
             </td>
           </tr>
