@@ -370,10 +370,10 @@
               <td class="num" data-label="Días salida anticipada">{{ f.dias_salida_temprana }}</td>
               <td class="num" data-label="Salidas que cumplieron">{{ f.salidas_cumplieron }}</td>
               <td class="num" data-label="Días compensados">{{ f.dias_compensados }}</td>
-              <td class="num" data-label="Horas trabajadas">{{ f.horas_trabajadas }}</td>
-              <td class="num" data-label="Horas a trabajar sin faltas">{{ f.horas_a_trabajar_sin_faltas }}</td>
-              <td class="num" data-label="Diferencia (h)">
-                {% if f.diferencia_h is not none %}<span class="{{ 'dif-neg' if f.diferencia_h < 0 else ('dif-pos' if f.diferencia_h > 0 else '') }}">{{ f.diferencia_h }}</span>{% else %}—{% endif %}
+              <td class="num" data-label="Horas trabajadas" data-valor="{{ f.horas_trabajadas }}">{{ f.horas_trabajadas|hhmm }}</td>
+              <td class="num" data-label="Horas a trabajar sin faltas" data-valor="{{ f.horas_a_trabajar_sin_faltas }}">{{ f.horas_a_trabajar_sin_faltas|hhmm }}</td>
+              <td class="num" data-label="Diferencia (h)" data-valor="{{ f.diferencia_h if f.diferencia_h is not none else '' }}">
+                {% if f.diferencia_h is not none %}<span class="{{ 'dif-neg' if f.diferencia_h < 0 else ('dif-pos' if f.diferencia_h > 0 else '') }}">{{ f.diferencia_h|hhmm }}</span>{% else %}—{% endif %}
               </td>
               <td class="num" data-label="% Cumpl. sin faltas">{% if pct is not none %}<span class="badge-pct {{ clase_pct }}">{{ pct }}%</span>{% else %}—{% endif %}</td>
             </tr>
@@ -403,8 +403,14 @@
             let va = a.children[idx].innerText.trim();
             let vb = b.children[idx].innerText.trim();
             if (esNum) {
-              va = va === '—' ? -Infinity : parseFloat(va.replace('%', '').replace(',', '.'));
-              vb = vb === '—' ? -Infinity : parseFloat(vb.replace('%', '').replace(',', '.'));
+              // Las horas se muestran como HH:MM; se ordena por su valor decimal (data-valor).
+              const num = (celda, texto) => {
+                const dv = celda.dataset.valor;
+                if (dv !== undefined) return dv === '' ? -Infinity : parseFloat(dv);
+                return texto === '—' ? -Infinity : parseFloat(texto.replace('%', '').replace(',', '.'));
+              };
+              va = num(a.children[idx], va);
+              vb = num(b.children[idx], vb);
               return asc ? va - vb : vb - va;
             }
             return asc ? va.localeCompare(vb, 'es') : vb.localeCompare(va, 'es');

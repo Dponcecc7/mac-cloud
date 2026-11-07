@@ -37,6 +37,21 @@ REFRIGERIO_MIN = {"con refrigerio": 60, "medio refrigerio": 30, "sin refrigerio"
 CIERRE_AUTOMATICO_STR = "23:30:00"  # mismo criterio que reporte_diario_9am.py -- no es una salida real
 
 
+def formatear_horas(valor):
+    """Horas decimales -> "HH:MM" (Davor, 2026-11-06: "cuando restamos horas,
+    sale 8.5 trabajadas, trabaja 08:30") -- 8.5 es 08:30 pero en decimal se
+    confunde (8.48 parece 8 h 48 min y son 8 h 29 min). Solo cambia cómo se
+    MUESTRA: todos los cálculos siguen en horas decimales. None/NaN -> "—".
+    Una diferencia negativa lleva el signo adelante ("-04:24"); un resultado
+    que redondea a 00:00 no lleva signo."""
+    if valor is None or pd.isna(valor):
+        return "—"
+    minutos = int(round(abs(float(valor)) * 60))
+    horas, mins = divmod(minutos, 60)
+    signo = "-" if valor < 0 and minutos else ""
+    return f"{signo}{horas:02d}:{mins:02d}"
+
+
 def semana_iso(anio, num_semana):
     """Lunes a domingo de la semana ISO `num_semana` del año `anio` --
     hasta 2026-09-14 llegaba solo a sábado; se extendió a domingo (Davor:
@@ -474,7 +489,10 @@ def resumen_por_persona(detalle_semana):
         + " / Tardanzas: " + g["dias_tardanza"].astype(str)
         + " / Vacante: " + g["dias_vacante"].astype(str)
     )
-    g["horas_trabajadas"] = g["horas_trabajadas"].round(1)
+    # 2 decimales (0.01 h = 36 s), no 1 (6 min): las horas se muestran en
+    # HH:MM (ver formatear_horas) y con 1 decimal un total de 42:38 salía
+    # como 42:30.
+    g["horas_trabajadas"] = g["horas_trabajadas"].round(2)
     # Vacante, faltas CON sustento (descanso médico/licencia/feriado
     # regional) y días en estado DESCANSO se descuentan de la base -- a
     # nadie se le puede "deber" horas que tienen justificación real, que
@@ -483,12 +501,12 @@ def resumen_por_persona(detalle_semana):
     # motivo un analista marcó como "compensa todas las horas".
     g["horas_a_trabajar"] = (
         g["horas_a_trabajar"] - g["_horas_vacante"] - g["_horas_sustento"] - g["_horas_descanso"] - g["_horas_compensadas"]
-    ).round(1)
+    ).round(2)
     # "sin faltas" descuenta además cualquier día sin marcación real
     # (Falta/Vacaciones normales, o un "Asistió" todavía sin hora cargada) --
     # compara solo contra los días que sí tienen una jornada real registrada.
-    g["horas_a_trabajar_sin_faltas"] = (g["horas_a_trabajar"] - g["_horas_sin_marcacion"]).round(1)
-    g["diferencia_h"] = (g["horas_trabajadas"] - g["horas_a_trabajar_sin_faltas"]).round(1)
+    g["horas_a_trabajar_sin_faltas"] = (g["horas_a_trabajar"] - g["_horas_sin_marcacion"]).round(2)
+    g["diferencia_h"] = (g["horas_trabajadas"] - g["horas_a_trabajar_sin_faltas"]).round(2)
 
     # Division por cero (ej. toda la semana Vacante) -- deja el % en blanco
     # en vez de infinito/NaN feo.

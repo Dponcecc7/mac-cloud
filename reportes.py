@@ -27,7 +27,9 @@ from dimension_models import (
 from excel_safety import fila_segura
 from fact_models import ClasificacionDiaria
 from historial import CAMPOS_VALIDOS, DIAS_SEMANA as DIAS_SEMANA_HISTORIAL
-from horas_semanales import semana_iso, calcular_detalle_semana, compensaciones_del_mes, resumen_por_persona
+from horas_semanales import (
+    calcular_detalle_semana, compensaciones_del_mes, formatear_horas, resumen_por_persona, semana_iso,
+)
 from patron_recurrente import sin_acentos
 from permisos import requiere_analista_admin, requiere_pagina
 from planning import (
@@ -216,6 +218,9 @@ COLUMNAS_HORAS = [
     ("diferencia_h", "Diferencia (h)"), ("pct_cumplimiento", "% Cumplimiento"),
     ("pct_cumplimiento_sin_faltas", "% Cumplimiento sin faltas"),
 ]
+
+
+COLUMNAS_HORAS_DURACION = {"horas_trabajadas", "horas_a_trabajar", "horas_a_trabajar_sin_faltas"}
 
 
 def _filtros_admin():
@@ -439,6 +444,21 @@ def horas_exportar():
         celda.font = Font(bold=True)
     for fila in resumen.to_dict("records"):
         ws.append(fila_segura([fila.get(clave) for clave, _titulo in COLUMNAS_HORAS]))
+        # Horas en HH:MM (Davor, 2026-11-06): como duración de Excel (fracción
+        # de día con formato [hh]:mm) para que se puedan sumar. La diferencia
+        # puede ser negativa y Excel no muestra duraciones negativas, así que
+        # va como texto "-04:24" (valor generado acá, no texto libre).
+        for columna, (clave, _titulo) in enumerate(COLUMNAS_HORAS, start=1):
+            if clave in COLUMNAS_HORAS_DURACION:
+                valor = fila.get(clave)
+                celda = ws.cell(row=ws.max_row, column=columna)
+                if valor is None or pd.isna(valor):
+                    celda.value = None
+                else:
+                    celda.value = float(valor) / 24
+                    celda.number_format = "[hh]:mm"
+            elif clave == "diferencia_h":
+                ws.cell(row=ws.max_row, column=columna).value = formatear_horas(fila.get(clave))
     for i, (_clave, titulo) in enumerate(COLUMNAS_HORAS, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = max(12, len(titulo) + 2)
 
@@ -545,7 +565,10 @@ def _señal_como_alerta(i):
         fechas, motivos = [], [f"{d['semana']}: {d['pct']}%" for d in i["detalle_semanas"]]
     elif "detalle_dias" in i:
         fechas = [d["fecha"] for d in i["detalle_dias"]]
-        motivos = [f"{d['fecha']}: {d['horas_trabajadas']}/{d['horas_a_trabajar']}h" for d in i["detalle_dias"]]
+        motivos = [
+            f"{d['fecha']}: {formatear_horas(d['horas_trabajadas'])}/{formatear_horas(d['horas_a_trabajar'])}"
+            for d in i["detalle_dias"]
+        ]
     else:
         fechas, motivos = i.get("detalle_fechas", []), []
     return {

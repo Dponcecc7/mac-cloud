@@ -26,6 +26,7 @@ from sqlalchemy.orm import aliased
 PERU_TZ = ZoneInfo("America/Lima")  # sin horario de verano -- offset fijo UTC-5
 
 from extensions import csrf, db, limiter, login_manager
+from horas_semanales import formatear_horas
 from models import Usuario
 from dimension_models import Feriado, Persona, PersonaSupervisorCanal, PersonaZonaCanal, SUBCANALES
 from permisos import requiere_pagina, tiene_acceso
@@ -168,6 +169,8 @@ def create_app():
     # Disponible en todas las plantillas como {% if tiene_acceso(usuario, 'clave') %}
     # -- ver permisos.py.
     app.jinja_env.globals["tiene_acceso"] = tiene_acceso
+    # Horas decimales -> HH:MM en todas las pantallas (Davor, 2026-11-06).
+    app.jinja_env.filters["hhmm"] = formatear_horas
 
     @app.errorhandler(405)
     def _metodo_no_permitido(e):

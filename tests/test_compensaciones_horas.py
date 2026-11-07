@@ -54,8 +54,8 @@ def _resumen(r, compensaciones):
 
 def test_compensar_ambos_descuenta_todo_el_faltante():
     fila = _resumen(_detalle(_dia_04_11()), {(DNI, D2.date()): (True, True, "Permiso aprobado")})
-    assert fila["horas_trabajadas"] == 3.4            # lo realmente marcado, sin inflar
-    assert fila["horas_a_trabajar"] == 3.4            # 8.5 - 5.08
+    assert fila["horas_trabajadas"] == 3.42           # lo realmente marcado, sin inflar
+    assert fila["horas_a_trabajar"] == 3.42           # 8.5 - 5.08
     assert fila["diferencia_h"] == 0.0
     assert fila["dias_compensados"] == 1
     assert fila["tardanzas_recuperadas"] == 1 and fila["salidas_cumplieron"] == 1
@@ -63,7 +63,7 @@ def test_compensar_ambos_descuenta_todo_el_faltante():
 
 def test_compensar_solo_la_tardanza_descuenta_solo_esos_minutos():
     fila = _resumen(_detalle(_dia_04_11()), {(DNI, D2.date()): (True, False, "Tráfico por paro")})
-    assert fila["horas_a_trabajar"] == 8.2            # 8.5 - 0.28
+    assert fila["horas_a_trabajar"] == 8.22           # 8.5 - 0.28
     assert fila["dias_compensados"] == 1
     assert fila["tardanzas_recuperadas"] == 0         # sigue sin cubrir sus horas
 
@@ -88,7 +88,7 @@ def test_dia_con_un_solo_tipo_compensa_todo_al_marcar_ese_tipo():
     # que aplica ese día, así que cuenta como compensado por completo.
     dia = _fila(D1, 4.04, 8.5, salida_min=257, salida=True)
     fila = _resumen(_detalle(dia), {(DNI, D1.date()): (False, True, "Permiso")})
-    assert fila["horas_a_trabajar"] == 4.0
+    assert fila["horas_a_trabajar"] == 4.04
     assert fila["salidas_cumplieron"] == 1
 
 
