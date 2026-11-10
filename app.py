@@ -1188,7 +1188,7 @@ def create_app():
             dim_session.close()
 
         columnas = [
-            "DNI", "Nombre", "Estado", "Fecha de baja", "Rol", "Canal", "Subcanal",
+            "DNI", "Nombre", "Estado", "Fecha de ingreso", "Fecha de baja", "Rol", "Canal", "Subcanal",
             "Región", "Ciudad", "Zona", "Supervisor", "Supervisores adicionales",
             "Correo", "Analista",
         ]
@@ -1202,7 +1202,7 @@ def create_app():
             sup = supervisores_por_dni.get(p.dni, {"principal": None, "overrides": []})
             adicionales = ", ".join(f"{c}: {n}" for c, n, _sdni in sup["overrides"])
             ws.append([
-                p.dni, p.nombre_completo, p.estado, p.fecha_baja, p.rol, p.canal, p.subcanal,
+                p.dni, p.nombre_completo, p.estado, p.fecha_ingreso, p.fecha_baja, p.rol, p.canal, p.subcanal,
                 p.region, p.ciudad, p.zona, sup["principal"], adicionales,
                 p.correo, p.analista_propietario,
             ])
