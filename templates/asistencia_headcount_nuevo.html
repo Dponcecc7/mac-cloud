@@ -47,6 +47,13 @@
     table.patron .dia { font-size:12.5px; font-weight:700; white-space:nowrap; padding-right:12px; }
     table.patron input, table.patron select { font:inherit; font-size:12.5px; padding:6px 8px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--ink); width:100%; }
     .table-wrap { overflow-x:auto; }
+    .copiar-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .copiar-row .ipt { flex:1; min-width:260px; }
+    .btn-sec { background:var(--card); color:var(--brand); border:1px solid var(--brand); }
+    .btn-sec:disabled { opacity:.6; cursor:wait; }
+    .copiar-msg { font-size:12.5px; margin:10px 0 0; padding:8px 12px; border-radius:8px; background:#e8f4ec; color:#1b6b3a; }
+    .copiar-msg.error { background:var(--bad-bg); color:var(--bad); }
+    tr.turno2 .dia { color:var(--muted); font-weight:600; }
     details summary { cursor:pointer; font-weight:700; font-size:14px; color:var(--brand); padding:12px 16px; background:var(--card); border-radius:14px; box-shadow:0 1px 3px rgba(35,25,10,.06); list-style:none; }
     details summary::-webkit-details-marker { display:none; }
     details summary::before { content:"+ "; }
@@ -115,6 +122,17 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="panel">
+        <p class="panel-title">Copiar de una persona activa (opcional)</p>
+        <p class="note" style="margin-bottom:12px;">Para cuando hay 2 personas en el mismo lugar por unos días: elegí a la persona activa y se llenan rol, canal, supervisor, región, ciudad, zona y horario. Después solo completás DNI y nombre (y podés ajustar lo que haga falta antes de guardar). No es un reemplazo: la persona original sigue activa. El correo no se copia.</p>
+        <div class="copiar-row">
+          <input class="ipt" id="copiar-buscar" list="lista-activos" placeholder="Escribí un nombre o DNI…" autocomplete="off">
+          <datalist id="lista-activos">{% for dni_a, nombre_a in activos_para_copiar %}<option value="{{ (nombre_a or dni_a)|title }} — {{ dni_a }}">{% endfor %}</datalist>
+          <button type="button" class="btn btn-sec" id="btn-copiar">Copiar datos</button>
+        </div>
+        <p class="copiar-msg" id="copiar-msg" hidden></p>
+      </div>
+
+      <div class="panel">
         <p class="panel-title">Datos de la persona</p>
         <div class="form-row">
           <label class="field">DNI<input class="ipt" name="dni" required></label>
@@ -163,15 +181,16 @@
         <table class="patron">
           <tr><th>Día</th><th>Entrada</th><th>Salida</th><th>Canal del día</th><th>Refrigerio</th></tr>
           {% for dia in dias_patron %}
-          <tr>
-            <td class="dia">{{ dia }}</td>
-            <td><input type="time" name="entrada_{{ dia.lower() }}"></td>
-            <td><input type="time" name="salida_{{ dia.lower() }}"></td>
+          {% for sufijo in ("", "_2") %}
+          <tr{% if sufijo %} class="turno2" data-turno2="{{ dia }}" hidden{% endif %}>
+            <td class="dia">{{ dia }}{% if sufijo %} (2.º turno){% endif %}</td>
+            <td><input type="time" name="entrada_{{ dia.lower() }}{{ sufijo }}"></td>
+            <td><input type="time" name="salida_{{ dia.lower() }}{{ sufijo }}"></td>
             <td>
-              <input list="lista-canal-dia" name="canal_{{ dia.lower() }}" placeholder="ej. Tradicional">
+              <input list="lista-canal-dia" name="canal_{{ dia.lower() }}{{ sufijo }}" placeholder="ej. Tradicional">
             </td>
             <td>
-              <select name="refrigerio_{{ dia.lower() }}">
+              <select name="refrigerio_{{ dia.lower() }}{{ sufijo }}">
                 <option value="">—</option>
                 <option value="Con refrigerio">Con refrigerio</option>
                 <option value="Medio refrigerio">Medio refrigerio</option>
@@ -179,6 +198,7 @@
               </select>
             </td>
           </tr>
+          {% endfor %}
           {% endfor %}
         </table>
         <datalist id="lista-canal-dia"><option value="Tradicional"><option value="Autoservicio"><option value="Farmacia"></datalist>
@@ -215,5 +235,64 @@
       </div>
     </details>
   </div>
+  <script>
+    (function () {
+      var URL_COPIAR = {{ url_for('asistencia.headcount_nuevo_copiar', dni='__DNI__')|tojson }};
+      var buscar = document.getElementById('copiar-buscar');
+      var btn = document.getElementById('btn-copiar');
+      var msg = document.getElementById('copiar-msg');
+      var form = btn.closest('form');
+
+      function aviso(texto, error) {
+        msg.textContent = texto;
+        msg.className = 'copiar-msg' + (error ? ' error' : '');
+        msg.hidden = false;
+      }
+      function campo(nombre) { return form.elements[nombre]; }
+      function limpiarHorario() {
+        form.querySelectorAll('table.patron input, table.patron select').forEach(function (el) { el.value = ''; });
+        form.querySelectorAll('tr.turno2').forEach(function (tr) { tr.hidden = true; });
+      }
+      function dniDe(texto) {
+        texto = (texto || '').trim();
+        var m = texto.match(/—\s*(\S+)\s*$/);
+        return m ? m[1] : texto;
+      }
+
+      btn.addEventListener('click', function () {
+        var dni = dniDe(buscar.value);
+        if (!dni) { aviso('Elegí a una persona de la lista.', true); return; }
+        btn.disabled = true;
+        fetch(URL_COPIAR.replace('__DNI__', encodeURIComponent(dni)), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok || !res.j.ok) { aviso(res.j.error || 'No se pudo copiar.', true); return; }
+            var d = res.j;
+            ['rol', 'canal', 'region', 'ciudad', 'zona'].forEach(function (k) { campo(k).value = d[k] || ''; });
+            campo('supervisor_dni').value = d.supervisor_dni || '';
+            limpiarHorario();
+            var usados = {};
+            d.patron.forEach(function (f) {
+              var dia = f.dia.toLowerCase();
+              var n = usados[dia] || 0;
+              if (n >= 2) return; // el formulario admite 2 turnos por día
+              var suf = n === 1 ? '_2' : '';
+              usados[dia] = n + 1;
+              campo('entrada_' + dia + suf).value = f.entrada;
+              campo('salida_' + dia + suf).value = f.salida;
+              campo('canal_' + dia + suf).value = f.canal_dia;
+              campo('refrigerio_' + dia + suf).value = f.refrigerio;
+              if (suf) form.querySelector('tr.turno2[data-turno2="' + f.dia + '"]').hidden = false;
+            });
+            var nombre = (d.nombre || d.dni);
+            aviso('Datos copiados de ' + nombre + ' (DNI ' + d.dni + ')' + (d.patron.length ? '' : ' — no tiene horario cargado') + '. Completá el DNI y el nombre de la nueva persona.', false);
+            campo('dni').focus();
+          })
+          .catch(function () { aviso('No se pudo copiar (error de conexión).', true); })
+          .then(function () { btn.disabled = false; });
+      });
+      buscar.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); btn.click(); } });
+    })();
+  </script>
 </body>
 </html>

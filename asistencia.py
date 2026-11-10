@@ -25,10 +25,12 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from dimension_models import CatalogoMotivo, CorreccionWeb, Feriado, Persona, ReunionRegistrada, VacacionRegistrada, Visita, get_session
+from dimension_models import (
+    CatalogoMotivo, CorreccionWeb, Feriado, PatronRecurrente, Persona, ReunionRegistrada, VacacionRegistrada, Visita, get_session,
+)
 from fact_models import ClasificacionDiaria
 from github_actions import disparar_workflow, estado_ultima_corrida
-from patron_recurrente import dnis_con_domingo
+from patron_recurrente import dnis_con_domingo, sin_acentos
 from permisos import requiere_analista_admin, requiere_pagina
 from scoping import CANALES_FILTRABLES, aplicar_filtros_extra, canonizar_canal, condicion_scope, overrides_supervisor_canal
 from sqlalchemy import func
@@ -1582,6 +1584,53 @@ def _hora_form(valor):
         return None
 
 
+def _datos_para_copiar(session, dni, cond_scope):
+    """Datos de una persona ACTIVA para pre-llenar "Agregar headcount" (Davor,
+    2026-11-10: "a veces por unos días tenemos 2 personas en un mismo lugar y
+    es muy tedioso llenar su información manual... no es reemplazo, es como
+    una persona duplicada"). Devuelve rol/canal/región/ciudad/zona/supervisor
+    y el horario semanal; NO el DNI, nombre ni correo (son de la persona).
+    `cond_scope`: condicion_scope() del usuario -- nadie copia a alguien que
+    no puede ver. None si no existe, no está Activo o está fuera de alcance."""
+    q = session.query(Persona).filter(Persona.dni == dni, Persona.estado == "Activo")
+    if cond_scope is not None:
+        q = q.filter(cond_scope)
+    p = q.first()
+    if p is None:
+        return None
+    nombre_dia = {sin_acentos(d): d for d in DIAS_PATRON}
+    orden = {sin_acentos(d): i for i, d in enumerate(DIAS_PATRON)}
+    filas = session.query(PatronRecurrente).filter(PatronRecurrente.dni == dni).all()
+    filas = [f for f in filas if sin_acentos(f.dia_semana) in nombre_dia]
+    filas.sort(key=lambda f: (orden[sin_acentos(f.dia_semana)], f.hora_entrada_prog or dt.time(0)))
+    return {
+        "dni": p.dni, "nombre": p.nombre_completo, "rol": p.rol, "canal": p.canal, "region": p.region,
+        "ciudad": p.ciudad, "zona": p.zona, "supervisor_dni": p.supervisor_dni,
+        "patron": [
+            {
+                "dia": nombre_dia[sin_acentos(f.dia_semana)],
+                "entrada": f.hora_entrada_prog.strftime("%H:%M") if f.hora_entrada_prog else "",
+                "salida": f.hora_salida_prog.strftime("%H:%M") if f.hora_salida_prog else "",
+                "canal_dia": f.canal_dia or "", "refrigerio": f.refrigerio or "",
+            }
+            for f in filas
+        ],
+    }
+
+
+@bp.get("/headcount-nuevo/copiar/<dni>")
+@_analista_requerido
+def headcount_nuevo_copiar(dni):
+    session = get_session()
+    try:
+        datos = _datos_para_copiar(session, dni.strip(), condicion_scope(Persona, current_user))
+    finally:
+        session.close()
+    if datos is None:
+        return jsonify({"ok": False, "error": "No se encontró a esa persona activa en tu alcance."}), 404
+    return jsonify({"ok": True, **datos})
+
+
 @bp.get("/headcount-nuevo")
 @_analista_requerido
 def headcount_nuevo_form():
@@ -1616,6 +1665,12 @@ def headcount_nuevo_form():
         if cond_scope is not None:
             q_sup = q_sup.filter(cond_scope)
         supervisores_disponibles = sorted(q_sup.distinct().all(), key=lambda t: (t[1] or "").title())
+
+        # Personas activas que se pueden copiar (mismo alcance que el resto de la pantalla).
+        q_act = session.query(Persona.dni, Persona.nombre_completo).filter(Persona.estado == "Activo")
+        if cond_scope is not None:
+            q_act = q_act.filter(cond_scope)
+        activos_para_copiar = sorted(q_act.distinct().all(), key=lambda t: (t[1] or t[0] or "").title())
     finally:
         session.close()
 
@@ -1627,7 +1682,7 @@ def headcount_nuevo_form():
         roles_disponibles=roles_disponibles, canales_disponibles=canales_disponibles,
         regiones_disponibles=regiones_disponibles, ciudades_disponibles=ciudades_disponibles,
         zonas_disponibles=zonas_disponibles, supervisores_disponibles=supervisores_disponibles,
-        historico=historico,
+        activos_para_copiar=activos_para_copiar, historico=historico,
     )
 
 
@@ -1662,15 +1717,19 @@ def headcount_nuevo_submit():
             volver=url_for("asistencia.headcount_nuevo_form"),
         )
 
+    # "" = turno principal; "_2" = segundo turno del mismo día (un Multicanal
+    # puede tener dos, ver PatronRecurrente) -- solo aparece al copiar a alguien
+    # que ya los tiene.
     patron_dias = [
         {
             "dia_semana": dia,
-            "hora_entrada": _hora_form(request.form.get(f"entrada_{dia.lower()}", "").strip()),
-            "hora_salida": _hora_form(request.form.get(f"salida_{dia.lower()}", "").strip()),
-            "canal_dia": request.form.get(f"canal_{dia.lower()}", "").strip() or None,
-            "refrigerio": request.form.get(f"refrigerio_{dia.lower()}", "").strip() or None,
+            "hora_entrada": _hora_form(request.form.get(f"entrada_{dia.lower()}{sufijo}", "").strip()),
+            "hora_salida": _hora_form(request.form.get(f"salida_{dia.lower()}{sufijo}", "").strip()),
+            "canal_dia": request.form.get(f"canal_{dia.lower()}{sufijo}", "").strip() or None,
+            "refrigerio": request.form.get(f"refrigerio_{dia.lower()}{sufijo}", "").strip() or None,
         }
         for dia in DIAS_PATRON
+        for sufijo in ("", "_2")
     ]
 
     try:
