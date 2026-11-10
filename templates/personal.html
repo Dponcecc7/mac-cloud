@@ -57,6 +57,8 @@
     .estado-pill.vacante { background:var(--warn); }
     a.nombre-link { color:inherit; text-decoration:none; font-weight:600; }
     a.nombre-link:hover { color:var(--brand); text-decoration:underline; }
+    .btn-editar-nombre { border:none; background:none; color:var(--muted); cursor:pointer; font-size:12px; padding:0 4px; }
+    .btn-editar-nombre:hover { color:var(--brand); }
     .top-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
     .btn-descargar { font:inherit; font-weight:700; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid var(--brand); background:var(--card); color:var(--brand); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
     .btn-descargar:hover { background:var(--brand); color:#fff; }
@@ -272,7 +274,9 @@
             data-orden-supervisor="{{ (sup.principal or '')|upper }}" data-orden-correo="{{ (p.correo or '')|upper }}"
             data-orden-analista="{{ (p.analista_propietario or '')|upper }}">
           <td>{{ p.dni }}</td>
-          <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a></td>
+          <td><a class="nombre-link" href="{{ url_for('reportes.ficha', dni=p.dni) }}">{{ p.nombre_completo|title }}</a>{% if puede_editar %}
+            <button type="button" class="btn-editar-nombre" title="Corregir el nombre" onclick="editarNombre(this, '{{ p.dni }}')">✎</button>
+            <input type="hidden" name="nombre_{{ p.dni }}" form="form-todos" value="">{% endif %}</td>
           <td>
             {% if p.estado == "Activo" %}<span class="estado-pill activo">Activo</span>
             {% elif p.estado == "Vacante" %}<span class="estado-pill vacante">Dado de baja</span>
@@ -381,6 +385,22 @@ document.addEventListener('click', function (e) {
 // los <select>/<input> de Subcanal/Zona/Supervisor. El valor a comparar
 // sale de data-orden-<campo>, ya normalizado en mayúsculas (o ISO para
 // fecha_baja, o el DNI crudo) en vez del texto tal como se ve en pantalla.
+// Corregir el nombre de una persona (Davor, 2026-11-10: el DNI quedó como
+// nombre). Solo deja el nombre nuevo en un campo oculto y lo muestra en la
+// fila; se guarda con "Guardar todos los cambios" como el resto.
+function editarNombre(btn, dni) {
+  var fila = btn.closest('tr');
+  var link = fila.querySelector('a.nombre-link');
+  var oculto = fila.querySelector('input[name="nombre_' + dni + '"]');
+  var nuevo = window.prompt('Nombre completo de esta persona (DNI ' + dni + '):', oculto.value || link.textContent.trim());
+  if (nuevo === null) return;
+  nuevo = nuevo.replace(/\s+/g, ' ').trim();
+  if (!nuevo) return;
+  oculto.value = nuevo;
+  link.textContent = nuevo.toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }) ;
+  fila.setAttribute('data-orden-nombre', nuevo.toUpperCase());
+  btn.textContent = '✎ pendiente de guardar';
+}
 var ordenActual = { campo: null, asc: true };
 function ordenarPor(campo) {
   var tabla = document.getElementById('tabla-personal');

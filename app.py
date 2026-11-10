@@ -1055,6 +1055,7 @@ def create_app():
                 datos = {
                     "subcanal": (request.form.get(f"subcanal_{dni}") or "").strip(),
                     "rol": (request.form.get(f"rol_{dni}") or "").strip(),
+                    "nombre": " ".join((request.form.get(f"nombre_{dni}") or "").split()).upper(),
                     "modo_canal": modo_canal,
                 }
                 if modo_canal:
@@ -1084,6 +1085,9 @@ def create_app():
             for dni, datos in datos_por_dni.items():
                 persona = personas[dni]
                 persona.subcanal = datos["subcanal"] or None
+                # Corrección de nombre (solo si se pidió en la fila; vacío = no tocar).
+                if datos["nombre"] and datos["nombre"] != (persona.nombre_completo or ""):
+                    persona.nombre_completo = datos["nombre"]
                 # Cambio de Rol -- se registra en Historial de cambios ANTES
                 # de pisar el valor viejo (Davor, 2026-09-04: "Adicionalmente
                 # cambiar de Rol a Aguilar Vasquez... agregar el cambio de
