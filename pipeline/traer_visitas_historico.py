@@ -54,10 +54,10 @@ TAMANO_LOTE = 2000  # bien debajo del límite de 65535 parámetros por sentencia
 # real) la fila vieja quedaba huérfana con una hora de salida equivocada
 # para siempre, en vez de corregirse (811 visitas de ~138k encontradas con
 # conflicto, ver dimension_models.py::Visita).
-COLUMNAS_ACTUALIZABLES = ["punto_venta", "tipo_negocio", "distancia_metros_inicio", "motivo_visita", "fecha_fin", "hora_fin"]
+COLUMNAS_ACTUALIZABLES = ["punto_venta", "tipo_negocio", "cadena", "distancia_metros_inicio", "motivo_visita", "fecha_fin", "hora_fin"]
 
 COLUMNAS = [
-    "dni", "punto_venta_id", "punto_venta", "tipo_negocio",
+    "dni", "punto_venta_id", "punto_venta", "tipo_negocio", "cadena",
     "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin",
     "distancia_metros_inicio", "motivo_visita",
 ]
@@ -72,7 +72,7 @@ def preparar_filas(df):
     """df: mismo formato que devuelve athena_client.traer_visitas() (columna
     nro_documento en vez de dni, fechas como texto "%d-%m-%Y"). Devuelve una
     lista de dicts lista para upsert_visitas()."""
-    r = df.rename(columns={"nro_documento": "dni"})[COLUMNAS].copy()
+    r = df.rename(columns={"nro_documento": "dni", "cadena_personalizada": "cadena"})[COLUMNAS].copy()
     # .str.zfill(8) (Davor, 2026-09-24) -- aunque athena_client.py ya deja
     # "nro_documento" zero-padded a 8 dígitos en memoria, esto es defensa
     # barata por si algún día esa columna se vuelve a inferir como número

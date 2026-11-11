@@ -428,6 +428,17 @@ class Visita(Base):
     punto_venta_id = Column(String(50))
     punto_venta = Column(String(200))
     tipo_negocio = Column(String(30))
+    # Nombre de cadena/cliente tal cual lo trae Athena (p.ej. "PLAZA VEA",
+    # "INKAFARMA") -- Davor, 2026-11-11: "aqui agregar la cadena" en Ruta
+    # mercaderista, para ver el nombre comercial además de tipo_negocio
+    # (Tradicional/Farmacia/Autoservicios), que es la clasificación interna
+    # de canal, no el nombre de la cadena. athena_client.traer_visitas() ya
+    # trae esto como "cadena_personalizada" (usado para inferir tipo_negocio
+    # cuando no hay campana_id confiable) pero nunca se guardaba en esta
+    # tabla. NULL para toda visita sincronizada antes de este cambio -- no
+    # hay backfill retroactivo, solo se llena desde la próxima corrida del
+    # pipeline hacia adelante (ventana de VENTANA_DIAS_VISITAS días).
+    cadena = Column(String(200))
     fecha_inicio = Column(Date, nullable=False, index=True)
     hora_inicio = Column(String(10))
     fecha_fin = Column(Date)

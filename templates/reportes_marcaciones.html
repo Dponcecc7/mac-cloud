@@ -195,7 +195,7 @@
         <table>
           <tr>
             <th class="info">Mercaderista</th><th>Ciudad</th><th>Supervisor</th>
-            <th>Hora inicio</th><th>Hora fin</th><th>Canal</th><th>Punto de venta</th><th>Distancia</th>
+            <th>Hora inicio</th><th>Hora fin</th><th>Canal</th><th>Punto de venta</th><th>Cadena</th><th>Distancia</th>
           </tr>
           {% for p in personas %}
             {% for m in p.marcaciones %}
@@ -214,6 +214,7 @@
               <td>{{ m.hora_fin[:5] if m.hora_fin else 'En curso' }}</td>
               <td>{{ (m.canal or '—')|title }}</td>
               <td>{{ m.punto_venta or '—' }}</td>
+              <td>{{ (m.cadena or '—')|title }}</td>
               <td>
                 {{ m.distancia ~ ' m' if m.distancia is not none else '—' }}
                 {% if not m.geofence_ok %}<span class="badge bad">Fuera de rango</span>{% endif %}

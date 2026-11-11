@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dimension_models import Visita, get_session  # noqa: E402
 
 COLUMNAS = [
-    "nro_documento", "punto_venta_id", "punto_venta", "tipo_negocio",
+    "nro_documento", "punto_venta_id", "punto_venta", "tipo_negocio", "cadena",
     "fecha_inicio", "hora_inicio", "fecha_fin", "hora_fin",
     "distancia_metros_inicio", "motivo_visita",
 ]
@@ -37,7 +37,7 @@ def cargar_visitas():
     try:
         filas = (
             session.query(
-                Visita.dni, Visita.punto_venta_id, Visita.punto_venta, Visita.tipo_negocio,
+                Visita.dni, Visita.punto_venta_id, Visita.punto_venta, Visita.tipo_negocio, Visita.cadena,
                 Visita.fecha_inicio, Visita.hora_inicio, Visita.fecha_fin, Visita.hora_fin,
                 Visita.distancia_metros_inicio, Visita.motivo_visita,
             )

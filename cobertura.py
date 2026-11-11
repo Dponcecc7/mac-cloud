@@ -69,7 +69,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
         query = (
             session.query(
                 Visita.dni, Persona.nombre_completo, Persona.ciudad, Persona.supervisor_dni,
-                Visita.punto_venta_id, Visita.punto_venta, Visita.tipo_negocio, Visita.fecha_inicio,
+                Visita.punto_venta_id, Visita.punto_venta, Visita.tipo_negocio, Visita.cadena, Visita.fecha_inicio,
                 Visita.hora_inicio, Visita.hora_fin, Visita.distancia_metros_inicio,
             )
             .join(Persona, Persona.dni == Visita.dni)
@@ -100,7 +100,7 @@ def _cargar_visitas(desde, hasta, usuario_actual, dni_filtro=None,
         session.close()
 
     v = pd.DataFrame(filas, columns=[
-        "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta", "tipo_negocio",
+        "dni", "nombre", "ciudad", "supervisor_dni", "punto_venta_id", "punto_venta", "tipo_negocio", "cadena",
         "fecha_inicio", "hora_inicio", "hora_fin", "distancia_metros_inicio",
     ])
     v = v[~v["punto_venta"].astype(str).str.strip().str.upper().isin(PUNTOS_NO_VISITA)]
@@ -240,6 +240,7 @@ def marcaciones_del_dia(fecha, usuario_actual, dni_filtro=None, rol_filtro=None,
                 # ingenuo dejaba pasar el NaN de pandas hasta la plantilla.
                 "hora_fin": None if pd.isna(row["hora_fin_valida"]) else row["hora_fin_valida"],
                 "punto_venta": row["punto_venta"], "canal": row["tipo_negocio"],
+                "cadena": row["cadena"] if pd.notna(row["cadena"]) else None,
                 "geofence_ok": bool(row["geofence_ok"]),
                 "distancia": None if pd.isna(row["distancia_metros_inicio"]) else round(row["distancia_metros_inicio"]),
             }
