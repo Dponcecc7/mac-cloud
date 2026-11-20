@@ -673,6 +673,24 @@ def main():
     dni_num = pd.to_numeric(m["DNI"], errors="coerce")
     m = m[dni_num.notna()].copy()
     m["DNI"] = m["DNI"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True).str.zfill(8)
+
+    # Remapeo por VALOR NUMÉRICO, no por ancho fijo (Davor, 2026-11-20) --
+    # Athena a veces reporta nro_documento con MENOS ceros a la izquierda
+    # que el documento real guardado en Personas (hallazgo real: un carnet
+    # de extranjería de 9 dígitos en Personas/Patrón, pero Athena lo trae
+    # con un cero menos, 8 dígitos -- el .str.zfill(8) de arriba solo
+    # rellena HASTA 8 dígitos, y su documento real tiene más, así que nunca
+    # volvía a calzar: el motor nunca encontraba su Patrón/Maestro para
+    # ningún día y la marcaba FALTA pese a tener decenas de visitas GPS
+    # reales). Acá se empareja por el valor sin ceros a la izquierda
+    # (int(d) descarta cualquier cantidad de ceros de cualquiera de los dos
+    # lados), y se reemplaza por el DNI CANÓNICO de Personas -- sin match,
+    # el nro_documento queda tal cual (mismo comportamiento de siempre para
+    # todos los demás).
+    mapa_por_numero = {str(int(d)): d for d in m["DNI"] if d.isdigit()}
+    v["nro_documento"] = v["nro_documento"].map(
+        lambda d: mapa_por_numero.get(str(int(d)), d) if d.isdigit() else d
+    )
     activos = m[m["Estado"].astype(str).str.strip() == "Activo"].copy()
 
     p = cargar_patron_recurrente()
