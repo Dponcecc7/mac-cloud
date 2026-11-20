@@ -660,14 +660,19 @@ def main():
     # Mismo gotcha que parseo_headcount.py -- si ALGUNA fila de DNI viene
     # vacía, pandas sube toda la columna a float64 y sobrevive al filtro,
     # dejando "18074336.0" en vez de "18074336" para todos los DNIs válidos.
-    # .str.zfill(8) (Davor, 2026-09-21) -- ese redondeo a int64 tambien se
-    # come un cero a la izquierda de un DNI real de 8 digitos (ej.
-    # "09917175" -> "9917175"), que despues no matchea contra el DNI real
-    # en personas -- hallazgo real, Felix Leon Karina Elizabeth (09917175)
-    # quedaba "huerfana" en cada corrida por esto.
+    # dni_num solo sirve para FILTRAR filas no numéricas -- el valor final se
+    # arma desde el string ORIGINAL (regex le saca el ".0" de sobra), nunca
+    # redondeando a int64. Davor, 2026-09-21: redondear a int64 se comía un
+    # cero a la izquierda de un DNI real de 8 dígitos (ej. "09917175" ->
+    # "9917175"), que después no matchea contra el DNI real en personas
+    # (hallazgo real, Felix Leon Karina Elizabeth). Davor, 2026-11-20: con un
+    # carnet de extranjería de 9 dígitos (ej. "007845810") int64 se comía DOS
+    # ceros en vez de uno y el .zfill(8) de respaldo solo repone UNO, dejando
+    # a esa persona "huérfana" igual (hallazgo real, Delgado X Jenny
+    # Carolina) -- de ahí que ahora no se pase nunca por int64.
     dni_num = pd.to_numeric(m["DNI"], errors="coerce")
     m = m[dni_num.notna()].copy()
-    m["DNI"] = dni_num[dni_num.notna()].astype("int64").astype(str).str.zfill(8)
+    m["DNI"] = m["DNI"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True).str.zfill(8)
     activos = m[m["Estado"].astype(str).str.strip() == "Activo"].copy()
 
     p = cargar_patron_recurrente()
