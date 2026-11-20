@@ -485,6 +485,45 @@
       {% endif %}
     </div>
 
+    <div class="panel">
+      <p class="panel-title">Visitas con ejecución por mercaderista ({{ por_mercaderista|length }})</p>
+      {% if not por_mercaderista %}
+        <p class="empty">Sin planning cargado para este período.</p>
+      {% else %}
+      <div class="table-wrap">
+        <table id="tabla-mercaderista-visitas">
+          <tr>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'mercaderista')">Mercaderista <span class="flecha-orden" id="flecha-mercaderista-visitas-mercaderista"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'dni')">DNI <span class="flecha-orden" id="flecha-mercaderista-visitas-dni"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'ciudad')">Ciudad <span class="flecha-orden" id="flecha-mercaderista-visitas-ciudad"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'visitas')" data-numerico>Visitas (golpes) <span class="flecha-orden" id="flecha-mercaderista-visitas-visitas"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'conejgeneral')" data-numerico>Con ejecución (General) <span class="flecha-orden" id="flecha-mercaderista-visitas-conejgeneral"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'ejgeneral')" data-numerico>% Ejecución (General) <span class="flecha-orden" id="flecha-mercaderista-visitas-ejgeneral"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'conejnosotras')" data-numerico>Con ejecución (Nosotras) <span class="flecha-orden" id="flecha-mercaderista-visitas-conejnosotras"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'ejnosotras')" data-numerico>% Ejecución (Nosotras) <span class="flecha-orden" id="flecha-mercaderista-visitas-ejnosotras"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'conejtena')" data-numerico>Con ejecución (TENA) <span class="flecha-orden" id="flecha-mercaderista-visitas-conejtena"></span></th>
+            <th class="th-ordenable" onclick="ordenarPor('mercaderista-visitas', 'ejtena')" data-numerico>% Ejecución (TENA) <span class="flecha-orden" id="flecha-mercaderista-visitas-ejtena"></span></th>
+          </tr>
+          {% for m in por_mercaderista %}
+          <tr data-orden-mercaderista="{{ (m.mercaderista or '')|upper }}" data-orden-dni="{{ m.dni or '' }}" data-orden-ciudad="{{ (m.ciudad or '')|upper }}" data-orden-visitas="{{ m.visitas }}" data-orden-conejgeneral="{{ m.visitas_con_ejecucion }}" data-orden-ejgeneral="{{ m.pct_ejecucion_visitas if m.pct_ejecucion_visitas is not none else -1 }}" data-orden-conejnosotras="{{ m.visitas_con_ejecucion_nosotras }}" data-orden-ejnosotras="{{ m.pct_ejecucion_visitas_nosotras if m.pct_ejecucion_visitas_nosotras is not none else -1 }}" data-orden-conejtena="{{ m.visitas_con_ejecucion_tena }}" data-orden-ejtena="{{ m.pct_ejecucion_visitas_tena if m.pct_ejecucion_visitas_tena is not none else -1 }}">
+            <td>{{ m.mercaderista|title }}</td>
+            <td>{{ m.dni or '—' }}</td>
+            <td>{{ (m.ciudad or '—')|title }}</td>
+            <td>{{ m.visitas }}</td>
+            <td>{{ m.visitas_con_ejecucion }}</td>
+            <td {{ 'class=celda-cero' if m.pct_ejecucion_visitas is not none and m.pct_ejecucion_visitas < 50 else '' }}>{{ (m.pct_ejecucion_visitas ~ '%') if m.pct_ejecucion_visitas is not none else '—' }}</td>
+            <td>{{ m.visitas_con_ejecucion_nosotras }}</td>
+            <td {{ 'class=celda-cero' if m.pct_ejecucion_visitas_nosotras is not none and m.pct_ejecucion_visitas_nosotras < 50 else '' }}>{{ (m.pct_ejecucion_visitas_nosotras ~ '%') if m.pct_ejecucion_visitas_nosotras is not none else '—' }}</td>
+            <td>{{ m.visitas_con_ejecucion_tena }}</td>
+            <td {{ 'class=celda-cero' if m.pct_ejecucion_visitas_tena is not none and m.pct_ejecucion_visitas_tena < 50 else '' }}>{{ (m.pct_ejecucion_visitas_tena ~ '%') if m.pct_ejecucion_visitas_tena is not none else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <p class="note">"Visitas (golpes)": días distintos con al menos una visita real (PDV + fecha), tenga foto o no. "Con ejecución": de esos golpes, cuántos tienen foto Antes Y Después confirmada -- "General" cuenta cualquier marca, "Nosotras" solo Cuidado Femenino y "TENA" solo Cuidado del Adulto.</p>
+      {% endif %}
+    </div>
+
     <details class="panel panel-colapsable" id="det-pendientes-ejecucion">
       <summary class="panel-title">PDVs pendientes de ejecución ({{ pendientes_ejecucion|length }})</summary>
       <div class="fragmento-lazy" id="frag-pendientes-ejecucion" data-url="{{ url_for('reportes.planning_fragmento_pendientes_ejecucion', mes=periodo_str, region=region_filtro, ciudad=ciudad_filtro, supervisor=supervisor_filtro, mercado=mercado_filtro) }}">
@@ -622,7 +661,8 @@ function ordenarPor(tabla_id, campo) {
   var actual = ordenActual[tabla_id];
   var asc = (actual && actual.campo === campo) ? !actual.asc : true;
   ordenActual[tabla_id] = { campo: campo, asc: asc };
-  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento' || campo === 'asignados' || campo === 'pendientes' || campo === 'conejecucion' || campo === 'ejecucion' || campo === 'golpesejecucion';
+  var esNumerico = campo === 'visitas' || campo === 'veces' || campo === 'planificadas' || campo === 'cumplimiento' || campo === 'asignados' || campo === 'pendientes' || campo === 'conejecucion' || campo === 'ejecucion' || campo === 'golpesejecucion'
+    || campo === 'conejgeneral' || campo === 'ejgeneral' || campo === 'conejnosotras' || campo === 'ejnosotras' || campo === 'conejtena' || campo === 'ejtena';
   filas.sort(function (a, b) {
     var va = a.getAttribute('data-orden-' + campo) || '';
     var vb = b.getAttribute('data-orden-' + campo) || '';
@@ -644,6 +684,7 @@ function ordenarPor(tabla_id, campo) {
 // y data-orden-punto para el PDV, al revés que tabla-pendientes/detalle).
 var CONFIG_BUSQUEDA = {
   'tabla-mercaderista': { mercaderista: ['mercaderista', 'dni'] },
+  'tabla-mercaderista-visitas': { mercaderista: ['mercaderista', 'dni'] },
   'tabla-pendientesejecucion': { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-pendientes':   { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },
   'tabla-detalle':      { mercaderista: ['mercaderista', 'dni'], pdv: ['nombre'] },

@@ -901,7 +901,7 @@ def planning():
     detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
     ejecutados_fuera = pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, v, desde, hasta)
 
     # Cumplimiento de ruta del día (Davor, 2026-10-15: "cuando cargue el
     # planning el mercaderista esta asignado a una ruta... quiero que por
@@ -980,7 +980,7 @@ def planning_fragmento_personal():
         abort(403)
     planning_periodo, v, periodo_str, desde, hasta = _planning_periodo_filtrado_desde_query()
     pendientes = pdvs_pendientes(planning_periodo, v)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, v, desde, hasta)
     return render_template("_planning_fragmento_personal.html", por_mercaderista=por_mercaderista, periodo_str=periodo_str)
 
 
@@ -1256,7 +1256,7 @@ def planning_exportar():
     detalle = pdvs_detalle(planning_periodo, v, desde, hasta)
     fuera = pdvs_fuera_planning(planning_periodo, v)
     ejecutados_fuera = pdvs_ejecutados_fuera_planning(co_lis_planning, desde, hasta)
-    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, desde, hasta)
+    por_mercaderista = resumen_por_mercaderista(planning_periodo, pendientes, v, desde, hasta)
 
     wb = openpyxl.Workbook()
     ws0 = wb.active

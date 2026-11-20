@@ -540,6 +540,60 @@ def pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta):
         session.close()
 
 
+def _golpes_visita_por_pdv(v):
+    """Golpes de visita (días DISTINTOS con al menos una visita real) por
+    PDV -- dedupeando por "código PDV + fecha" (Davor, 2026-11-20: "un
+    indicador que diga visitas, que golpes de visita: concatenando el
+    codigo pdv & Fecha"), sin filtrar por ejecución ni marca -- cuenta
+    CUALQUIER visita real, tenga foto o no. Mismo "golpe" que ya usa
+    _ejecucion_por_pdv() para "golpes con ejecución", para poder comparar
+    ambos números uno contra el otro."""
+    if not len(v):
+        return {}
+    dedup = v.drop_duplicates(subset=["punto_venta_id", "fecha_inicio"])
+    return dedup.groupby(dedup["punto_venta_id"].astype(str)).size().to_dict()
+
+
+def golpes_ejecucion_por_pdv_y_marca(co_lis_planning, desde, hasta):
+    """Por PDV: golpes con ejecución fotográfica confirmada en el período,
+    partidos por marca -- Davor, 2026-11-20: "comparalo con el indicador de
+    visita con ejecución, pon uno general, otro de solo Nosotras y otro
+    TENA". "general" = cualquier categoría (mismo criterio que
+    _ejecucion_por_pdv()/pdvs_con_ejecucion_fotografica()); "nosotras" =
+    categoria "FEMENINO" (Cuidado Femenino, línea Nosotras); "tena" =
+    categoria "ADULTO" (Cuidado del Adulto, línea TENA) -- ver
+    dimension_models.EjecucionFotografica y pipeline/sync_fotografico.py::
+    _categoria(). "Ejecución" sigue siendo lo mismo de siempre: con_ejecucion
+    ya viene resuelto como "tiene foto Antes Y Después de esa marca"."""
+    if not co_lis_planning or not desde or not hasta:
+        return {}
+    session = get_session()
+    try:
+        filas = (
+            session.query(EjecucionFotografica.punto_venta_id, EjecucionFotografica.fecha, EjecucionFotografica.categoria)
+            .filter(
+                EjecucionFotografica.con_ejecucion.is_(True),
+                EjecucionFotografica.fecha >= desde,
+                EjecucionFotografica.fecha <= hasta,
+                EjecucionFotografica.punto_venta_id.in_(co_lis_planning),
+            )
+            .distinct()
+            .all()
+        )
+    finally:
+        session.close()
+
+    por_pdv = {}
+    for co_li, fecha, categoria in filas:
+        d = por_pdv.setdefault(co_li, {"general": set(), "nosotras": set(), "tena": set()})
+        d["general"].add(fecha)
+        if categoria == "FEMENINO":
+            d["nosotras"].add(fecha)
+        elif categoria == "ADULTO":
+            d["tena"].add(fecha)
+    return {co_li: {k: len(fechas) for k, fechas in d.items()} for co_li, d in por_pdv.items()}
+
+
 def pdvs_pendientes(planning, v):
     """PDVs del planning que NO tienen ninguna visita (de nadie) en el
     período -- responde "qué me falta visitar"."""
@@ -745,7 +799,7 @@ def _mercado_sin_palabra(mercado):
     return limpio.title() if limpio else None
 
 
-def resumen_por_mercaderista(planning, pendientes, desde=None, hasta=None):
+def resumen_por_mercaderista(planning, pendientes, v=None, desde=None, hasta=None):
     """Por mercaderista: cuántos PDVs tiene asignados en el Planning del
     período (sumando TODAS sus ciudades en una sola fila), cuántos de esos
     le quedan pendientes de visitar, y su DNI -- Davor, 2026-09-22:
@@ -805,7 +859,18 @@ def resumen_por_mercaderista(planning, pendientes, desde=None, hasta=None):
     pdvs_pendientes()/pdvs_detalle() en otras funciones de este archivo.
     Si no se pasa `desde`/`hasta` (nadie los pasaba antes de este cambio),
     queda en 0/None en vez de fallar, para no romper a quien llame a esta
-    función sin el rango."""
+    función sin el rango.
+
+    `visitas`/`visitas_con_ejecucion*` (Davor, 2026-11-20, tabla aparte
+    "Visitas con ejecución por mercaderista"): mismo cruce que
+    pdvs_con_ejecucion/pct_ejecucion de arriba, pero a nivel de GOLPE (PDV +
+    fecha), no de PDV -- "visitas" cuenta TODO golpe de visita real (tenga
+    foto o no, ver _golpes_visita_por_pdv()), para compararlo contra los
+    golpes que sí llegaron con ejecución fotográfica completa, partidos en
+    general/Nosotras (Cuidado Femenino)/TENA (Cuidado del Adulto) -- ver
+    golpes_ejecucion_por_pdv_y_marca(). `v`: DataFrame de visitas del mismo
+    período (visitas_tradicional()/_cargar_visitas()), ya lo calculaba cada
+    llamador antes de este cambio -- None/vacío deja visitas en 0."""
     uf = _UnionFind()
     for p in planning:
         nombre_norm = (p.mercaderista_nombre or "").strip().upper()
@@ -859,26 +924,42 @@ def resumen_por_mercaderista(planning, pendientes, desde=None, hasta=None):
         if mercado_limpio:
             fila["mercados"].setdefault(mercado_limpio.upper(), mercado_limpio)
 
-    todos_co_lis = {c for v in conteo.values() for c in v["co_lis"]}
+    todos_co_lis = {c for grupo in conteo.values() for c in grupo["co_lis"]}
     pdvs_ejecutados = pdvs_con_ejecucion_fotografica(todos_co_lis, desde, hasta) if desde and hasta else set()
+    golpes_visita_por_pdv = _golpes_visita_por_pdv(v) if v is not None else {}
+    golpes_ejecucion_por_pdv = golpes_ejecucion_por_pdv_y_marca(todos_co_lis, desde, hasta)
 
     filas = []
-    for v in conteo.values():
-        dnis_ordenados = v["dnis"].most_common()
+    for grupo in conteo.values():
+        dnis_ordenados = grupo["dnis"].most_common()
         dni_principal = dnis_ordenados[0][0] if dnis_ordenados else None
         dni_variantes = [d for d, _n in dnis_ordenados[1:]]
-        nombre_principal = v["nombres"].most_common(1)[0][0] if v["nombres"] else None
-        es_solo_mayorista = v["tipos"] == {"Mayorista"}
-        mercado_str = ", ".join(sorted(v["mercados"].values())) if es_solo_mayorista and v["mercados"] else None
-        con_ejecucion = len(v["co_lis"] & pdvs_ejecutados)
+        nombre_principal = grupo["nombres"].most_common(1)[0][0] if grupo["nombres"] else None
+        es_solo_mayorista = grupo["tipos"] == {"Mayorista"}
+        mercado_str = ", ".join(sorted(grupo["mercados"].values())) if es_solo_mayorista and grupo["mercados"] else None
+        con_ejecucion = len(grupo["co_lis"] & pdvs_ejecutados)
+        visitas = sum(golpes_visita_por_pdv.get(c, 0) for c in grupo["co_lis"])
+        golpes_marca = {"general": 0, "nosotras": 0, "tena": 0}
+        for c in grupo["co_lis"]:
+            d = golpes_ejecucion_por_pdv.get(c)
+            if d:
+                for k in golpes_marca:
+                    golpes_marca[k] += d.get(k, 0)
         filas.append({
-            "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": ", ".join(sorted(v["ciudades"].values())),
+            "mercaderista": nombre_principal or "(Sin asignar)", "ciudad": ", ".join(sorted(grupo["ciudades"].values())),
             "mercado": mercado_str,
             "dni": dni_principal, "dni_variantes": dni_variantes,
-            "pdvs_asignados": v["asignados"], "pdvs_pendientes": v["pendientes"],
-            "pct_cumplimiento": round((v["asignados"] - v["pendientes"]) / v["asignados"] * 100, 1) if v["asignados"] else None,
+            "pdvs_asignados": grupo["asignados"], "pdvs_pendientes": grupo["pendientes"],
+            "pct_cumplimiento": round((grupo["asignados"] - grupo["pendientes"]) / grupo["asignados"] * 100, 1) if grupo["asignados"] else None,
             "pdvs_con_ejecucion": con_ejecucion,
-            "pct_ejecucion": round(con_ejecucion / v["asignados"] * 100, 1) if v["asignados"] else None,
+            "pct_ejecucion": round(con_ejecucion / grupo["asignados"] * 100, 1) if grupo["asignados"] else None,
+            "visitas": visitas,
+            "visitas_con_ejecucion": golpes_marca["general"],
+            "pct_ejecucion_visitas": round(golpes_marca["general"] / visitas * 100, 1) if visitas else None,
+            "visitas_con_ejecucion_nosotras": golpes_marca["nosotras"],
+            "pct_ejecucion_visitas_nosotras": round(golpes_marca["nosotras"] / visitas * 100, 1) if visitas else None,
+            "visitas_con_ejecucion_tena": golpes_marca["tena"],
+            "pct_ejecucion_visitas_tena": round(golpes_marca["tena"] / visitas * 100, 1) if visitas else None,
         })
     filas.sort(key=lambda f: f["mercaderista"])
     return filas
