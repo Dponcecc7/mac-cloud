@@ -540,42 +540,57 @@ def pdvs_con_ejecucion_fotografica(co_lis_planning, desde, hasta):
         session.close()
 
 
-def _golpes_visita_por_pdv(v):
+def _golpes_visita_por_dni(v):
     """Golpes de visita (días DISTINTOS con al menos una visita real) por
-    PDV -- dedupeando por "código PDV + fecha" (Davor, 2026-11-20: "un
-    indicador que diga visitas, que golpes de visita: concatenando el
-    codigo pdv & Fecha"), sin filtrar por ejecución ni marca -- cuenta
-    CUALQUIER visita real, tenga foto o no. Mismo "golpe" que ya usa
-    _ejecucion_por_pdv() para "golpes con ejecución", para poder comparar
-    ambos números uno contra el otro."""
+    DNI del VISITANTE real -- dedupeando por "código PDV + fecha" (Davor,
+    2026-11-20: "un indicador que diga visitas, que golpes de visita:
+    concatenando el codigo pdv & Fecha"), sin filtrar por ejecución ni
+    marca -- cuenta CUALQUIER visita real, tenga foto o no.
+
+    Atribuido por DNI del visitante (`v["dni"]`), NO por PDV de la cartera
+    asignada en el Planning -- Davor, 2026-11-20 (seguimiento, con Excel
+    descargado en mano): "Giovana solo tiene 29 visitas donde relevo foto
+    antes y despues de Nosotras" contra las ~39 que salían cruzando por
+    los PDVs de su cartera -- un PDV asignado a alguien en el Excel puede
+    terminar siendo visitado/ejecutado por OTRA persona (reemplazo,
+    cobertura cruzada, zona compartida), así que cruzar por PDV le sumaba
+    golpes que en realidad hizo otro mercaderista. Ahora se cuenta por
+    quién hizo la visita de verdad, sin importar de quién era el PDV en el
+    Excel ese mes."""
     if not len(v):
         return {}
-    dedup = v.drop_duplicates(subset=["punto_venta_id", "fecha_inicio"])
-    return dedup.groupby(dedup["punto_venta_id"].astype(str)).size().to_dict()
+    dedup = v.drop_duplicates(subset=["dni", "punto_venta_id", "fecha_inicio"])
+    return dedup.groupby("dni").size().to_dict()
 
 
-def golpes_ejecucion_por_pdv_y_marca(co_lis_planning, desde, hasta):
-    """Por PDV: golpes con ejecución fotográfica confirmada en el período,
-    partidos por marca -- Davor, 2026-11-20: "comparalo con el indicador de
-    visita con ejecución, pon uno general, otro de solo Nosotras y otro
-    TENA". "general" = cualquier categoría (mismo criterio que
-    _ejecucion_por_pdv()/pdvs_con_ejecucion_fotografica()); "nosotras" =
-    categoria "FEMENINO" (Cuidado Femenino, línea Nosotras); "tena" =
-    categoria "ADULTO" (Cuidado del Adulto, línea TENA) -- ver
-    dimension_models.EjecucionFotografica y pipeline/sync_fotografico.py::
-    _categoria(). "Ejecución" sigue siendo lo mismo de siempre: con_ejecucion
-    ya viene resuelto como "tiene foto Antes Y Después de esa marca"."""
-    if not co_lis_planning or not desde or not hasta:
+def golpes_ejecucion_por_dni_y_marca(dnis, desde, hasta):
+    """Por DNI del USUARIO que ejecutó (no por PDV de la cartera asignada --
+    ver _golpes_visita_por_dni()): golpes con ejecución fotográfica
+    confirmada en el período, partidos por marca -- Davor, 2026-11-20:
+    "comparalo con el indicador de visita con ejecución, pon uno general,
+    otro de solo Nosotras y otro TENA". "general" = cualquier categoría
+    (mismo criterio que _ejecucion_por_pdv()/pdvs_con_ejecucion_fotografica(),
+    pero atribuido a la persona); "nosotras" = categoria "FEMENINO" (Cuidado
+    Femenino, línea Nosotras); "tena" = categoria "ADULTO" (Cuidado del
+    Adulto, línea TENA) -- ver dimension_models.EjecucionFotografica y
+    pipeline/sync_fotografico.py::_categoria(). "Ejecución" sigue siendo lo
+    mismo de siempre: con_ejecucion ya viene resuelto como "tiene foto
+    Antes Y Después de esa marca". Dedup por (PDV, fecha) por persona -- si
+    la misma persona visitó 2 PDVs distintos el mismo día, son 2 golpes."""
+    if not dnis or not desde or not hasta:
         return {}
     session = get_session()
     try:
         filas = (
-            session.query(EjecucionFotografica.punto_venta_id, EjecucionFotografica.fecha, EjecucionFotografica.categoria)
+            session.query(
+                EjecucionFotografica.dni_usuario, EjecucionFotografica.punto_venta_id,
+                EjecucionFotografica.fecha, EjecucionFotografica.categoria,
+            )
             .filter(
                 EjecucionFotografica.con_ejecucion.is_(True),
                 EjecucionFotografica.fecha >= desde,
                 EjecucionFotografica.fecha <= hasta,
-                EjecucionFotografica.punto_venta_id.in_(co_lis_planning),
+                EjecucionFotografica.dni_usuario.in_(dnis),
             )
             .distinct()
             .all()
@@ -583,15 +598,15 @@ def golpes_ejecucion_por_pdv_y_marca(co_lis_planning, desde, hasta):
     finally:
         session.close()
 
-    por_pdv = {}
-    for co_li, fecha, categoria in filas:
-        d = por_pdv.setdefault(co_li, {"general": set(), "nosotras": set(), "tena": set()})
-        d["general"].add(fecha)
+    por_dni = {}
+    for dni_usuario, co_li, fecha, categoria in filas:
+        d = por_dni.setdefault(dni_usuario, {"general": set(), "nosotras": set(), "tena": set()})
+        d["general"].add((co_li, fecha))
         if categoria == "FEMENINO":
-            d["nosotras"].add(fecha)
+            d["nosotras"].add((co_li, fecha))
         elif categoria == "ADULTO":
-            d["tena"].add(fecha)
-    return {co_li: {k: len(fechas) for k, fechas in d.items()} for co_li, d in por_pdv.items()}
+            d["tena"].add((co_li, fecha))
+    return {dni: {k: len(golpes) for k, golpes in d.items()} for dni, d in por_dni.items()}
 
 
 def pdvs_pendientes(planning, v):
@@ -862,15 +877,24 @@ def resumen_por_mercaderista(planning, pendientes, v=None, desde=None, hasta=Non
     función sin el rango.
 
     `visitas`/`visitas_con_ejecucion*` (Davor, 2026-11-20, tabla aparte
-    "Visitas con ejecución por mercaderista"): mismo cruce que
-    pdvs_con_ejecucion/pct_ejecucion de arriba, pero a nivel de GOLPE (PDV +
-    fecha), no de PDV -- "visitas" cuenta TODO golpe de visita real (tenga
-    foto o no, ver _golpes_visita_por_pdv()), para compararlo contra los
-    golpes que sí llegaron con ejecución fotográfica completa, partidos en
+    "Visitas con ejecución por mercaderista"): a diferencia de
+    pdvs_con_ejecucion/pct_ejecucion de arriba (que cruzan por PDV de la
+    cartera asignada, sin importar quién lo ejecutó), esto se atribuye por
+    PERSONA real -- Davor, 2026-11-20 (seguimiento, con Excel descargado):
+    "Giovana solo tiene 29 visitas donde relevo foto antes y despues de
+    Nosotras" contra las ~39 que salían cruzando por PDV (un PDV de su
+    cartera puede terminar siendo cubierto por otro mercaderista ese mes).
+    "visitas" cuenta TODO golpe de visita real de la persona (tenga foto o
+    no, ver _golpes_visita_por_dni()), para compararlo contra los golpes
+    que SÍ ejecutó esa misma persona con foto completa, partidos en
     general/Nosotras (Cuidado Femenino)/TENA (Cuidado del Adulto) -- ver
-    golpes_ejecucion_por_pdv_y_marca(). `v`: DataFrame de visitas del mismo
-    período (visitas_tradicional()/_cargar_visitas()), ya lo calculaba cada
-    llamador antes de este cambio -- None/vacío deja visitas en 0."""
+    golpes_ejecucion_por_dni_y_marca(). Se suma sobre TODOS los DNI
+    variantes del grupo (typos del Excel incluidos, ver docstring de
+    arriba), porque el DNI real usado por la app en las visitas/ejecuciones
+    puede no ser exactamente el que quedó tipeado en el Planning. `v`:
+    DataFrame de visitas del mismo período (visitas_tradicional()/
+    _cargar_visitas()), ya lo calculaba cada llamador antes de este cambio
+    -- None/vacío deja visitas en 0."""
     uf = _UnionFind()
     for p in planning:
         nombre_norm = (p.mercaderista_nombre or "").strip().upper()
@@ -925,9 +949,10 @@ def resumen_por_mercaderista(planning, pendientes, v=None, desde=None, hasta=Non
             fila["mercados"].setdefault(mercado_limpio.upper(), mercado_limpio)
 
     todos_co_lis = {c for grupo in conteo.values() for c in grupo["co_lis"]}
+    todos_dnis = {d for grupo in conteo.values() for d in grupo["dnis"].keys()}
     pdvs_ejecutados = pdvs_con_ejecucion_fotografica(todos_co_lis, desde, hasta) if desde and hasta else set()
-    golpes_visita_por_pdv = _golpes_visita_por_pdv(v) if v is not None else {}
-    golpes_ejecucion_por_pdv = golpes_ejecucion_por_pdv_y_marca(todos_co_lis, desde, hasta)
+    golpes_visita_por_dni = _golpes_visita_por_dni(v) if v is not None else {}
+    golpes_ejecucion_por_dni = golpes_ejecucion_por_dni_y_marca(todos_dnis, desde, hasta)
 
     filas = []
     for grupo in conteo.values():
@@ -938,10 +963,10 @@ def resumen_por_mercaderista(planning, pendientes, v=None, desde=None, hasta=Non
         es_solo_mayorista = grupo["tipos"] == {"Mayorista"}
         mercado_str = ", ".join(sorted(grupo["mercados"].values())) if es_solo_mayorista and grupo["mercados"] else None
         con_ejecucion = len(grupo["co_lis"] & pdvs_ejecutados)
-        visitas = sum(golpes_visita_por_pdv.get(c, 0) for c in grupo["co_lis"])
+        visitas = sum(golpes_visita_por_dni.get(d, 0) for d in grupo["dnis"].keys())
         golpes_marca = {"general": 0, "nosotras": 0, "tena": 0}
-        for c in grupo["co_lis"]:
-            d = golpes_ejecucion_por_pdv.get(c)
+        for dni_variante in grupo["dnis"].keys():
+            d = golpes_ejecucion_por_dni.get(dni_variante)
             if d:
                 for k in golpes_marca:
                     golpes_marca[k] += d.get(k, 0)
